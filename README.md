@@ -40,7 +40,9 @@ Spotify pays artists: $0.003-$0.005 per stream
 Meanwhile:
 - ❌ **Corporations exploit creators** - Keep the majority, provide limited transparency
 - ❌ **Users get a bad deal** - Pay monthly subscriptions, but artists still starve
-- ❌ **Labels control everything** - Decide what gets promoted, what gets hidden
+- ❌ **Algorithmic bias favors major labels** - Indie artists get buried despite quality
+- ❌ **Opaque recommendation systems** - Platforms optimize for label deals, not listeners
+- ❌ **Pay-to-play playlisting** - Money determines visibility, not merit
 - ❌ **No real analytics** - Artists don't know WHO loves their music or WHERE
 - ❌ **Users worldwide are tired** of being data products for corporations
 
