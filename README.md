@@ -640,7 +640,7 @@ Bootstrap Nodes ←→ Node 1 (You) ←→ Node 2 (Core) ←→ Node 3 (Casual)
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/yourusername/karma-player
+git clone https://github.com/trust-tune-net/karma-player
 cd karma-player
 pip install -e .
 
@@ -663,7 +663,7 @@ karma-player search "radiohead ok computer"
 
 ```bash
 # 1. Clone and install dependencies
-git clone https://github.com/yourusername/karma-player
+git clone https://github.com/trust-tune-net/karma-player
 cd karma-player
 poetry install
 
@@ -755,7 +755,7 @@ poetry run karma-player init
 **Don't have the technical skills or resources to run Jackett?**
 
 Contact the team to request access to a shared Jackett instance:
-- **GitHub Issues:** https://github.com/yourusername/karma-player/issues
+- **GitHub Issues:** https://github.com/trust-tune-net/karma-player/issues
   - Title: "Request Jackett Remote Access"
   - Include: Brief intro, why you're interested, commitment to learning self-hosting
 - **Discord/Email:** [To be announced]
@@ -977,7 +977,7 @@ Trust Tune:        Quality ✓✓  | Access ✓✓  | Retention ?   | Organizati
 
 ### Dev Setup
 ```bash
-git clone https://github.com/yourusername/karma-player
+git clone https://github.com/trust-tune-net/karma-player
 cd karma-player
 poetry install
 poetry run karma-player init
