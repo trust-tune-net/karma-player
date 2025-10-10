@@ -48,3 +48,5 @@ Thumbs.db
 .karma-player/
 *.db
 *.db-journal
+
+*.cast
