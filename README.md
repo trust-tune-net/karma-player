@@ -21,20 +21,36 @@
 
 ---
 
-## 🎯 The Problem
+## 🎯 The REAL Problem
+
+**The music industry is broken.**
 
 ```
-You → Search "Radiohead OK Computer" → Get 50 results
-                    ↓
-      Which one is actually FLAC?
-      Which one isn't a transcode?
-      Which one has seeders tomorrow?
-                    ↓
-      30 minutes wasted researching
-      Download 3 versions. 2 are fake.
+Spotify pays artists: $0.003-$0.005 per stream
+         ↓
+    1 million streams = $3,000-$5,000
+         ↓
+    Label takes 80-90%
+         ↓
+    Artist gets: ~$300-$500
+         ↓
+    For a MILLION streams.
 ```
 
-**The internet has infinite content. The problem isn't access — it's knowing what to trust.**
+Meanwhile:
+- ❌ **Corporations exploit creators** - Keep the majority, provide zero transparency
+- ❌ **Users get a bad deal** - Pay monthly subscriptions, but artists still starve
+- ❌ **Labels control everything** - Decide what gets promoted, what gets hidden
+- ❌ **No real analytics** - Artists don't know WHO loves their music or WHERE
+- ❌ **Users worldwide are tired** of being data products for corporations
+
+**But we all want the same thing:**
+- 🎵 **Great music** - High quality, accessible, properly attributed
+- 💰 **Fair compensation for creators** - Artists deserve the lion's share
+- 🔍 **Transparency** - Who's listening, where, why (for artists AND users)
+- 🚫 **No corporate middlemen** - Taking 90% and providing 10% value
+
+**The technical problem** (finding good torrents) is trivial compared to the social problem: *How do we create a system where creators actually benefit from people loving their music?*
 
 ---
 
