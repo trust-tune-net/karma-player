@@ -56,6 +56,28 @@ Meanwhile:
 
 ---
 
+## ⚠️ Reality Check (Read This First)
+
+**Probability of wild success (10k+ users, economic sustainability): 2-10%**
+
+**This is HARD.** Here's what could go wrong:
+
+- **50% chance:** Works great for 100-500 users, never scales beyond niche
+- **25% chance:** Legal shutdown (Napster/Grooveshark precedent)
+- **15% chance:** Technical failure (Gun.js doesn't scale beyond 1,000 users)
+- **8% chance:** Moderate success (sustainable niche with 500-2k users)
+- **2% chance:** Wild success (mainstream adoption, 10k+ users)
+
+**Why we're building anyway:**
+
+Even **Phase 0 is valuable** today (AI + MusicBrainz beats manual torrent search). If we fail at Phases 1-5, we'll **open-source everything** so others can learn from our mistakes and build better systems.
+
+**We're being radically honest** because we respect your time. If you're looking for guaranteed success, this isn't it. If you want to help experiment with community-validated quality + transparent creator compensation, **we'd love your help**.
+
+[Read full risk assessment →](#-known-risks--failure-modes)
+
+---
+
 ## 🎨 Why This Exists: Empowering Creators, Not Exploiting Them
 
 **The fundamental problem:** Streaming platforms are black boxes. Spotify pays artists $0.003-$0.005 per stream, keeps the lion's share, and provides limited transparency about who's listening, where, or why. Labels take most of what's left. Artists get pennies.
@@ -72,11 +94,18 @@ Meanwhile:
 ┌─────────────────────────────────────────────────────────────────┐
 │              CREATOR-FIRST REVENUE MODEL (Future)               │
 │                                                                 │
-│  Phase 1 (Now): Free, open access                              │
+│  Phase 0 (Now): Free, open access                              │
 │    → Build trust network & verified content library            │
 │    → Prove the model works                                     │
 │                                                                 │
-│  Phase 2 (Critical Mass): Optional paid features               │
+│  Phase 1 (Next): Network-first search                          │
+│    → Gun.js distributed ledger + voting                        │
+│    → 5-10% of searches hit verified files                      │
+│                                                                 │
+│  Phase 2 (Scale): Opt-in permissions system                    │
+│    → Creator dashboard + artist control                        │
+│                                                                 │
+│  Phase 3 (Revenue): Optional paid features                     │
 │    → Premium: ad-free, faster downloads, priority support      │
 │    → Revenue split: 95% Creators | 5% Network                  │
 │    → IF implemented: Payments recorded on blockchain           │
@@ -770,7 +799,8 @@ Adds:
 - Verified file badges
 - Network-first search logic
 
-**Success metric:** 80% of searches hit verified network files
+**Success metric:** 5-10% of searches hit verified network files (bootstrap phase)
+**Note:** 80% coverage is aspirational long-term goal (Phase 4-5 if successful)
 
 ### Phase 2: Two-Tier Validation (Weeks 5-6)
 **Goal:** Community validation with proof
