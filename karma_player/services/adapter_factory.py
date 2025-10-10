@@ -36,9 +36,16 @@ class AdapterFactory:
             loader = IndexerConfigLoader()
 
             # Build context for variable substitution
+            import os
             context = {}
             if self.config.jackett_api_key:
                 context['JACKETT_API_KEY'] = self.config.jackett_api_key
+
+            # Add environment variables for remote Jackett
+            if os.environ.get('JACKETT_REMOTE_URL'):
+                context['JACKETT_REMOTE_URL'] = os.environ['JACKETT_REMOTE_URL']
+            if os.environ.get('JACKETT_REMOTE_API_KEY'):
+                context['JACKETT_REMOTE_API_KEY'] = os.environ['JACKETT_REMOTE_API_KEY']
 
             # Get profile configuration
             profile_config = loader.get_profile(profile_name=profile_name, context=context)

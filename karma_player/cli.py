@@ -122,6 +122,10 @@ async def run_interactive_ai_search(
     click.echo(f"   Min Seeders: {click.style(str(min_seeders), fg='cyan')}")
     click.echo(f"   Profile: {click.style(profile or 'remote (default)', fg='cyan')}")
 
+    # Show Jackett URL being used (for debugging)
+    jackett_url = os.environ.get('JACKETT_REMOTE_URL', 'http://localhost:9117')
+    click.echo(f"   Jackett: {click.style(jackett_url, fg='cyan', dim=True)}")
+
     # Step 1: AI parses query + MusicBrainz lookup + AI grouping
     from rich.console import Console
     from rich.spinner import Spinner

@@ -458,8 +458,9 @@ poetry run karma-player search "radiohead ok computer"
 
 #### Option 1: Run Jackett Locally (Recommended for Privacy)
 
+**Installation:**
+
 ```bash
-# Install Jackett
 # macOS (Homebrew)
 brew install jackett
 
@@ -471,13 +472,40 @@ sudo apt install jackett
 # Start Jackett
 jackett
 
-# Access: http://localhost:9117
-# Configure indexers, copy API key
+# Access web UI: http://localhost:9117
 ```
 
-Then during `karma-player init`, enter:
+**Configure Indexers:**
+
+1. Open http://localhost:9117 in browser
+2. Click "Add Indexer" → Search for indexers (1337x, ThePirateBay, etc.)
+3. **Important:** Some indexers require **FlareSolverr** (Cloudflare bypass)
+4. Copy your API key from the top-right corner
+
+**FlareSolverr Setup (Optional but Recommended):**
+
+Some indexers (like 1337x) are protected by Cloudflare and require FlareSolverr:
+
+```bash
+# Using Docker (easiest)
+docker run -d \
+  --name=flaresolverr \
+  -p 8191:8191 \
+  -e LOG_LEVEL=info \
+  --restart unless-stopped \
+  ghcr.io/flaresolverr/flaresolverr:latest
+
+# In Jackett, go to Settings → FlareSolverr API URL
+# Enter: http://localhost:8191
+```
+
+Without FlareSolverr, you'll get "FlareSolverr is not configured" errors for Cloudflare-protected indexers.
+
+**Configure Karma Player:**
+
+During `karma-player init`, enter:
 - Jackett URL: `http://localhost:9117`
-- API key: (from Jackett web interface)
+- API key: (copied from Jackett web interface)
 
 #### Option 2: Use a Remote Jackett Instance
 
@@ -507,7 +535,7 @@ export JACKETT_REMOTE_URL="https://provided-by-team.com"
 export JACKETT_REMOTE_API_KEY="provided-api-key"
 
 # Use remote profile (default)
-karma-player search "radiohead ok computer" --profile remote
+poetry run karma-player search "radiohead ok computer" --profile remote
 ```
 
 **Note:** Remote access is temporary and best-effort. We encourage self-hosting for privacy and reliability.
@@ -555,13 +583,13 @@ profiles:
 
 ```bash
 # Use local Jackett
-karma-player search "miles davis" --profile local
+poetry run karma-player search "miles davis" --profile local
 
 # Use remote (default)
-karma-player search "miles davis" --profile remote
+poetry run karma-player search "miles davis" --profile remote
 
 # Lossless only
-karma-player search "radiohead" --profile lossless_only
+poetry run karma-player search "radiohead" --profile lossless_only
 ```
 
 #### Customize Your Setup
@@ -612,11 +640,9 @@ Jackett uses category codes for filtering:
 
 ## 🎮 Usage Examples
 
-> **Note:** Examples assume you installed with `pip install -e .` or activated `poetry shell`. If using Poetry without shell, prefix commands with `poetry run`.
-
 ### Basic Search
 ```bash
-karma-player search "Miles Davis Kind of Blue"
+poetry run karma-player search "Miles Davis Kind of Blue"
 ```
 
 AI finds the canonical album, searches 18+ indexers, returns best FLAC.
@@ -624,29 +650,29 @@ AI finds the canonical album, searches 18+ indexers, returns best FLAC.
 ### Format Preference
 ```bash
 # Prefer FLAC, fallback to MP3 if none found
-karma-player search "Pink Floyd Dark Side" --format FLAC
+poetry run karma-player search "Pink Floyd Dark Side" --format FLAC
 
 # ONLY FLAC (strict, no fallback)
-karma-player search "Radiohead OK Computer" --format FLAC --strict
+poetry run karma-player search "Radiohead OK Computer" --format FLAC --strict
 ```
 
 ### Auto-Mode (Let AI Handle Everything)
 ```bash
-karma-player search "fear of the dark iron maiden"
+poetry run karma-player search "fear of the dark iron maiden"
 # Select album → Choose [4] Just get it for me!
 # System tries: single track → album → other albums
 ```
 
 ### Fast Mode (Skip MusicBrainz)
 ```bash
-karma-player search "esperanza spalding" --skip-musicbrainz --min-seeders 5
+poetry run karma-player search "esperanza spalding" --skip-musicbrainz --min-seeders 5
 ```
 
 Direct torrent search. Faster but less accurate.
 
 ### Check Configuration
 ```bash
-karma-player config show
+poetry run karma-player config show
 ```
 
 ---
