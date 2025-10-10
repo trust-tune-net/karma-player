@@ -250,7 +250,7 @@ Traditional systems:
 - ✅ **Community validates quality** with cryptographic proof
 - ✅ **Transparent trust** — you can audit the validators
 - ✅ **Self-reinforcing** — more users = more validated content
-- ✅ **Distributed** — no servers, no central control (Gun.js)
+- ✅ **Distributed** — federated mesh with bootstrap nodes (Gun.js), no single point of control
 
 ---
 
@@ -1172,6 +1172,400 @@ The validation principles *could* theoretically apply to other content types (so
 **Our approach:** Ship Phase 0 → Collect data → Answer questions with evidence → Iterate or pivot.
 
 We'd rather admit uncertainty than fake confidence. If you have insights on any of these, **please share feedback.**
+
+---
+
+## 💰 Infrastructure Costs (Real Numbers)
+
+**Transparency about actual costs at different scales:**
+
+### Phase 0 (Current - Local Jackett)
+```
+Cost: $0/month
+- Users run Jackett locally (no shared infrastructure)
+- AI API costs: User-provided keys (Anthropic/OpenAI/Gemini)
+- MusicBrainz: Free (CC0 license, public API)
+```
+
+**If offering remote Jackett access:**
+```
+VPS (4GB RAM, 2 CPU): $20-50/month
+Bandwidth (100GB/month): $10-30/month
+Total: $30-80/month (supports 50-100 users)
+```
+
+### Phase 1 (Gun.js Bootstrap Network)
+```
+Bootstrap nodes (3-5 VPS instances):
+- Digital Ocean/Hetzner: $20/node × 5 = $100/month
+- Linode: $40/node × 5 = $200/month
+
+STUN servers (can use public initially): $0-50/month
+
+Monitoring & analytics:
+- Grafana Cloud: $0-20/month
+- UptimeRobot: Free tier
+
+Total: $100-270/month (supports 100-500 users)
+```
+
+### Phase 2 (Full P2P with TURN Relay)
+
+**TURN relay bandwidth is the cost driver:**
+
+```
+Assumptions:
+- 1,000 users total
+- 7% need TURN relay (can't direct connect via STUN)
+- Average 2 hours/day active usage
+- 128kbps average bandwidth (voting + metadata sync)
+
+Calculation:
+- 1,000 × 7% = 70 relay users
+- 70 users × 2 hrs/day × 128kbps = ~7 GB/hour
+- 7 GB/hr × 30 days = ~5,000 GB/month
+
+TURN relay costs:
+- Cloudflare TURN: ~$0.08/GB = $400/month
+- AWS CloudFront: ~$0.085/GB = $425/month
+- Coturn self-hosted: VPS $100/month + bandwidth
+
+Bootstrap + monitoring: $150/month
+
+Total Phase 2: $500-600/month (1,000 users)
+```
+
+### Phase 3 (Scale - 10,000 Users)
+
+```
+TURN relay (7% of 10k = 700 users):
+- 50,000 GB/month × $0.08 = $4,000/month
+
+Bootstrap nodes (10 instances): $400/month
+Monitoring + CDN: $100/month
+
+Total: $4,500-5,000/month (10,000 users)
+```
+
+### Phase 4+ (100,000 Users - Aspirational)
+
+```
+TURN relay (7% = 7,000 users):
+- 500,000 GB/month × $0.08 = $40,000/month
+
+Mitigation strategies at scale:
+- Aggressive STUN optimization (reduce TURN to <3%): Save $20k/month
+- Community relay nodes (volunteer bandwidth): Save $10k/month
+- WebRTC mesh optimization: Reduce per-user bandwidth 30%
+- Selective relay (only critical operations): Save $15k/month
+
+Optimized cost: $20,000-30,000/month (100k users)
+```
+
+### Cost Per User Analysis
+
+```
+Phase 1 (500 users):   $200/month ÷ 500 = $0.40/user/month
+Phase 2 (1k users):    $550/month ÷ 1k = $0.55/user/month
+Phase 3 (10k users):   $4,500/month ÷ 10k = $0.45/user/month
+Phase 4 (100k users):  $25k/month ÷ 100k = $0.25/user/month
+
+Economics improve with scale (relay overhead amortizes)
+```
+
+### Revenue Requirements (95/5 Split Model)
+
+**To break even at 10k users ($4,500/month costs):**
+
+```
+Network needs: $4,500 ÷ 0.05 = $90,000/month total revenue
+Creators get: $90,000 × 0.95 = $85,500/month
+Network fee: $90,000 × 0.05 = $4,500/month (covers costs)
+
+Per-user subscription needed: $90k ÷ 10k = $9/month
+(Higher than Spotify $10.99, but 95% goes to creators)
+
+Alternative: 20% adopt paid tier at $15/month
+- 10k × 20% × $15 = $30,000/month
+- Creators: $28,500
+- Network: $1,500 (shortfall of $3k/month - need grants/donations)
+```
+
+### Funding Strategy
+
+**Phase 0-1 (Pre-revenue):**
+- Personal funding / donations
+- Grants (Mozilla, Protocol Labs, music foundations)
+- Target: $5,000 runway for 6-12 months Phase 1 development
+
+**Phase 2 (Proof of Concept):**
+- Optional donations (Patreon, OpenCollective)
+- Early adopter premium tier ($5-10/month)
+- Target: Cover $500-1,000/month costs, prove willingness to pay
+
+**Phase 3+ (Sustainability):**
+- Premium tier (faster, ad-free, priority support)
+- DAO treasury (if community wants governance token)
+- Creator tip jars (voluntary additional support)
+- Target: 100% cost coverage + modest Core validator compensation
+
+### Key Takeaway
+
+**Infrastructure costs are REAL but manageable:**
+- Phase 0-1: <$300/month (affordable from savings/donations)
+- Phase 2: $500-1,000/month (need 100+ paying users at $5-10/month)
+- Phase 3+: $4k-30k/month (need sustainable revenue model or grants)
+
+**This is NOT "free decentralization" - bootstrap nodes + relay bandwidth cost money. But it's FAR cheaper than hosting audio files (Spotify spends ~$2-3/user/month on CDN alone).**
+
+---
+
+## 🚨 Known Risks & Failure Modes
+
+**We're transparent about what could go wrong:**
+
+### Technical Risks
+
+1. **Gun.js may not scale** - Unproven beyond ~1,000 concurrent users. If it fails at 10k+ users, we'll need fallback (IPFS, federated servers)
+2. **NAT traversal costs** - TURN relay bandwidth for users behind strict NATs could cost $1,200-5,000/month at 1k-10k users
+3. **Validation queue bottleneck** - If Core recruitment fails (<10 validators), verification could take months per file
+4. **Sybil attacks on karma** - Vote spam without economic barrier could poison network. Need proof-of-work or staking
+5. **Bootstrap node centralization** - Initial reliance on team-run nodes creates single point of failure until community nodes mature
+
+### Community Risks
+
+1. **Core validator recruitment** - Need 10-20 technically skilled volunteers willing to validate for free (Phase 0-2). Historically difficult.
+2. **Vote spam** - Malicious actors flooding network with fake votes. Mitigation: Karma requirements, rate limiting, cryptographic proof
+3. **Governance capture** - Early users accumulating karma could dominate decisions. Need: Quadratic voting or reputation decay
+4. **Eternal September** - Quality standards drift as network grows. Private trackers face this; we need automated validation + community norms
+5. **Toxicity** - As communities grow, moderation becomes critical. Reddit/Discord show this is hard.
+
+### Economic Risks
+
+1. **95/5 split may not cover costs** - If infrastructure costs $5k/month but revenue is $3k/month, network is unsustainable
+2. **Creator opt-in low (<1%)** - Artists may not participate until seeing $$$ (chicken-and-egg). Phase 2 success depends on trust-building
+3. **Blockchain volatility** - If using crypto for payments, USD value could fluctuate 50%+ (mitigation: stablecoins)
+4. **Payment distribution complexity** - Splitting revenue across 1,000+ creators proportional to plays requires gas fees (~$0.00025/tx × 1000 = $0.25 minimum)
+
+### Legal Risks
+
+1. **Secondary liability** - Napster ($26M settlement), Grooveshark ($736M judgment) precedents show "we don't host content" defense FAILED in court
+2. **Inducement doctrine** - MGM v. Grokster established platforms liable if they "induce" infringement (marketing, encouragement)
+3. **DMCA takedown flood** - Malicious or legitimate takedown requests could overwhelm manual review (need automated + appeal process)
+4. **International law complexity** - Different countries, different copyright rules. EU Article 17 could require upload filters.
+5. **Artist/label opposition** - Unlike Audius (which had artist buy-in), we start with existing torrents. Labels could sue aggressively.
+
+### Mitigation Strategies
+
+**Technical:**
+- Stress test Gun.js at 100/500/1k users before scaling
+- Optimize STUN (reduce TURN relay usage to <5%)
+- Automated validation tools to supplement Core validators
+- Economic spam barrier (karma staking, proof-of-work)
+
+**Community:**
+- Transparent governance from day 1
+- Clear code of conduct + moderation tools
+- Reputation decay (old karma loses weight)
+- Multiple validation paths (AI + Core + community votes)
+
+**Economic:**
+- Start with grants/donations (Phase 0-1)
+- Proof-of-concept before paid tier (Phase 2 validates demand)
+- Fallback: DAO funding, NFT sales, or volunteer infrastructure
+- Payment batching to reduce blockchain fees
+
+**Legal:**
+- Legal counsel from Phase 0
+- DMCA compliance (takedown within 48 hours)
+- Artist opt-in emphasis (Phase 2+)
+- Focus on public domain, CC, artist-approved content
+- Clear user ToS (user responsibility for downloads)
+- Transparent risk communication (no false promises)
+
+### Most Likely Failure Modes
+
+1. **Network never reaches critical mass** (50% probability) - Users try it, don't find value, abandon. Like most startups.
+2. **Legal shutdown before Phase 2** (30% probability) - Label lawsuit, court injunction, domain seizure.
+3. **Gun.js doesn't scale** (20% probability) - Technical limitations force architecture rewrite, delays kill momentum.
+4. **Economic model breaks** (15% probability) - Costs exceed revenue, can't sustain infrastructure.
+5. **Community governance capture** (10% probability) - Early whales dominate, new users feel excluded, network stagnates.
+
+**Our commitment:** If we hit a fatal blocker, we'll communicate honestly and open-source everything so others can learn/fork.
+
+---
+
+## 🤔 Why This Might NOT Work (Honest Assessment)
+
+**We're building something hard. Here's why it might fail:**
+
+### What Makes This REALLY Hard
+
+**Historical precedents aren't encouraging:**
+
+1. **Audius** - Raised $80M+ across 5 years, reached 6M users (impressive!)
+   - Still burning money (not profitable)
+   - Required massive VC funding + blockchain hype
+   - We have: $0 funding, 1-2 devs, no hype cycle
+
+2. **Royal** - Raised $71M from A-list investors (Nas, Chainsmokers, etc.)
+   - Shut down in 2024 after 3 years
+   - Reason: Economics didn't work (NFT royalties model failed)
+   - We're attempting similar creator compensation, different mechanism
+
+3. **Grooveshark** - 30M users at peak
+   - $736M judgment, shut down by labels
+   - "We don't host content" defense FAILED in court
+   - We face same legal risk (secondary liability)
+
+4. **Napster** - Changed music forever
+   - $26M settlement, forced to shut down
+   - "Just providing infrastructure" didn't protect them
+   - We're learning from this, but risk remains
+
+### Our Realistic Probability of Success
+
+**Phase-by-phase assessment:**
+
+```
+Phase 0 (MVP works): 90% ✅
+- Already mostly built
+- AI + MusicBrainz + Jackett integration proven
+- Risk: Low (just need to finish polish + testing)
+
+Phase 1 (Gun.js scales to 500 users): 60% ⚠️
+- Gun.js unproven at scale
+- Bootstrap node costs manageable ($100-300/month)
+- Risk: Medium (technical unknowns)
+- Fallback: IPFS or federated servers if Gun.js fails
+
+Phase 2 (Core recruitment: 10-20 validators): 40% ⚠️
+- Need technically skilled volunteers
+- Must validate for free (no compensation yet)
+- Historical data: Hard to find committed validators
+- Risk: High (social/community challenge)
+- Fallback: Automated validation + smaller Core team
+
+Phase 3 (Economic model works): 20% 🚨
+- Creator opt-in required (chicken-and-egg)
+- Users must pay $5-15/month (willingness uncertain)
+- Infrastructure costs $4k-30k/month at scale
+- Revenue must exceed costs + pay creators 95%
+- Risk: Very High (market validation needed)
+- Fallback: Grants, donations, DAO treasury
+
+Phase 4+ (10k+ users, self-sustaining): 10% 🚨
+- Network effects need to kick in
+- Legal risk increases with visibility
+- Competing with Spotify, private trackers, Soulseek
+- Risk: Extreme (most startups fail here)
+```
+
+### What Gives Us a CHANCE
+
+**Despite long odds, we have some advantages:**
+
+1. **Tech stack is mature NOW** (wasn't possible in 2005/2015)
+   - MusicBrainz: 35M recordings, free, canonical
+   - AI: Cheap, powerful, accessible ($0.01-0.10 per search)
+   - Chromaprint: Mature acoustic fingerprinting
+   - Gun.js: Production-ready distributed DB (if it scales)
+
+2. **Cultural moment is RIGHT**
+   - Artists KNOW they're getting screwed ($0.003/stream)
+   - Users want alternatives (Spotify fatigue real)
+   - Decentralization has mindshare (post-crypto, but still valued)
+   - Creator economy is mainstream (Patreon, Substack, etc.)
+
+3. **Lower infrastructure costs than streaming**
+   - We don't host audio (users run torrent clients)
+   - Just metadata + coordination: $0.25-0.55/user/month
+   - vs Spotify: $2-3/user/month on CDN alone
+   - Economics COULD work if we hit scale
+
+4. **Incremental validation** (not all-or-nothing)
+   - Phase 0 works WITHOUT network (already useful)
+   - Phase 1 adds value (verified content)
+   - Phase 2+ builds on proven foundation
+   - We can fail gracefully at any stage
+
+5. **Open source + transparent**
+   - Community can fork if we fail
+   - Learning in public builds trust
+   - No VC pressure to "grow or die"
+   - Can pivot based on user feedback
+
+### Our Edge (If We Have One)
+
+**What makes us different from failed attempts:**
+
+| Project | Their Approach | Our Approach |
+|---------|---------------|--------------|
+| Audius | Streaming platform (compete with Spotify) | Metadata validation (complement torrents) |
+| Royal | NFT royalties (complex, speculative) | Simple 95/5 split (if revenue exists) |
+| Grooveshark | Hosted content on AWS S3 | No hosting (user torrents) |
+| Napster | Centralized index | Distributed ledger (Gun.js) |
+| Private trackers | Expert gatekeeping | Two-tier validation (open + Core) |
+
+**Our bet:** By focusing on VALIDATION (not streaming), using mature tech (not bleeding edge), and being brutally honest (not hyped), we might thread the needle.
+
+### Most Likely Outcome
+
+**Realistic scenarios ranked by probability:**
+
+1. **50%: Phase 1 works, stagnates at 100-500 users**
+   - AI search + validation works great
+   - Small community loves it
+   - Never reaches critical mass for economic sustainability
+   - Becomes niche tool, not network
+
+2. **25%: Legal shutdown before Phase 2**
+   - Label cease-and-desist or lawsuit
+   - Domain seizure, GitHub DMCA
+   - Can't afford legal defense
+   - Open-source code lives on, project dies
+
+3. **15%: Technical failure (Gun.js doesn't scale)**
+   - Bootstrap costs spiral beyond budget
+   - TURN relay bandwidth kills economics
+   - Architecture rewrite needed
+   - Community loses momentum during rebuild
+
+4. **8%: Moderate success (1k-5k users, break-even)**
+   - Niche audiophile community adopts it
+   - Enough revenue to cover costs
+   - Never mainstream, but sustainable
+   - Serves dedicated user base well
+
+5. **2%: Wild success (10k+ users, economic sustainability)**
+   - Network effects kick in
+   - Creators opt in, users pay
+   - Legal challenges overcome (artist buy-in, precedent)
+   - Becomes legitimate alternative infrastructure
+
+### Why We're Building It Anyway
+
+**Even with 2% odds of wild success:**
+
+1. **Phase 0 is already valuable** - AI + MusicBrainz + Jackett beats manual torrent search
+2. **Learning in public** - If we fail, others learn from our mistakes (all open source)
+3. **Timing might be right** - 2025 convergence (tech + culture + economics) is real
+4. **Small wins matter** - Helping 100 users find quality music is worthwhile
+5. **Alternative must exist** - If we don't try, who will? (And they'll probably have worse incentives - ads, surveillance, VC extraction)
+
+### Our Commitment
+
+**Whether we succeed or fail:**
+
+- ✅ **Transparent communication** - No hiding failures, no fake metrics
+- ✅ **Open source everything** - Code, learnings, postmortems
+- ✅ **Respect users + creators** - No dark patterns, no exploitation
+- ✅ **Fail gracefully** - If Phase X doesn't work, we'll say so clearly
+- ✅ **Community first** - Users should fork/improve if we can't continue
+
+**We're building this because it SHOULD exist, even if the odds are long.**
+
+If you believe in the vision, join us. If you're skeptical, that's healthy - so are we.
 
 ---
 
