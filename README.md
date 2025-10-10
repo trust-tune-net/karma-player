@@ -79,8 +79,14 @@ Meanwhile:
 │  Phase 2 (Critical Mass): Optional paid features               │
 │    → Premium: ad-free, faster downloads, priority support      │
 │    → Revenue split: 95% Creators | 5% Network                  │
-│    → Payments recorded on blockchain (if implemented)          │
-│    → Aggregate stats public, user data pseudonymous            │
+│    → IF implemented: Payments recorded on blockchain           │
+│    → Transaction cost: ~$0.00025/tx (Solana)                   │
+│                                                                 │
+│  Transparency vs Privacy:                                       │
+│    ✓ Creator earnings: Public (total earned, per-song)         │
+│    ✓ Payment allocation: Public (auditable formula)            │
+│    ✓ User activity: Private (pseudonymous hashes)              │
+│    ✓ Individual streams: Private (not linked to identity)      │
 │                                                                 │
 │  Creator Controls:                                             │
 │    ✓ Opt-in per song/album (approve what you share)           │
@@ -131,24 +137,177 @@ Revenue won't exist without scale.
 
 ---
 
-## ⚖️ Legal Position (Transparency First)
+## 💰 Revenue Allocation: Starting Simple, Evolving Publicly
 
-**People will ask: "Is this piracy?" Answer up front:**
+**Phase 0-2: No payments** (build trust infrastructure first)
+
+**Phase 3: Simple proportional model**
+
+IF optional premium tier generates revenue:
+
+```
+Total Monthly Revenue: $10,000
+Split: 95% Creators ($9,500) | 5% Network ($500)
+
+Creator Allocation (simple formula):
+- Creator_A share = (Creator_A_verified_streams / total_verified_streams) × $9,500
+- Example: 10,000 streams / 100,000 total = 10% × $9,500 = $950
+
+Network Allocation:
+- 60% to Core validators ($300) - split proportional to validations performed
+- 40% to infrastructure ($200) - bootstrap nodes, relay bandwidth
+
+Minimum payout: $10 (prevents micro-transaction spam)
+Payment frequency: Monthly
+Tax reporting: 1099 for US creators earning $600+/year
+```
+
+**Phase 4+: Community governance evolves formula**
+
+**Open questions we'll solve WITH creators and community:**
+
+1. **Quality multipliers?**
+   - Should FLAC validated files earn 1.5x vs MP3?
+   - Should rare content (few seeders) earn 2-3x multiplier?
+   - Should first-validator bonus exist?
+
+2. **Time decay?**
+   - Should older validated files earn less over time?
+   - Or should catalog value be evergreen?
+
+3. **Seeding incentives?**
+   - Should long-term seeders earn from network 5%?
+   - How to measure seeding (honor system vs proof)?
+
+4. **Geographic fairness?**
+   - Equal weight globally, or adjust for regional purchasing power?
+
+5. **Validator compensation formula?**
+   - Flat rate per validation? ($0.50 per file?)
+   - Or proportional to validation difficulty (rare = more)?
+
+**Decision process:**
+- Proposals published as GitHub issues
+- Community discussion (30 days)
+- Token-weighted voting (karma = voting power)
+- Founder veto in early phases (prevent capture)
+- All changes logged on blockchain (transparency)
+
+**Why start simple:**
+- Sound.xyz started with 100% primary sales (dead simple)
+- Audius evolved to 90% revenue share over years
+- Complexity without data = premature optimization
+- Let community see REAL data, then optimize
+
+**Transparency commitment:**
+- All revenue: Public dashboard (updated daily)
+- All payouts: Blockchain explorer (verify any transaction)
+- All formula changes: GitHub changelog + community vote
+- All disputes: Public appeal process
+
+**Starting simple lets us PROVE the model works, then evolve with community input based on real data, not speculation.**
+
+---
+
+## ⚖️ Legal Positioning: Honest Assessment
+
+**People will ask: "Is this piracy?" Here's the honest answer:**
+
+### What We Do
+
+✅ **Metadata Coordination**
+- MusicBrainz canonical data lookup (legal, public domain CC0 license)
+- AI intent parsing (transformative use)
+- Quality ranking algorithm (no content storage)
+
+✅ **Torrent Search Aggregation**
+- Via Jackett proxy to existing indexers (1337x, TPB, etc.)
+- No hosting of .torrent files or magnet links
+- Users query external sources directly
+
+✅ **Community Validation (Phase 1+)**
+- Acoustic fingerprinting via Chromaprint (legal, fair use for verification)
+- Spectral analysis (technical verification, no audio storage)
+- Cryptographic proof system (signatures only, no content)
+
+✅ **Future: Artist Opt-In (Phase 2+)**
+- Creator dashboard with read-only analytics (transparency)
+- Permission system (artists control what's shared)
+- Compensation framework (direct payments, 95% to creators)
+
+### What We DON'T Do
+
+❌ **Not a torrent tracker** - Don't coordinate swarms or peer connections
+❌ **Not a content host** - No audio file storage on our infrastructure
+❌ **Not a streaming service** - Users run their own torrent clients
+❌ **Not promoting infringement** - Focus is quality validation, not "free music"
 
 ### What Karma Player Is NOT
 
-❌ **A piracy tool** - We validate quality/metadata, not encourage infringement
-❌ **A Spotify replacement** - We're search infrastructure, not a streaming service
-❌ **A music hosting service** - No servers, no storage, no distribution
-❌ **A get-rich-quick token scheme** - Karma ≠ money in Phase 0-2
-❌ **Guaranteed to work at scale** - Gun.js scalability unproven (research needed)
+**Let's be crystal clear about what we're NOT building:**
+
+❌ **NOT a piracy tool**
+- We validate quality, not facilitate copyright infringement
+- DMCA compliance from day 1 (designated agent, 24-hour takedown)
+- Artist opt-in model (Phase 2+)
+- Focus: Music discovery with community trust validation
+
+❌ **NOT a Spotify replacement**
+- We're metadata + search infrastructure, not streaming service
+- No audio hosting, no playback in-app
+- Users manage their own torrent clients and files
+- Complementary to streaming (different use case)
+
+❌ **NOT a music hosting service**
+- No servers storing audio files
+- Users download via BitTorrent (existing protocol)
+- We coordinate validation, not content distribution
+- Minimal infrastructure (bootstrap + relay nodes for coordination only)
+
+❌ **NOT a get-rich-quick token scheme**
+- Karma ≠ money in Phase 0-2 (no value, just reputation)
+- No token sale, no ICO, no pump-and-dump
+- Future compensation (Phase 3+) is for WORK (validation, seeding, node operation)
+- Transparent allocation, no founder pre-mine
+
+❌ **NOT guaranteed to work at scale**
+- Gun.js unproven at 10,000+ users (we're testing this in Phase 1)
+- Core recruitment may fail (need 5-20 technical validators)
+- Legal risk is real (Napster/Grooveshark/LimeWire precedents)
+- Economic sustainability unproven (5% network fee may not cover $50k/month costs at scale)
+- **Honest success rate: 10-30%** across all phases
+
+❌ **NOT gatekept or exclusionary**
+- No interviews (unlike private trackers)
+- No ratio requirements (unlike private trackers)
+- Donation OR invitation (lower barrier to entry)
+- **BUT:** Core role requires technical skills (by design - quality control needs expertise)
 
 ### What It IS
 
-✅ **Community trust validation network** - Like Wikipedia for audio quality
-✅ **Metadata infrastructure** - MusicBrainz + AI + community proof
-✅ **Experiment in decentralization** - Can distributed trust work at scale?
-✅ **Transparent alternative** - No algorithmic gatekeeping, open validation
+✅ **A community trust validation network**
+- Two-tier system: Casual votes → Core validates with cryptographic proof
+- Acoustic fingerprinting + spectral analysis (no audio storage)
+- Transparent, auditable, open-source
+
+✅ **An experiment in decentralized quality assurance**
+- Can community validation scale WITHOUT gatekeeping?
+- Can crypto proofs prevent spam WITHOUT interviews?
+- Can karma incentives sustain seeding WITHOUT ratio police?
+- We're testing these hypotheses in public
+
+✅ **A transparent alternative to algorithmic gatekeeping**
+- Streaming: Opaque algorithms favor major labels
+- Private trackers: Expert curators (excellent but exclusive)
+- Karma Player: Community validates, anyone can audit proofs
+
+✅ **A long-term bet on creator economics**
+- **IF** we achieve scale → transparent compensation
+- **IF** artists opt-in → direct payments (95% to creators)
+- **IF** community thrives → self-sustaining network
+- No guarantees, but worth attempting
+
+**We're building in public. We'll fail in public if we fail. We'll succeed transparently if we succeed.**
 
 ### Phase 0 Limitations (Be Honest)
 
@@ -171,25 +330,125 @@ Revenue won't exist without scale.
 
 **Phase 0 is about proving the CONCEPT:** Can AI + MusicBrainz + community validation create better search than manual torrent hunting? We're testing that hypothesis before building the full distributed network.
 
-### Legal Framework
+### Legal Risks: Reality Check
 
-**DMCA Compliance:**
-- Network respects takedown requests
-- Flagged content removed from distributed ledger
-- Transparent appeal process
+**Precedents that concern us:**
 
-**Acknowledged Risks:**
-- **Secondary liability** (Napster, Grooveshark precedents exist)
-- **Inducement doctrine** (MGM v. Grokster) - platforms liable if they "induce" infringement
-- **Legal landscape evolves** - Court decisions unpredictable
+🚨 **Napster (2001)** - $26M damages + forced shutdown
+- **Defense:** "We're just infrastructure, users share files"
+- **Court ruling:** Contributory infringement (knowledge + material contribution)
+- **Lesson:** "Facilitating" infringement = liability
 
-**Mitigation:**
-- Phase 0-1: Search/validation only (VPN model - no control over user actions)
-- Phase 2+: Artist opt-in (creators authorize sharing)
-- Focus on legal content (public domain, CC, artist-approved)
-- User responsibility (clear ToS, distributed architecture)
+🚨 **Grooveshark (2015)** - $736M judgment + asset seizure
+- **Defense:** "Users upload content, we don't host (AWS does)"
+- **Court ruling:** Company employees uploaded 100k songs = direct infringement
+- **Lesson:** "Not hosting" defense FAILED
 
-**Reality:** This is experimental infrastructure with legal uncertainty. Community should understand the risks.
+🚨 **LimeWire (2010)** - Forced shutdown, $105M settlement
+- **Defense:** "Decentralized P2P, we don't control users"
+- **Court ruling:** Inducement liability (designed for infringement)
+- **Lesson:** Decentralization doesn't eliminate liability
+
+**Three forms of secondary liability:**
+
+1. **Inducement Liability** (MGM v. Grokster)
+   - Affirmative steps to foster infringement
+   - Evidence: Marketing materials, instructions, newsletter content
+   - **Our risk:** If we promote torrent downloading = inducement
+
+2. **Contributory Infringement**
+   - Knowledge of specific infringement + material contribution
+   - **Our risk:** Torrent search aggregation = "material contribution"
+
+3. **Vicarious Liability** (most dangerous)
+   - Right/ability to control + direct financial benefit
+   - No knowledge required
+   - **Our risk:** If premium tier profits from infringement = vicarious
+
+### Mitigation Strategies
+
+**Immediate (Phase 0-1):**
+- ✅ **Legal counsel retained** (not "we're just a tool" naivety)
+- ✅ **DMCA compliance from day 1:**
+  - Designated agent registered with US Copyright Office
+  - Takedown response within 24 hours
+  - Repeat infringer policy (3 strikes)
+  - Transparent appeal process for false positives
+- ✅ **Marketing emphasizes legitimate uses only:**
+  - No screenshots of copyrighted content
+  - No targeting known infringers
+  - Focus on quality validation, not "free music"
+- ✅ **No profit from infringement in Phase 0-2** (no vicarious liability)
+
+**Medium-term (Phase 2-3):**
+- ✅ **Artist opt-in model:**
+  - Creators approve what's shared ("I approve album X for promotional use")
+  - Transparency dashboard (analytics without opt-in)
+  - Legitimate use case: Promotional sharing with artist consent
+- ✅ **Creator compensation framework:**
+  - Payment distribution when revenue exists (Phase 3+)
+  - Transparent allocation (blockchain-recorded)
+  - Direct artist relationships (not label intermediaries)
+
+**Long-term (Phase 3+):**
+- ✅ **Licenses where possible:**
+  - Approach indie labels for revenue-sharing agreements
+  - Promotional use licenses (like SoundCloud's model)
+  - Partnership discussions with artist collectives
+- ✅ **Non-infringing content focus:**
+  - Creative Commons music (Free Music Archive, ccMixter)
+  - Public domain recordings (78rpm archives, classical)
+  - Artist-approved promotional tracks
+
+### User Responsibility
+
+**You are responsible for:**
+- Copyright compliance in your jurisdiction
+- Verifying file legality before download
+- Understanding local laws (vary by country)
+- Using platform ethically and legally
+
+**We provide:**
+- Tools for quality validation
+- Metadata coordination infrastructure
+- Community trust network
+- **NOT legal advice or content legality guarantees**
+
+### Why We're Still Building
+
+**Despite legal risks:**
+
+1. **Audius precedent** - 6M users, $80M funded, artist partnerships
+   - **Proof:** Hybrid P2P + artist opt-in CAN work legally
+   - They survived because: Artist buy-in, revenue sharing, legitimate use case
+
+2. **Phase structure mitigates risk:**
+   - Phase 0-1: No revenue (no vicarious liability)
+   - Phase 2: Opt-in only (legitimate promotional use)
+   - Phase 3+: License agreements (like Spotify's early path)
+
+3. **Quality validation is transformative:**
+   - Not just "access to copyrighted content"
+   - Cryptographic proof system adds technical value
+   - Acoustic fingerprinting = fair use (courts have upheld for services like Shazam)
+
+4. **Transparent, creator-first approach:**
+   - Unlike Napster (ignored labels entirely)
+   - Unlike Grooveshark (uploaded content internally)
+   - We engage creators from Phase 1 (dashboard)
+
+**Bottom line:**
+- **Legal risk is REAL** (not hypothetical)
+- **We're not naive** about Napster/Grooveshark/LimeWire precedents
+- **Strategy:** Start small, prove value, get creator buy-in, pursue licenses
+- **Alternative:** Ignore legal risk and get shut down (see history)
+
+**Transparency commitment:**
+- Any legal challenges: Public disclosure (unless NDA required)
+- DMCA takedowns: Public log (anonymized complainant data)
+- Platform changes: Community notification (30-day notice)
+
+**We believe the potential impact on creator economics justifies careful, legally-informed risk-taking.**
 
 ---
 
@@ -229,14 +488,45 @@ What if there was a system where:
 
 **Not expert gatekeeping. Community validation at scale.**
 
-- **Casual Listeners (YOU)** vote on files after listening
-- **Core Listeners** validate those votes with cryptographic proof (acoustic fingerprint + spectral analysis)
-- **Progressive path to Core** (Casual → Trusted → Core Candidate → Core)
-  - Requires technical skills: ffprobe, Chromaprint, spectral analysis
-  - Learning resources provided, but ~5% of users estimated to qualify
-  - Earn karma → apply → pass validation test → become Core
-- **The network is self-governing** — no central authority, community-decided criteria
-- **Trust is transparent** — all validation proofs are public and auditable
+**Progressive Path to Core:**
+
+1. **Casual Listener** (95% of users)
+   - Download, vote, seed files
+   - Earn karma through participation (+1 karma per vote)
+   - No technical skills required
+
+2. **Trusted Casual** (50+ karma)
+   - Votes carry more weight in AI rankings
+   - Unlock faster validation queue for your votes
+   - Still no technical requirements
+
+3. **Core Candidate** (100+ karma + technical skills)
+   - Apply to become validator
+   - Must pass validation test: 3 pre-validated files, 90%+ accuracy
+   - Submit acoustic fingerprints + spectral analysis proof
+   - Community reviews application (transparent criteria)
+
+4. **Core Listener** (5-10% of users, estimated)
+   - **Technical requirements**:
+     - Command-line proficiency (ffprobe, Chromaprint, fpcalc)
+     - Audio analysis skills (spectral analysis, transcode detection, sample rate verification)
+     - Cryptographic key management (Ed25519 signing, proof generation)
+     - Time commitment: ~2-5 hours/week for validation queue
+   - **Responsibilities**:
+     - Validate pending votes with cryptographic proof
+     - Run bootstrap/relay nodes (optional but encouraged)
+     - Participate in governance (dispute resolution, criteria updates)
+   - **Compensation** (Phase 3+): Small fee from network 5% (if sustainable)
+
+**Realistic expectations:**
+- Not everyone will qualify for Core (by design - maintains quality)
+- Estimated 5-10% of active users reach Core status
+- Learning resources provided (tutorials, test environment)
+- Technical baseline required (can't validate without command-line skills)
+
+**The network is self-governing** — no central authority, community-decided criteria
+
+**Trust is transparent** — all validation proofs are public and auditable
 
 ### Why This Changes Everything
 
@@ -250,7 +540,11 @@ Traditional systems:
 - ✅ **Community validates quality** with cryptographic proof
 - ✅ **Transparent trust** — you can audit the validators
 - ✅ **Self-reinforcing** — more users = more validated content
-- ✅ **Distributed** — federated mesh with bootstrap nodes (Gun.js), no single point of control
+- ✅ **Distributed mesh** — minimal infrastructure required
+  - Bootstrap nodes coordinate initial peer discovery
+  - STUN servers for NAT traversal (~$50/month)
+  - TURN relays for ~7-15% of users who can't direct connect
+  - Community can run relay nodes to distribute costs
 
 ---
 
@@ -591,20 +885,27 @@ Adds:
 
 ### 3. Distributed Infrastructure
 ```
-Gun.js Distributed Ledger
+Gun.js Distributed Mesh
 
-Bootstrap Nodes ←→ Node 1 (You) ←→ Node 2 (Core) ←→ Node 3 (Casual)
-      ↓                  ↓               ↓                ↓
-  Relay/Init       Local data      Validation        Vote data
-      ↓                  ↓               ↓                ↓
-            All nodes sync via federated mesh
-              (no single point of control)
+Bootstrap Node ←→ Node 2 (You) ←→ Node 3 (Core) ←→ Node 4 (Casual)
+     ↑              ↓              ↓              ↓
+  Required for   Local data    Validation     Vote data
+  discovery         ↓              ↓              ↓
+                All nodes sync via gossip protocol
 ```
 
-- Bootstrap nodes required initially (team-funded)
-- Community peer nodes supplement as network grows
-- Scalability beyond 10k users unproven (Gun.js research needed)
-- No single point of control (distributed architecture)
+**Infrastructure Requirements:**
+- **Bootstrap nodes**: 3-5 servers for peer discovery (required for network to function)
+- **STUN servers**: Public NAT traversal (can use free services initially, e.g., Google STUN)
+- **TURN relays**: Fallback for ~7-15% of users who can't direct connect (bandwidth-intensive)
+- **Estimated costs**:
+  - Phase 1 (500 users): $100-300/month
+  - Phase 2 (1k users): $500-1,000/month
+  - Phase 3 (10k users): $5k-10k/month
+  - Phase 4+ (100k users): $20k-50k/month (with optimizations)
+- **Architecture**: Federated, not serverless (bootstrap nodes = central coordination points)
+- **No single point of control**: Community can run relay nodes to share infrastructure costs
+- **Scalability**: Gun.js unproven beyond 10k concurrent users (research needed)
 
 ### 4. Open Source & Transparent
 - All code is public
@@ -916,32 +1217,104 @@ poetry run karma-player config show
 - **Them:** You rent access. They decide what's available.
 - **Us:** Community owns the trust network. You decide what to download.
 
-### vs What.CD / Redacted
-- **Them:** Interview process. Invite trees. Ratio requirements. Expert gatekeeping.
-- **Us:** Open access. Two-tier validation. Progressive path to Core (requires technical skills).
+### vs What.CD / Redacted (Private Trackers)
 
-### vs Public Torrent Sites
-- **Them:** 50 results. No quality control. Decision paralysis. Fake files.
-- **Us:** Network validates once. Everyone benefits forever. AI picks best match.
+**Private Trackers (What.CD, Redacted, Orpheus):**
+- **Quality**: ✓✓✓ Expert-curated, transcodes banned, strict scene standards
+- **Access**: ✗ Invitation-only, interview process, high barriers to entry
+- **Retention**: ✓✓✓ Ratio requirements enforce long-term seeding (files stay alive for years)
+- **Organization**: ✓✓✓ Complete discographies, proper tags, NFO files, scene standards
+- **Curation**: ✓✓✓ Dedicated staff, years of quality control, trusted uploaders
+- **Community**: ✓✓✓ Strong bonds, expert knowledge sharing, but exclusive
+- **Cost**: Free (but significant time investment for ratio maintenance)
+
+**Public Torrents (TPB, 1337x, RARBG):**
+- **Quality**: ✗ No validation, fake files common, malware risk
+- **Access**: ✓✓✓ Completely open, no barriers
+- **Retention**: ✗ Files die quickly without seeders (no incentive system)
+- **Organization**: ✗ Inconsistent naming, incomplete releases, missing metadata
+- **Curation**: ✗ None (completely unmoderated)
+- **Community**: ✗ Anonymous, transient, no collaboration
+- **Cost**: Free
+
+**Trust Tune (Phase 0 - Current):**
+- **Quality**: ✓ AI-ranked, better than public torrents (but not private tracker level yet)
+- **Access**: ✓✓ Donation or invitation (lower barrier than private trackers)
+- **Retention**: ? No incentive system yet (altruistic seeding only)
+- **Organization**: ✓✓ MusicBrainz canonical metadata (35M recordings)
+- **Curation**: ✗ No validation active yet (Phase 1+ feature)
+- **Community**: ? Building from scratch (6 active testers currently)
+- **Cost**: Free + optional donation
+
+**Trust Tune (Phase 2+ - If Successful):**
+- **Quality**: ✓✓ Cryptographic validation with proof (acoustic fingerprinting + spectral analysis)
+- **Access**: ✓✓ Open with spam prevention (invitation/donation barrier)
+- **Retention**: ✓ Karma incentives for seeding (earn reputation for long-term seeding)
+- **Organization**: ✓✓✓ MusicBrainz + community validation + AI ranking
+- **Curation**: ✓✓ Two-tier validation (casual vote → Core cryptographic proof)
+- **Community**: ✓✓ Transparent governance, open participation at multiple levels
+- **Cost**: Free tier + optional premium ($5-15/month, 95% to creators)
+
+**Honest Assessment:**
+- **Private trackers have superior quality/retention TODAY** - years of expert curation can't be replicated overnight
+- **Our advantage**: Lower access barriers + transparent validation + creator compensation model
+- **We're not replacing private trackers** (they serve their audience exceptionally well)
+- **We're offering an alternative**: Open access + validated quality + transparent economics
+- **Success = finding users who value accessibility over perfection**
+
+**Complementary, not competitive:**
+- **Private trackers**: Best for completists, audiophiles with time to maintain ratio
+- **Trust Tune**: Best for casual discovery + verified quality without gatekeeping
+- **Can use both** (many audiophiles already do - private for rare, public for mainstream)
 
 ### vs Soulseek
-- **Complementary sources, not competitors**
-- **Soulseek strengths:** Excellent for rare/underground music discovery (80-100k concurrent users), strong community
-- **Karma Player adds:** MusicBrainz canonical metadata + AI quality ranking + community validation
-- **Best together:** Soulseek for discovery, TTN for mainstream verification
-- **Integration potential:** If Soulseek wants to join as a search source, we're open (our metadata layer could enhance their network)
+
+**Soulseek:**
+- **Established:** 25 years (2000-present)
+- **Users:** 80,000-100,000 concurrent (700k+ registered)
+- **Strengths:**
+  - Rare/underground music (bootlegs, demos, out-of-print, regional scenes)
+  - Folder browsing (discover entire collections, not just single tracks)
+  - Strong community (annual meetups, chat rooms, reputation systems)
+  - Free, donation-supported, non-commercial
+  - Direct artist/collector connections
+- **Discovery:** Keyword search + folder exploration (serendipitous finds)
+- **Quality:** User self-policing (ban bad sharers, ratio expectations, community trust)
+- **Speed:** Single-source downloads (1 user at a time)
+- **Access:** Free, but sharing required (community enforced)
+
+**Karma Player:**
+- **Established:** Phase 0 (2025)
+- **Users:** TBD (building from zero)
+- **Strengths:**
+  - MusicBrainz canonical metadata (35M recordings)
+  - AI intent parsing ("miles davis kind of blue" → correct album)
+  - Cryptographic validation (acoustic fingerprint + spectral analysis)
+  - BitTorrent swarming (faster for popular content)
+  - Two-tier validation (casual votes + Core cryptographic proof)
+- **Discovery:** Natural language queries → albums
+- **Quality:** Two-tier validation with cryptographic proof (Phase 1+)
+- **Speed:** Multi-source swarming (faster for popular releases)
+- **Access:** Free + optional donation/invitation
+
+**Complementary Strengths:**
+- **Soulseek excels at:** Rare content, underground scenes, browsing discovery, artist collections
+- **Karma Player excels at:** Mainstream albums, validated quality, AI ranking, faster popular downloads
+
+**Potential Integration (Phase 2+):**
+- Add Soulseek as search source (requires Soulseek community approval)
+- Combine: MusicBrainz metadata + Soulseek rare content discovery + validation layer
+- Open to collaboration if Soulseek community interested
+
+**Honest Assessment:**
+- **Soulseek has 25-year head start + deeply loyal community** - that's not replicable
+- **We're not "better" - we're different** (different use cases, different strengths)
+- **Both serve music discovery** with different approaches and audiences
+- **Success = coexistence, not replacement** - many users will use both
 
 ### What Makes TTN Different
 
-```
-Private Trackers:  Quality ✓✓✓ | Access ✗   | Retention ✓✓✓ | Organization ✓✓✓
-Public Torrents:   Quality ✗   | Access ✓✓✓ | Retention ✗   | Organization ✗
-Soulseek:          Quality ✓✓  | Access ✓✓  | Retention ✓✓  | Organization ✓
-Trust Tune:        Quality ✓✓  | Access ✓✓  | Retention ?   | Organization ✓✓
-                   (validated)   (open)      (TBD)          (MusicBrainz)
-```
-
-**The bet:** Combining MusicBrainz (canonical metadata) + distributed validation (community proof) + AI (intent understanding) creates something better than gatekeeping OR anarchy.
+**The bet:** Combining MusicBrainz (canonical metadata) + distributed validation (community proof) + AI (intent understanding) creates something better than gatekeeping OR anarchy - **but not better than private trackers for their specific use case.**
 
 ---
 
@@ -1075,63 +1448,88 @@ The validation principles *could* theoretically apply to other content types (so
 
 ## 🎯 Success Metrics (Realistic Targets)
 
-### Phase 0 (Current - Proof of Concept)
+### Phase 0 (3-6 months - Proof of Concept)
 **Goal:** Prove AI + MusicBrainz can beat manual torrent search
 
 **Metrics:**
-- ✅ **10+ users** successfully search and download (targeting 50+ in 2 months)
-- ✅ **80%+ correct album selection** (AI matches user intent, not random results)
-- ✅ **Edge case handling** (album mismatch detection, format fallback, auto-mode)
-- 📊 **<10 seconds** average search time (MusicBrainz + Jackett aggregation)
-- 📊 **User satisfaction:** 8/10+ rating ("better than manual search")
+- ✅ **50+ users** successfully search and download
+- ✅ **70%+ correct album selection** (AI matches user intent)
+- ✅ **<5 "wrong album" GitHub issues per week**
+- ✅ **System handles edge cases gracefully** (album mismatch, format fallback, auto-mode)
 
 **Current status:** 6 active testers, 85% album match rate, collecting feedback
 
-### Phase 1 (Months 1-3 - Network Launch)
+### Phase 1 (6-12 months - Network Launch)
 **Goal:** Launch Gun.js distributed ledger + voting system
 
 **Metrics:**
-- 🎯 **100+ users** actively voting on downloads
-- 🎯 **500+ files** with vote counts in distributed ledger
-- 🎯 **<500ms network query** latency (Gun.js performance test)
-- 🎯 **50%+ searches** hit files with existing votes (network effect starting)
-- ⚠️ **Bootstrap node stability** (single point of failure risk - need 3+ nodes)
+- ✅ **Gun.js handles 500 concurrent users** (stress tested at 100/250/500)
+- ✅ **50-100 files** with community votes in network
+- ✅ **5-10% of searches hit network-verified files** (bootstrap phase)
+- ✅ **<3s network query latency** (acceptable UX)
+- ✅ **Network operational without critical failures** (99% uptime)
 
 **Unknowns:** Gun.js scalability beyond 1k users, vote spam mitigation effectiveness
 
-### Phase 2 (Months 4-6 - Core Validation)
+### Phase 2 (12-24 months - Core Validation)
 **Goal:** Recruit and onboard Core Listeners with cryptographic validation
 
 **Metrics:**
-- 🎯 **10-20 Core Listeners** (realistic given technical requirements)
-- 🎯 **100+ files** with cryptographic VERIFIED status
-- 🎯 **<2 weeks** average validation time for popular albums
-- 🎯 **Zero false positives** (no fake files marked as verified)
-- 🎯 **Core retention:** 70%+ active after 3 months
+- ✅ **5-10 active Core validators** recruited and trained
+- ✅ **100-500 files** with cryptographic VERIFIED status
+- ✅ **20-30% of popular searches hit verified files**
+- ✅ **<2 weeks average validation time**
+- ✅ **Vote spam rate <5%** (caught by Core validators)
+- ✅ **First creator dashboard launched** (read-only analytics)
 
 **Challenges:** Finding qualified validators, validation tooling complexity, spam prevention
 
-### Phase 3 (Months 7-12 - Creator Opt-In)
+### Phase 3 (24-36 months - Creator Opt-In & Revenue)
 **Goal:** Launch artist dashboard + optional compensation framework
 
 **Metrics:**
-- 🎯 **5-10 artists** opt into network (early adopters, indie musicians)
-- 🎯 **Read-only analytics** dashboard (who's listening, where, quality preferences)
-- 🎯 **Zero artist complaints** (DMCA takedowns respected within 48 hours)
-- 🎯 **Payment proof-of-concept** (if legal, 1-2 artists receive compensation)
+- ✅ **10-20 Core validators active**
+- ✅ **500-2,000 verified files** (major albums + popular catalog)
+- ✅ **40-50% of searches hit verified files**
+- ✅ **Optional premium tier launched**
+- ✅ **1-5 artists opted-in to payment distribution**
+- ✅ **First revenue distribution completed** (transparent, auditable)
 
 **Reality check:** Most artists won't participate until network proves value at scale
 
-### Long-Term (Years 2-3 - IF Phase 1-3 Succeed)
-**Aspirational targets (not guarantees):**
+### Phase 4 (36-48 months - AI Learning & Growth)
+**Goal:** System learns from validation patterns, expands verified catalog
 
-- 🌍 **10,000+ active users** contributing votes and seeding
-- 🌍 **100,000+ verified files** across 100+ Core Listeners
-- 🌍 **1,000+ artists** opted in (transparent analytics + compensation)
-- 🌍 **Self-sustaining economics** (95% creator / 5% network split proven)
-- 🌍 **Legal clarity** (court precedent or regulatory guidance established)
+**Metrics:**
+- ✅ **15-30 Core validators**
+- ✅ **1,000-5,000 verified files**
+- ✅ **50-60% of searches hit verified files**
+- ✅ **AI learning from validation patterns** (ranking accuracy improves to 85%+)
+- ✅ **10-20 artists opted-in**
+- ✅ **Community governance proposals active** (voting on formula changes)
 
-**Honest assessment:** If we hit 10% of these numbers, we've succeeded in building something valuable. These are stretch goals, not promises.
+### Phase 5 (48-60 months - Self-Sustaining Network)
+**Goal:** Economic sustainability, network operates independently
+
+**Metrics:**
+- ✅ **500-2,000 active users** (realistic community size)
+- ✅ **20-50 Core validators** (5-10% of user base)
+- ✅ **5,000-20,000 verified files** (still <0.1% of MusicBrainz 35M catalog)
+- ✅ **60-70% of popular searches hit verified files**
+- ✅ **Economic sustainability proven** (5% network fee covers infrastructure)
+- ✅ **50+ artists opted-in** with transparent compensation
+- ✅ **Network self-sustaining** without founder subsidies
+
+### Reality Check
+
+**These metrics are AMBITIOUS but grounded in research:**
+
+- **Audius:** 6M users after 5 years + $80M funding
+- **Soulseek:** 80-100k concurrent users after 25 years
+- **Private trackers:** 40-150k users after 10-20 years
+- **Our target:** 500-2k users in 5 years = conservative but achievable niche
+
+**Honest assessment:** If we hit 10% of Phase 5 targets (50-200 users, 500-2k verified files), we've succeeded in building something valuable. These are stretch goals, not promises.
 
 ---
 
@@ -1318,42 +1716,167 @@ Alternative: 20% adopt paid tier at $15/month
 
 **This is NOT "free decentralization" - bootstrap nodes + relay bandwidth cost money. But it's FAR cheaper than hosting audio files (Spotify spends ~$2-3/user/month on CDN alone).**
 
+### Cost Scaling Factors
+
+**Three variables that dominate infrastructure costs:**
+
+1. **TURN relay % (biggest variable):**
+   - 5% relay need = $600/month (1k users)
+   - 7% relay need = $1,200/month (1k users)
+   - 15% relay need = $2,500/month (1k users)
+   - **Why it varies:** NAT type (symmetric vs cone), ISP policies, user firewall configs
+   - **Our target:** <7% through aggressive STUN optimization
+
+2. **Usage patterns (hours/day active):**
+   - Light users (1 hr/day): 50% of base estimate
+   - Medium users (2 hrs/day): 100% of base estimate (our assumption)
+   - Heavy users (4 hrs/day): 200% of base estimate
+   - **Reality:** Most users are light, few are heavy (averages out)
+
+3. **Community relay nodes:**
+   - If 10% of users run relay nodes → 50% cost reduction
+   - If 25% of users run relay nodes → 75% cost reduction
+   - **Incentive model:** Karma multipliers (2x karma for relay operators)
+   - **Challenge:** Requires technical setup (Docker, port forwarding)
+
+### Why Transparency Matters
+
+**Users should know real costs:**
+- Not "free forever" - infrastructure has real expenses
+- 5% network allocation must be justified by actual costs
+- Community can audit: "Are these costs reasonable?"
+- Donors understand where contributions go
+
+**Quarterly financial transparency reports:**
+- Public blog posts with full breakdown
+- Actual costs vs budgeted costs
+- Revenue sources (donations, grants, premium tier if exists)
+- Surplus/deficit and runway calculations
+- Example: "Q1 2026: $450 actual, $370 budgeted, $150 donations received, +$150 surplus = 4-month runway"
+
+### Fallback Plan if Costs Exceed Revenue
+
+**Phase-by-phase fallback strategy:**
+
+**Phase 1 (No revenue yet):**
+- ✅ **Founder subsidizes** (acceptable for 1-2 years at $200-400/month)
+- ✅ **Apply for grants:** Protocol Labs, Gitcoin, Mozilla Foundation
+- ✅ **Community donations:** Patreon, OpenCollective ($5-20/month from early adopters)
+
+**Phase 2 (Costs growing, revenue uncertain):**
+- ⚠️ **Scale back relay capacity** (accept lower direct connect %)
+- ⚠️ **Limit concurrent connections** (queue system during peak hours)
+- ⚠️ **Recruit community relay operators** (aggressive incentive campaign)
+
+**Phase 3 (Revenue exists but insufficient):**
+- 🚨 **Community vote to adjust split:**
+  - Option 1: 95/5 → 90/10 (increase network allocation)
+  - Option 2: Raise premium tier price ($10 → $15/month)
+  - Option 3: Hybrid (93/7 split + $12/month pricing)
+- 🚨 **Foundation grants** (pitch to music/tech foundations with track record)
+- 🚨 **DAO treasury** (if community wants governance token, allocate % to infrastructure)
+
+**Phase 4 (Critical - costs unsustainable):**
+- ❌ **Reduce service level** (Phase back to Phase 1 bootstrap-only)
+- ❌ **Transparent shutdown timeline** (6-month notice, archive code, export data)
+- ❌ **Open source everything** (community can fork and continue)
+
+**Our commitment:** We'll never silently disappear. If costs become unsustainable, we'll transparently discuss options with community (adjust economics, scale back features, or graceful shutdown with data export).
+
 ---
 
 ## 🚨 Known Risks & Failure Modes
 
-**We're transparent about what could go wrong:**
+**We're building in public. Here's what could go wrong:**
 
 ### Technical Risks
 
-1. **Gun.js may not scale** - Unproven beyond ~1,000 concurrent users. If it fails at 10k+ users, we'll need fallback (IPFS, federated servers)
-2. **NAT traversal costs** - TURN relay bandwidth for users behind strict NATs could cost $1,200-5,000/month at 1k-10k users
-3. **Validation queue bottleneck** - If Core recruitment fails (<10 validators), verification could take months per file
-4. **Sybil attacks on karma** - Vote spam without economic barrier could poison network. Need proof-of-work or staking
-5. **Bootstrap node centralization** - Initial reliance on team-run nodes creates single point of failure until community nodes mature
+**Gun.js Scaling (HIGH RISK)**
+- **Status**: Unproven at 10,000+ user scale
+- **Impact**: If it fails at scale, network becomes unusable (slow sync, data loss, node crashes)
+- **Mitigation**: Stress testing in Phase 1 (100/500/1k users), fallback to centralized DB if needed
+- **Backup plan**: Hybrid architecture (Gun.js for P2P + PostgreSQL for critical data)
+
+**NAT Traversal Costs (MEDIUM RISK)**
+- **TURN relay bandwidth**: ~$0.08/GB
+- **At 10,000 users** with 7% needing relay = ~$5,000/month
+- **At 100,000 users** = ~$30,000-50,000/month
+- **Mitigation**: Aggressive STUN optimization, community relay nodes, WebRTC improvements
+
+**Validation Queue Bottleneck (MEDIUM RISK)**
+- **Need**: 5-20 active Core validators from day 1
+- **If recruitment fails** → validation backlog → user frustration → network abandonment
+- **Mitigation**: Manually seed validated files (bootstrap trust), recruit from audiophile communities, automated pre-validation
+
+**Sybil Attacks on Karma (MEDIUM RISK)**
+- **Threat**: Malicious users create fake accounts to spam votes
+- **Mitigation**: Proof-of-work for validation (Chromaprint takes time), invitation codes (Phase 1), donation barrier ($1-5 to create account)
 
 ### Community Risks
 
-1. **Core validator recruitment** - Need 10-20 technically skilled volunteers willing to validate for free (Phase 0-2). Historically difficult.
-2. **Vote spam** - Malicious actors flooding network with fake votes. Mitigation: Karma requirements, rate limiting, cryptographic proof
-3. **Governance capture** - Early users accumulating karma could dominate decisions. Need: Quadratic voting or reputation decay
-4. **Eternal September** - Quality standards drift as network grows. Private trackers face this; we need automated validation + community norms
-5. **Toxicity** - As communities grow, moderation becomes critical. Reddit/Discord show this is hard.
+**Core Validator Recruitment (HIGH RISK)**
+- **Need**: 5-20 technically skilled volunteers willing to work 2-5 hrs/week
+- **Challenge**: Audiophile communities may prefer private trackers (established networks, proven quality)
+- **Mitigation**: Grants/stipends for early validators ($100-500/month), recognition system (leaderboards), eventual crypto compensation (Phase 3+)
+
+**Vote Spam / Gaming (MEDIUM RISK)**
+- **Threat**: Users upvote bad files to game system
+- **Mitigation**: Core validation catches this (cryptographic proof required), karma penalties (lose 10x for fake vote), rate limiting (max 50 votes/day)
+
+**Community Governance Capture (LOW RISK - Phase 3+)**
+- **Threat**: Whale users dominate karma economy, new users feel powerless
+- **Mitigation**: Quadratic voting (sqrt of karma), karma decay (old votes lose weight), founder veto in early phases (transparent criteria)
 
 ### Economic Risks
 
-1. **95/5 split may not cover costs** - If infrastructure costs $5k/month but revenue is $3k/month, network is unsustainable
-2. **Creator opt-in low (<1%)** - Artists may not participate until seeing $$$ (chicken-and-egg). Phase 2 success depends on trust-building
-3. **Blockchain volatility** - If using crypto for payments, USD value could fluctuate 50%+ (mitigation: stablecoins)
-4. **Payment distribution complexity** - Splitting revenue across 1,000+ creators proportional to plays requires gas fees (~$0.00025/tx × 1000 = $0.25 minimum)
+**95/5 Split Insufficient for Costs (HIGH RISK)**
+- **Phase 5 infrastructure**: $30k-50k/month (at 100k users)
+- **5% of revenue may not cover this** if adoption is low
+- **Example**: 100k users × 10% paid tier × $10/month = $100k/month → 5% = $5k (shortfall of $25k-45k)
+- **Mitigation**: Dynamic split adjustment (community vote), foundation grants (Mozilla, Protocol Labs), premium tier pricing ($15-20/month)
+
+**Creator Opt-In Adoption Low (HIGH RISK)**
+- **Scenario**: Phase 2 launch, <1% of artists opt-in to payment distribution
+- **Result**: Network remains "torrent validation" not "creator platform"
+- **Mitigation**: Direct outreach to indie labels (Bandcamp, etc.), showcase analytics dashboard (prove value first), artist testimonials
+
+**Blockchain Volatility (MEDIUM RISK - if using crypto)**
+- **Threat**: Solana/crypto price fluctuations affect validator compensation (50%+ swings)
+- **Mitigation**: Stablecoin payouts (USDC, DAI), fiat on-ramp options (Stripe, PayPal), hedge fund for volatility buffer
 
 ### Legal Risks
 
-1. **Secondary liability** - Napster ($26M settlement), Grooveshark ($736M judgment) precedents show "we don't host content" defense FAILED in court
-2. **Inducement doctrine** - MGM v. Grokster established platforms liable if they "induce" infringement (marketing, encouragement)
-3. **DMCA takedown flood** - Malicious or legitimate takedown requests could overwhelm manual review (need automated + appeal process)
-4. **International law complexity** - Different countries, different copyright rules. EU Article 17 could require upload filters.
-5. **Artist/label opposition** - Unlike Audius (which had artist buy-in), we start with existing torrents. Labels could sue aggressively.
+**Secondary Liability (HIGH RISK)**
+- **Napster precedent**: "Facilitating" infringement = contributory liability
+- **Grooveshark lesson**: $736M judgment despite "we don't host content" defense
+- **Inducement doctrine**: If we promote infringement (marketing, encouragement) = liability (MGM v. Grokster)
+- **Mitigation**: Artist opt-in model (Phase 2+), DMCA compliance from day 1 (48-hour takedown), legal counsel retained ($5k-10k/month), market only legitimate uses (quality validation, not piracy)
+
+**DMCA Takedown Flood (MEDIUM RISK)**
+- **Threat**: Automated bots submit thousands of bogus takedowns (YouTube-style abuse)
+- **Mitigation**: Appeal process (counter-notice system), human review (not automated), community dispute resolution
+
+**Artist/Label Opposition (MEDIUM RISK)**
+- **Unlike Audius** (which had artist buy-in), we start with torrents
+- **Perception problem**: "piracy tool" not "quality validation network"
+- **Mitigation**: Phase 1 creator dashboard (transparency builds trust), Phase 2 opt-in model (artist control), Phase 3 compensation (prove value)
+
+### Market Risks
+
+**Critical Mass Failure (HIGHEST RISK)**
+- **Chicken-and-egg**: Need users for votes, need votes for value
+- **Phase 1-2 stagnation** before network effects kick in
+- **Historical precedent**:
+  - Rdio (excellent tech, failed marketing)
+  - Grooveshark (legal shutdown despite 30M users)
+  - Royal ($71M burned, economics didn't work)
+- **Mitigation**: Manually seed validated content (bootstrap 1,000 files), incentivize Core validators (grants $100-500/month), focus on niche first (audiophiles, jazz, classical), expand gradually
+
+**Competing with Entrenched Players (HIGH RISK)**
+- **Spotify**: 500M users, $50B market cap, unlimited marketing budget
+- **Private trackers**: 10-20 years of curated content, loyal communities, proven quality
+- **Soulseek**: 25 years, 80-100k users, strong network effects
+- **Our edge**: MusicBrainz metadata (35M recordings) + AI ranking + crypto validation (unique combination no one else has)
 
 ### Mitigation Strategies
 
@@ -1382,6 +1905,33 @@ Alternative: 20% adopt paid tier at $15/month
 - Focus on public domain, CC, artist-approved content
 - Clear user ToS (user responsibility for downloads)
 - Transparent risk communication (no false promises)
+
+### Realistic Probability of Success
+
+- **Phase 0 (MVP works)**: 90% (already mostly built)
+- **Phase 1 (Gun.js scales to 500 users)**: 70% (technical validation needed)
+- **Phase 2 (Core recruitment, 5-10 validators)**: 50% (social challenge - need skilled volunteers)
+- **Phase 3 (Economic sustainability)**: 30% (market adoption, creator opt-in)
+- **Phase 5 (Self-sustaining network, 10k+ users)**: 10-20% (long-term viability)
+
+### Why We're Building Anyway
+
+**The upside justifies the risk:**
+
+- **Audius proved hybrid P2P works** (6M users, $80M funded - shows demand exists)
+- **MusicBrainz provides 35M recordings** at zero cost (canonical metadata ready to use)
+- **AI makes intent parsing trivial** (vs 2005 keyword search - "miles davis kind of blue" → correct album)
+- **Crypto validation tech is mature** (Chromaprint, Ed25519, spectral analysis - all production-ready)
+- **Community wants alternatives** (Spotify fatigue is real - artists know they're getting screwed)
+
+**Our edge:**
+
+- **Lower costs** (no content hosting, just metadata coordination - $0.25-0.55/user/month vs Spotify's $2-3/user/month)
+- **Incremental validation** (Phase 0 works WITHOUT network - already useful as AI torrent search)
+- **Open development** (community can fork/improve - no vendor lock-in)
+- **Focus on quality validation** (not streaming infrastructure replacement - complementary to existing tools)
+
+**We're honest: This is HARD. But the potential impact on creator economics makes it worth attempting.**
 
 ### Most Likely Failure Modes
 
