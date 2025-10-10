@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "karma-player"
+version = "0.1.1"
+description = "AI-powered music search tool with community verification"
+authors = ["Karma Player Team"]
+readme = "README.md"
+packages = [{include = "karma_player"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+click = "^8.1.7"
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+musicbrainzngs = "^0.7.1"
+requests = "^2.31.0"
+aiohttp = "^3.9.0"
+beautifulsoup4 = "^4.12.0"
+rich = "^13.7.0"
+python-dateutil = "^2.8.2"
+textualeffects = "^0.1.4"
+textual = "^6.2.1"
+pyyaml = "^6.0.3"
+litellm = "^1.77.7"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+pytest-vcr = "^1.0.2"
+pytest-asyncio = "^0.21.0"
+black = "^23.12.0"
+ruff = "^0.1.8"
+
+[tool.poetry.scripts]
+karma-player = "karma_player.cli:cli"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=karma_player --cov-report=term-missing --cov-report=html"

@@ -1,0 +1,103 @@
+KARMA PLAYER SETUP
+==================
+
+AI-powered music search with intelligent album matching and quality ranking.
+
+1. Install:
+   pip install karma_player-0.1.1-py3-none-any.whl
+
+2. Initialize:
+   karma-player init
+
+   When prompted, enter:
+
+   a) MusicBrainz API key (REQUIRED):
+      - Go to: https://musicbrainz.org/account/applications
+      - Register/login, create new app
+      - Type: Installed
+      - Callback URI: Leave empty
+      - Copy the key and paste it here
+
+   b) Music directory:
+      - Press Enter for default (~/Music)
+
+   c) Jackett (REQUIRED for torrent search):
+      - Run locally: http://localhost:9117 (see README for setup)
+      - Or request remote access from team (see README)
+
+3. Enable AI Features (RECOMMENDED):
+   Set ONE of these API keys (auto-detected):
+
+   # Anthropic Claude (recommended for quality)
+   export ANTHROPIC_API_KEY="sk-ant-..."
+
+   # OpenAI GPT (fastest, most economical)
+   export OPENAI_API_KEY="sk-..."
+
+   # Google Gemini
+   export GEMINI_API_KEY="..."
+
+   Auto-detection priority: Anthropic > OpenAI > Gemini
+
+   Add to ~/.bashrc or ~/.zshrc for persistence:
+   echo 'export ANTHROPIC_API_KEY="your-key"' >> ~/.bashrc
+
+4. Search Examples:
+
+   # Basic search (AI-powered, best quality any format)
+   karma-player search "I know you know - Esperanza Spalding"
+
+   # Prefer FLAC, fallback to best available
+   karma-player search "radiohead ok computer" --format FLAC
+
+   # ONLY FLAC (strict, no fallback)
+   karma-player search "pink floyd dark side" --format FLAC --strict
+
+   # Regional music (any format, FLAC may not exist)
+   karma-player search "edson gomes camelo" --min-seeders 1
+
+   # Fast search (skip MusicBrainz)
+   karma-player search "miles davis" --skip-musicbrainz --min-seeders 1
+
+Common Options:
+   --format FLAC          Prefer FLAC, fallback to MP3 if none found
+   --format * (default)   Best quality any format
+   --strict               ONLY exact format, no fallback
+   --min-seeders 5        Minimum seeders (default: 1)
+   --profile remote       Use remote/local/hybrid Jackett
+   --skip-musicbrainz     Direct search (faster, less accurate)
+
+Environment Variables:
+   KARMA_PLAYER_NO_SPLASH=1    Disable splash screen (cleaner output)
+
+   AI API Keys (auto-detected, set ONE):
+     ANTHROPIC_API_KEY         Anthropic Claude API key (priority 1)
+     OPENAI_API_KEY            OpenAI GPT API key (priority 2)
+     GEMINI_API_KEY            Google Gemini API key (priority 3)
+
+   Examples:
+   KARMA_PLAYER_NO_SPLASH=1 karma-player search "miles davis"
+   ANTHROPIC_API_KEY="sk-ant-..." karma-player search "radiohead"
+
+What the AI Does:
+- Parses your query to extract artist, song, album
+- Searches MusicBrainz for canonical metadata
+- Queries 18+ torrent indexers via Jackett
+- FILTERS to correct album first
+- RANKS by quality (24-bit > 16-bit, FLAC > MP3)
+- Explains its decision with reasoning
+
+Example Output:
+   🤖 AI Decision
+   └─ Selected: Esperanza Spalding - Esperanza (2008) [FLAC 16/44]
+
+   💭 Reasoning:
+      Selected the correct album 'Esperanza' containing the song
+      'I Know You Know'. Although 16-bit, it matches the requested
+      album.
+
+   ❌ Rejected:
+      • "12 Little Spells" (24-bit) - Wrong album, doesn't contain song
+      • "Radio Music Society" (24-bit) - Different album
+
+Done!

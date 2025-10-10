@@ -1,0 +1,264 @@
+# Karma Player Indexer Configuration
+# ===================================
+# Configure your torrent indexers here.
+# You can define multiple profiles and switch between them.
+
+# Default profile to use (can be overridden with --profile)
+default_profile: remote
+
+# Indexer Profiles
+# ----------------
+profiles:
+  # Local Jackett instance
+  local:
+    description: "Local Jackett instance"
+    indexers:
+      - name: jackett_local
+        type: jackett
+        enabled: true
+        base_url: http://localhost:9117
+        api_key: ${JACKETT_API_KEY}  # From ~/.karma-player/config.db
+        indexer_id: all  # Query all configured indexers
+        categories:
+          - 3000  # Audio (general)
+          - 3010  # Audio/MP3
+          - 3020  # Audio/Video
+          - 3030  # Audio/Audiobook
+          - 3040  # Audio/Lossless (FLAC, ALAC)
+          - 3050  # Audio/Other
+        timeout: 15
+
+      - name: 1337x
+        type: 1337x
+        enabled: true
+
+  # Remote Jackett instance - Request access from team
+  remote:
+    description: "Remote Jackett instance (contact team for access)"
+    indexers:
+      # Use specific working indexers instead of "all" to avoid failures
+      - name: knaben
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}  # Request from team
+        api_key: ${JACKETT_REMOTE_API_KEY}  # Request from team
+        indexer_id: knaben
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: therarbg
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: therarbg
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: torrentgalaxy
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: torrentgalaxyclone
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: uindex
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: uindex
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: internetarchive
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: internetarchive
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: 1337x
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: 1337x
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 120  # Increased timeout for FlareSolverr
+
+      - name: anirena
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: AniRena
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: audiobookbay
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: audiobookbay
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: bangumi
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: bangumimoe
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: btetree
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: btetree
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: ebookbay
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: ebookbay
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: kickasstorrents
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: kickasstorrents-ws
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: mixtapetorrent
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: mixtapetorrent
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: nipponsei
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: nipponsei
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: nyaa
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: nyaasi
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: thepiratebay
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: thepiratebay
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: tokyotoshokan
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: tokyotosho
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: torrentdownload
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: torrentdownload
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+  # Use both local and remote
+  hybrid:
+    description: "Query both local and remote Jackett"
+    indexers:
+      - name: jackett_local
+        type: jackett
+        enabled: true
+        base_url: http://localhost:9117
+        api_key: ${JACKETT_API_KEY}
+        indexer_id: all
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 15
+
+      - name: jackett_remote
+        type: jackett
+        enabled: true
+        base_url: ${JACKETT_REMOTE_URL}
+        api_key: ${JACKETT_REMOTE_API_KEY}
+        indexer_id: all
+        categories: [3000, 3010, 3020, 3030, 3040, 3050]
+        timeout: 30
+
+      - name: 1337x
+        type: 1337x
+        enabled: false
+
+  # FLAC-only profile (lossless audio only)
+  lossless_only:
+    description: "Search only for lossless audio (FLAC, ALAC)"
+    indexers:
+      - name: jackett_local
+        type: jackett
+        enabled: true
+        base_url: http://localhost:9117
+        api_key: ${JACKETT_API_KEY}
+        indexer_id: all
+        categories:
+          - 3040  # Audio/Lossless only
+        timeout: 15
+
+# Indexer-specific settings
+# --------------------------
+indexer_settings:
+  jackett:
+    # Default Jackett settings (can be overridden per indexer)
+    default_categories: [3000, 3010, 3040, 3050]
+    retry_count: 2
+    circuit_breaker_threshold: 3
+    cooldown_seconds: 300
+
+  1337x:
+    retry_count: 3
+    timeout: 10
+    circuit_breaker_threshold: 3
+    cooldown_seconds: 300
+
+# Global search settings
+# ----------------------
+search:
+  min_seeders: 5
+  default_format: null  # null = any format, or specify: FLAC, MP3, etc.
+  max_results_per_indexer: 100
+  deduplicate_by: infohash  # or: title, none
