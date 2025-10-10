@@ -38,7 +38,7 @@ Spotify pays artists: $0.003-$0.005 per stream
 ```
 
 Meanwhile:
-- ❌ **Corporations exploit creators** - Keep the majority, provide zero transparency
+- ❌ **Corporations exploit creators** - Keep the majority, provide limited transparency
 - ❌ **Users get a bad deal** - Pay monthly subscriptions, but artists still starve
 - ❌ **Labels control everything** - Decide what gets promoted, what gets hidden
 - ❌ **No real analytics** - Artists don't know WHO loves their music or WHERE
@@ -975,7 +975,7 @@ Artists control what's shared (opt-in per song/album) and receive direct compens
 - 20+ active Core Listeners
 - 50+ files with VERIFIED status
 - <1 week average validation time for popular files
-- Zero vote spam incidents
+- limited vote spam incidents
 
 ### Long-Term (Months 4+)
 - Trusted network with distributed validation infrastructure
