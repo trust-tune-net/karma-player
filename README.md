@@ -38,6 +38,80 @@ You → Search "Radiohead OK Computer" → Get 50 results
 
 ---
 
+## 🎨 Why This Exists: Empowering Creators, Not Exploiting Them
+
+**The fundamental problem:** Streaming platforms are black boxes. Spotify pays artists $0.003-$0.005 per stream, keeps the lion's share, and provides limited transparency about who's listening, where, or why. Labels take most of what's left. Artists get pennies.
+
+**Our belief:**
+
+> **Artists WANT their music heard worldwide.** More reach = more fans = more shows = actual income.
+> **Artists DESERVE transparent compensation** when the network generates revenue.
+> **Nobody wants ads.** We hate them too.
+
+### The Vision: Transparent Creator Compensation
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              CREATOR-FIRST REVENUE MODEL (Future)               │
+│                                                                 │
+│  Phase 1 (Now): Free, open access                              │
+│    → Build trust network & verified content library            │
+│    → Prove the model works                                     │
+│                                                                 │
+│  Phase 2 (Critical Mass): Optional paid features               │
+│    → Premium: ad-free, faster downloads, priority support      │
+│    → Revenue split: 95% Creators | 5% Network                  │
+│    → Blockchain-recorded (Solana/similar)                      │
+│    → 100% transparent, auditable by anyone                     │
+│                                                                 │
+│  Creator Controls:                                             │
+│    ✓ Opt-in per song/album (approve what you share)           │
+│    ✓ Full analytics dashboard (who, where, when)              │
+│    ✓ Direct payments (no middlemen)                            │
+│    ✓ Revoke permission anytime                                │
+│                                                                 │
+│  What We Won't Do:                                             │
+│    ✗ Ads (we hate them too)                                   │
+│    ✗ Sell user data                                           │
+│    ✗ Lock content behind paywalls (free tier always exists)   │
+│    ✗ Take majority revenue (95% goes to creators)             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### The Chicken-and-Egg Problem
+
+**We know the challenge:**
+Artists won't upload to a platform without users.
+Users won't join a platform without content.
+Revenue won't exist without scale.
+
+**Our approach:**
+
+1. **Phase 0 (Now):** Build trust infrastructure with existing torrents
+   - Prove the validation model works
+   - Create a verified content library through community validation
+   - No artist participation required yet
+
+2. **Phase 1 (Next):** Launch creator dashboard (read-only)
+   - Artists can see what's being shared (their existing torrents)
+   - Full analytics: plays, locations, quality preferences, trending
+   - No commitment, just transparency
+
+3. **Phase 2 (Scale):** Opt-in permissions system
+   - Artists approve/block specific songs/albums
+   - "I'm okay with X album being shared, not Y"
+   - Still free for users, builds artist trust
+
+4. **Phase 3 (Revenue):** Paid tier for sustainability
+   - Premium features (faster, ad-free, early access)
+   - **95% of revenue → Creators** (proportional to plays/validations)
+   - **5% → Network** (validators + infrastructure)
+   - Artists see every transaction on blockchain
+
+**The bet:** If we build genuine trust infrastructure that respects creators AND users, both will choose to participate when they see it works.
+
+---
+
 ## 💡 The Trust Tune Network Vision
 
 What if there was a system where:
@@ -111,7 +185,7 @@ User Query → AI Parse → MusicBrainz → Torrent Search → AI Select → Dow
 
 #### 1. AI-Powered Query Understanding
 ```bash
-$ karma-player search "I know you know - Esperanza Spalding"
+poetry run karma-player search "I know you know - Esperanza Spalding"
 ```
 
 AI parses natural language:
@@ -503,7 +577,7 @@ Without FlareSolverr, you'll get "FlareSolverr is not configured" errors for Clo
 
 **Configure Karma Player:**
 
-During `karma-player init`, enter:
+During init, enter:
 - Jackett URL: `http://localhost:9117`
 - API key: (copied from Jackett web interface)
 
@@ -512,7 +586,12 @@ During `karma-player init`, enter:
 If you're running Jackett on another machine or have access to a shared instance:
 
 ```bash
+# If using Option 1 (pip install -e .)
 karma-player init
+
+# If using Option 2 (poetry)
+poetry run karma-player init
+
 # Enter remote URL: https://your-jackett-instance.com
 # Enter API key: (provided by instance admin)
 ```
@@ -849,27 +928,18 @@ The validation principles *could* theoretically apply to other content types (so
 - Tool facilitates search and metadata, not distribution
 - No hosting, no storage, no servers
 
-### Creator-Positive Approach
-**We're committed to building the best open analytics possible for creators.**
+### Creator Compensation (Detailed)
 
-**Our belief:**
-- Awesome music exists **beyond** label-controlled recordings where creators aren't paid fairly
-- Artists **want** their music heard worldwide — it builds awareness, strengthens their brand, and creates opportunities (more shows, more fans, more demand)
-- Labels often restrict access and take the lion's share, leaving creators with pennies
+*See [Why This Exists](#-why-this-exists-empowering-creators-not-exploiting-them) for the full vision.*
 
-Unlike streaming platforms (often black boxes with hidden metrics):
-- **Full transparency**: Every play, vote, validation is visible
-- **Open analytics dashboard**: Who's listening, where, quality preferences, trending patterns
-- **No hidden algorithms**: Creators see exactly how their music performs
-- **Direct compensation** (if network achieves scale):
-  - 95% of revenue → Creators who opt-in
-  - Blockchain-recorded payments (Solana or similar)
-  - Community-decided allocation model
-  - Immutable, auditable transaction history
+**Summary:**
+- **Phase 0-2:** Free for everyone, build trust infrastructure
+- **Phase 3+:** Optional paid tier (premium features)
+- **Revenue split:** 95% creators, 5% network
+- **Full transparency:** Open analytics + blockchain payments
+- **No ads, ever**
 
-**The vision:** Worldwide reach increases artist awareness and opportunities. Better analytics + direct compensation + global distribution = creators actually benefit from sharing their work.
-
-**Goal:** Prove you can build trust infrastructure that empowers creators with transparency, respects users' privacy, and remains decentralized.
+Artists control what's shared (opt-in per song/album) and receive direct compensation when revenue exists.
 
 ---
 

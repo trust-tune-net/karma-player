@@ -7,7 +7,7 @@ AI-powered music search with intelligent album matching and quality ranking.
    pip install karma_player-0.1.1-py3-none-any.whl
 
 2. Initialize:
-   karma-player init
+   poetry run karma-player init
 
    When prompted, enter:
 
@@ -45,19 +45,19 @@ AI-powered music search with intelligent album matching and quality ranking.
 4. Search Examples:
 
    # Basic search (AI-powered, best quality any format)
-   karma-player search "I know you know - Esperanza Spalding"
+   poetry run karma-player search "I know you know - Esperanza Spalding"
 
    # Prefer FLAC, fallback to best available
-   karma-player search "radiohead ok computer" --format FLAC
+   poetry run karma-player search "radiohead ok computer" --format FLAC
 
    # ONLY FLAC (strict, no fallback)
-   karma-player search "pink floyd dark side" --format FLAC --strict
+   poetry run karma-player search "pink floyd dark side" --format FLAC --strict
 
    # Regional music (any format, FLAC may not exist)
-   karma-player search "edson gomes camelo" --min-seeders 1
+   poetry run karma-player search "edson gomes camelo" --min-seeders 1
 
    # Fast search (skip MusicBrainz)
-   karma-player search "miles davis" --skip-musicbrainz --min-seeders 1
+   poetry run karma-player search "miles davis" --skip-musicbrainz --min-seeders 1
 
 Common Options:
    --format FLAC          Prefer FLAC, fallback to MP3 if none found
@@ -76,8 +76,8 @@ Environment Variables:
      GEMINI_API_KEY            Google Gemini API key (priority 3)
 
    Examples:
-   KARMA_PLAYER_NO_SPLASH=1 karma-player search "miles davis"
-   ANTHROPIC_API_KEY="sk-ant-..." karma-player search "radiohead"
+   KARMA_PLAYER_NO_SPLASH=1 poetry run karma-player search "miles davis"
+   ANTHROPIC_API_KEY="sk-ant-..." poetry run karma-player search "radiohead"
 
 What the AI Does:
 - Parses your query to extract artist, song, album
