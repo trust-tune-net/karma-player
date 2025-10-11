@@ -116,6 +116,32 @@ async def search_with_format_fallback(torrent_service, query, format_filter, str
     )
 
 
+# Save reference to real stdout before any redirection
+import sys as _sys
+_REAL_STDOUT = _sys.stdout
+
+
+def emit_json_event(event_type: str, data: dict):
+    """Emit a JSON event to stdout for Electron to consume."""
+    import json
+    event = {"type": event_type, **data}
+    # Write to REAL stdout (not redirected one)
+    _REAL_STDOUT.write(json.dumps(event) + '\n')
+    _REAL_STDOUT.flush()
+
+
+def read_stdin_answer() -> str:
+    """Read answer from stdin (Electron will write to it)."""
+    import sys
+    return sys.stdin.readline().strip()
+
+
+def redirect_output_to_stderr():
+    """Redirect all print/click.echo to stderr to keep stdout clean for JSON events."""
+    import sys
+    sys.stdout = sys.stderr
+
+
 async def run_interactive_ai_search(
     orchestrator,
     query_str: str,
@@ -125,9 +151,24 @@ async def run_interactive_ai_search(
     min_seeders: int,
     profile,
     page_size,
-    ai_model_auto_detected: bool = False
+    ai_model_auto_detected: bool = False,
+    output_json_events: bool = False,
+    partial_ai: bool = False,
+    full_ai: bool = False
 ):
-    """Run interactive AI-powered search with MusicBrainz understanding."""
+    """Run interactive AI-powered search with MusicBrainz understanding.
+
+    Args:
+        output_json_events: If True, emit JSON events and read answers from stdin
+        partial_ai: If True, auto-select 'just get it for me' option (option 4) for song searches
+        full_ai: If True, auto-select recommended album AND 'just get it for me' option (future use)
+    """
+
+    # If JSON events mode, redirect all output to stderr to keep stdout clean
+    if output_json_events:
+        redirect_output_to_stderr()
+        # Emit initial progress event
+        emit_json_event("progress", {"message": "Starting AI search...", "step": "init"})
 
     # Initialize AI session tracker
     from karma_player.ai.session_tracker import AISessionTracker
@@ -142,18 +183,20 @@ async def run_interactive_ai_search(
         format_display = f"{format_filter} (strict)"
 
     # Show search configuration
-    click.echo(f"\n🔧 {click.style('Search Configuration:', fg='blue')}")
-    model_display = ai_model
-    if ai_model_auto_detected:
-        model_display = f"{ai_model} {click.style('(auto-detected)', dim=True)}"
-    click.echo(f"   AI Model: {click.style(model_display, fg='cyan')}")
-    click.echo(f"   Format: {click.style(format_display, fg='cyan')}")
-    click.echo(f"   Min Seeders: {click.style(str(min_seeders), fg='cyan')}")
-    click.echo(f"   Profile: {click.style(profile or 'remote (default)', fg='cyan')}")
+    if not output_json_events:
+        click.echo(f"\n🔧 {click.style('Search Configuration:', fg='blue')}")
+        model_display = ai_model
+        if ai_model_auto_detected:
+            model_display = f"{ai_model} {click.style('(auto-detected)', dim=True)}"
+        click.echo(f"   AI Model: {click.style(model_display, fg='cyan')}")
+        click.echo(f"   Format: {click.style(format_display, fg='cyan')}")
+        click.echo(f"   Min Seeders: {click.style(str(min_seeders), fg='cyan')}")
+        click.echo(f"   Profile: {click.style(profile or 'remote (default)', fg='cyan')}")
 
-    # Show Jackett URL being used (for debugging)
-    jackett_url = os.environ.get('JACKETT_REMOTE_URL', 'http://localhost:9117')
-    click.echo(f"   Jackett: {click.style(jackett_url, fg='cyan', dim=True)}")
+        # Show Jackett URL being used (for debugging)
+        import os
+        jackett_url = os.environ.get('JACKETT_REMOTE_URL', 'http://localhost:9117')
+        click.echo(f"   Jackett: {click.style(jackett_url, fg='cyan', dim=True)}")
 
     # Step 1: AI parses query + MusicBrainz lookup + AI grouping
     from rich.console import Console
@@ -166,6 +209,9 @@ async def run_interactive_ai_search(
 
     spinner = Spinner("dots", text=f"🤔 Parsing query with AI and searching MusicBrainz...")
 
+    if output_json_events:
+        emit_json_event("progress", {"message": "Parsing query with AI and searching MusicBrainz...", "step": "parsing"})
+
     with Live(spinner, console=console, transient=True):
         result, parsed, mb_selection = await orchestrator.interactive_search(
             query_str,
@@ -176,6 +222,9 @@ async def run_interactive_ai_search(
         )
 
     elapsed = time.time() - start
+
+    if output_json_events:
+        emit_json_event("progress", {"message": f"Understood in {elapsed:.1f}s", "step": "understood"})
 
     # Display what AI understood
     click.echo(f"\n   {click.style('✓ Understood in', fg='green')} {click.style(f'{elapsed:.1f}s', fg='cyan')}")
@@ -204,12 +253,19 @@ async def run_interactive_ai_search(
             ai_model=ai_model
         )
         search_result = await orchestrator.search(params)
-        display_search_results(search_result, page_size, ai_tracker)
+        display_search_results(search_result, page_size, ai_tracker, output_json_events)
         return
 
     # Step 2: Pre-filter releases by checking torrent availability
     click.echo(f"\n{mb_selection.explanation}")
+
+    if output_json_events:
+        emit_json_event("progress", {"message": mb_selection.explanation[:100], "step": "explanation"})
+
     click.echo(f"\n🔍 {click.style('Checking torrent availability for each album...', fg='yellow')}")
+
+    if output_json_events:
+        emit_json_event("progress", {"message": "Checking torrent availability for each album...", "step": "checking_availability"})
 
     from karma_player.services.torrent_service import TorrentSearchService
     from karma_player.services.adapter_factory import AdapterFactory
@@ -239,9 +295,17 @@ async def run_interactive_ai_search(
             available_releases.append(release)
             total_seeders = sum(t.seeders for t in torrents)
             click.echo(f"   ✓ {album[:50]} - {len(torrents)} torrent(s) ({total_seeders} seeders)")
+
+            if output_json_events:
+                album_display = album if len(album) <= 120 else f"{album[:120]}..."
+                emit_json_event("progress", {"message": f"✓ {album_display} - {len(torrents)} torrent(s)", "step": "album_found"})
         else:
             click.echo(f"   ✗ {album[:50]} - no torrents", nl=False)
             click.echo(click.style(" (skipped)", dim=True))
+
+            if output_json_events:
+                album_display = album if len(album) <= 120 else f"{album[:120]}..."
+                emit_json_event("progress", {"message": f"✗ {album_display} - no torrents (skipped)", "step": "album_skipped"})
 
     # If no releases have torrents, fallback to generic artist search
     if not available_releases:
@@ -283,7 +347,7 @@ async def run_interactive_ai_search(
                 )
                 search_result.ai_decision = ai_decision
 
-            display_search_results(search_result, page_size, ai_tracker)
+            display_search_results(search_result, page_size, ai_tracker, output_json_events)
             return
         else:
             click.echo(f"\n❌ No torrents found even with generic search")
@@ -292,52 +356,127 @@ async def run_interactive_ai_search(
     # Update releases list with only available ones
     mb_selection.releases = available_releases
 
-    click.echo(f"\n📋 {click.style('What would you like to search for?', fg='green', bold=True)}")
+    if full_ai:
+        # Full AI mode: auto-select first (recommended) option
+        choice = 1
+        selected_release = mb_selection.releases[choice - 1]
 
-    for i, release in enumerate(mb_selection.releases, 1):
-        prefix = "🏆" if release.recommended else "  "
-        label = click.style(f"[{i}]", fg='yellow')
-        title = click.style(release.label, bold=release.recommended)
-        click.echo(f"   {prefix} {label} {title}")
-        if release.reason:
-            click.echo(f"        → {release.reason}")
+        if output_json_events:
+            emit_json_event("progress", {"message": f"Auto-selected: {selected_release.label}", "step": "album_auto_selected"})
+        else:
+            click.echo(f"\n🤖 {click.style('Full AI mode: Auto-selecting recommended album', fg='magenta', bold=True)}")
+            click.echo(f"   → {selected_release.label}")
+    elif output_json_events:
+        # Event mode: emit question and read answer from stdin
+        options = []
+        for i, release in enumerate(mb_selection.releases, 1):
+            options.append({
+                "value": i,
+                "label": release.label,
+                "recommended": release.recommended,
+                "reason": release.reason
+            })
 
-    # Step 3: User selects
-    choice = click.prompt(
-        "\nSelect option",
-        type=click.IntRange(1, len(mb_selection.releases)),
-        default=1
-    )
+        emit_json_event("question", {
+            "id": "album_selection",
+            "title": "What would you like to search for?",
+            "options": options,
+            "default": 1
+        })
 
-    selected_release = mb_selection.releases[choice - 1]
+        choice = int(read_stdin_answer())
+        selected_release = mb_selection.releases[choice - 1]
+    else:
+        # Interactive CLI mode: show options and prompt user
+        click.echo(f"\n📋 {click.style('What would you like to search for?', fg='green', bold=True)}")
+
+        for i, release in enumerate(mb_selection.releases, 1):
+            prefix = "🏆" if release.recommended else "  "
+            label = click.style(f"[{i}]", fg='yellow')
+            title = click.style(release.label, bold=release.recommended)
+            click.echo(f"   {prefix} {label} {title}")
+            if release.reason:
+                click.echo(f"        → {release.reason}")
+
+        # Step 3: User selects
+        choice = click.prompt(
+            "\nSelect option",
+            type=click.IntRange(1, len(mb_selection.releases)),
+            default=1
+        )
+
+        selected_release = mb_selection.releases[choice - 1]
 
     # Step 4: Ask user preference if this is a song search
     prefer_song_only = False
     search_other_albums = False
-    if parsed.search_type == "song" and parsed.song:
-        click.echo(f"\n🎵 {click.style('Song detected:', fg='blue')} \"{parsed.song}\" from album \"{selected_release.mb_result.album}\"")
+    auto_fallback = False
 
-        # Check if this is a song within an album (not just a standalone single)
+    if parsed.search_type == "song" and parsed.song:
         has_album = selected_release.mb_result.album is not None
 
-        click.echo(f"\n   {click.style('Search preference:', fg='yellow')}")
-        click.echo(f"   [1] Try to find just this song (single track)")
-        click.echo(f"   [2] Open to full album if song-only not available in good quality")
+        if partial_ai or full_ai:
+            # Partial/Full AI mode: auto-select option 4 (auto mode) if available, else option 2
+            mode_name = "Full AI" if full_ai else "Partial AI"
+            if has_album:
+                pref = 4
+                auto_fallback = True
+                if output_json_events:
+                    emit_json_event("progress", {"message": "Auto-selected: Just get it for me! (auto-try mode)", "step": "song_auto_selected"})
+                else:
+                    click.echo(f"\n🤖 {click.style(f'{mode_name} mode: Auto-selecting auto-try mode', fg='magenta', bold=True)}")
+                    click.echo(f"   → Just get it for me! (single → album → best available)")
+            else:
+                pref = 2
+                if output_json_events:
+                    emit_json_event("progress", {"message": "Auto-selected: Open to full album", "step": "song_auto_selected"})
+                else:
+                    click.echo(f"\n🤖 {click.style(f'{mode_name} mode: Auto-selecting fallback to album', fg='magenta', bold=True)}")
+        elif output_json_events:
+            # Event mode: emit question and read answer
+            options = [
+                {"value": 1, "label": "Try to find just this song (single track)"},
+                {"value": 2, "label": "Open to full album if song-only not available in good quality"}
+            ]
 
-        max_option = 2
-        if has_album:
-            click.echo(f"   [3] Search other albums containing this song")
-            click.echo(f"   [4] 🎲 {click.style('Just get it for me!', fg='magenta', bold=True)} (auto-try: single → album → best available)")
-            max_option = 4
+            if has_album:
+                options.append({"value": 3, "label": "Search other albums containing this song"})
+                options.append({"value": 4, "label": "🎲 Just get it for me! (auto-try: single → album → best available)"})
 
-        pref = click.prompt(
-            "\nYour preference",
-            type=click.IntRange(1, max_option),
-            default=2
-        )
-        prefer_song_only = (pref == 1)
-        search_other_albums = (pref == 3)
-        auto_fallback = (pref == 4)
+            emit_json_event("question", {
+                "id": "song_preference",
+                "title": f"Song detected: \"{parsed.song}\" from album \"{selected_release.mb_result.album}\"",
+                "subtitle": "Search preference:",
+                "options": options,
+                "default": 2
+            })
+
+            pref = int(read_stdin_answer())
+            prefer_song_only = (pref == 1)
+            search_other_albums = (pref == 3)
+            auto_fallback = (pref == 4)
+        else:
+            # Interactive CLI mode: show prompts
+            click.echo(f"\n🎵 {click.style('Song detected:', fg='blue')} \"{parsed.song}\" from album \"{selected_release.mb_result.album}\"")
+
+            click.echo(f"\n   {click.style('Search preference:', fg='yellow')}")
+            click.echo(f"   [1] Try to find just this song (single track)")
+            click.echo(f"   [2] Open to full album if song-only not available in good quality")
+
+            max_option = 2
+            if has_album:
+                click.echo(f"   [3] Search other albums containing this song")
+                click.echo(f"   [4] 🎲 {click.style('Just get it for me!', fg='magenta', bold=True)} (auto-try: single → album → best available)")
+                max_option = 4
+
+            pref = click.prompt(
+                "\nYour preference",
+                type=click.IntRange(1, max_option),
+                default=2
+            )
+            prefer_song_only = (pref == 1)
+            search_other_albums = (pref == 3)
+            auto_fallback = (pref == 4)
 
         # If user wants to search other albums, actually search torrents for them
         if search_other_albums:
@@ -490,12 +629,15 @@ async def run_interactive_ai_search(
                             )
                             search_result.ai_decision = ai_decision
 
-                        display_search_results(search_result, page_size, ai_tracker)
+                        display_search_results(search_result, page_size, ai_tracker, output_json_events)
                         return  # Done! Skip the normal search flow
 
         # Auto-fallback mode: Try single → album → best available
         if auto_fallback and has_album:
             click.echo(f"\n🎲 {click.style('Auto mode:', fg='magenta', bold=True)} Finding best option for you...")
+
+            if output_json_events:
+                emit_json_event("progress", {"message": "Auto mode: Finding best option for you...", "step": "auto_mode"})
 
             from karma_player.services.torrent_service import TorrentSearchService
             from karma_player.services.adapter_factory import AdapterFactory
@@ -514,6 +656,10 @@ async def run_interactive_ai_search(
 
             # Strategy 1: Try single track
             click.echo(f"\n   {click.style('[1/3]', fg='cyan')} 🎵 Trying single track...")
+
+            if output_json_events:
+                emit_json_event("progress", {"message": "Trying to find single track...", "step": "single_track"})
+
             query_single = f"{selected_release.mb_result.artist} {parsed.song}"
             click.echo(f"      Query: {click.style(query_single, dim=True)}")
 
@@ -570,11 +716,11 @@ async def run_interactive_ai_search(
                         # Don't return, continue to Strategy 2
                     else:
                         # AI found a good match, use it
-                        display_search_results(search_result, page_size, ai_tracker)
+                        display_search_results(search_result, page_size, ai_tracker, output_json_events)
                         return
                 else:
                     # No AI, just display best quality
-                    display_search_results(search_result, page_size, ai_tracker)
+                    display_search_results(search_result, page_size, ai_tracker, output_json_events)
                     return
 
             click.echo(f" {click.style('✗', fg='red')} No single tracks ({elapsed:.1f}s)")
@@ -582,6 +728,10 @@ async def run_interactive_ai_search(
             # Strategy 2: Try the original selected album
             album_short = selected_release.mb_result.album[:40] + "..." if len(selected_release.mb_result.album) > 40 else selected_release.mb_result.album
             click.echo(f"\n   {click.style('[2/3]', fg='cyan')} 💿 Trying album: {click.style(album_short, bold=True)}...")
+
+            if output_json_events:
+                emit_json_event("progress", {"message": f"Trying album: {album_short}...", "step": "album_search"})
+
             query_album = f"{selected_release.mb_result.artist} {selected_release.mb_result.album}"
             click.echo(f"      Query: {click.style(query_album, dim=True)}")
 
@@ -600,6 +750,9 @@ async def run_interactive_ai_search(
 
             if torrents_album:
                 click.echo(f" {click.style('✓', fg='green')} Found {click.style(str(len(torrents_album)), fg='green', bold=True)} torrent(s)! ({elapsed:.1f}s)")
+
+                if output_json_events:
+                    emit_json_event("progress", {"message": f"Found {len(torrents_album)} torrents! AI is selecting the best one...", "step": "ai_selection"})
 
                 from karma_player.services.search_orchestrator import SearchResult
                 from karma_player.ai.agent import TorrentAgent
@@ -625,7 +778,7 @@ async def run_interactive_ai_search(
                     )
                     search_result.ai_decision = ai_decision
 
-                display_search_results(search_result, page_size, ai_tracker)
+                display_search_results(search_result, page_size, ai_tracker, output_json_events)
                 return
 
             click.echo(f" {click.style('✗', fg='red')} No torrents ({elapsed:.1f}s)")
@@ -718,7 +871,7 @@ async def run_interactive_ai_search(
                     )
                     search_result.ai_decision = ai_decision
 
-                display_search_results(search_result, page_size, ai_tracker)
+                display_search_results(search_result, page_size, ai_tracker, output_json_events)
                 return
             else:
                 click.echo(f"        ✗ No torrents found anywhere\n")
@@ -826,7 +979,7 @@ async def run_interactive_ai_search(
                 click.echo(f"\n   ℹ️  Showing best match across all categories (quality prioritized)")
 
     # Step 6: Display results
-    display_search_results(search_result, page_size, ai_tracker)
+    display_search_results(search_result, page_size, ai_tracker, output_json_events)
 
 
 def display_ai_session_summary(ai_tracker):
@@ -855,13 +1008,63 @@ def display_ai_session_summary(ai_tracker):
         click.echo(f"{'─' * 70}")
 
 
-def display_search_results(search_result, page_size, ai_tracker=None):
+def display_search_results(search_result, page_size, ai_tracker=None, output_json_events=False):
     """Display search results (AI or manual)."""
     if not search_result or not search_result.torrents:
-        click.echo("\n❌ No torrents found.")
-        if ai_tracker:
-            display_ai_session_summary(ai_tracker)
+        if output_json_events:
+            emit_json_event("result", {
+                "success": False,
+                "error": "No torrents found",
+                "results": []
+            })
+        else:
+            click.echo("\n❌ No torrents found.")
+            if ai_tracker:
+                display_ai_session_summary(ai_tracker)
         return
+
+    # If JSON events mode, emit result and return
+    if output_json_events:
+        result_data = {
+            "success": True,
+            "query": search_result.query_used,
+            "results": [
+                {
+                    "title": t.title,
+                    "artist": getattr(search_result.musicbrainz_result, "artist", None) if search_result.musicbrainz_result else None,
+                    "album": getattr(search_result.musicbrainz_result, "album", None) if search_result.musicbrainz_result else None,
+                    "format": t.format,
+                    "bitrate": t.bitrate,
+                    "size_formatted": t.size_formatted,
+                    "size_bytes": getattr(t, "size_bytes", None) or getattr(t, "size", None),
+                    "seeders": t.seeders,
+                    "leechers": t.leechers,
+                    "quality_score": t.quality_score,
+                    "torrent_hash": getattr(t, "infohash", None) or getattr(t, "info_hash", None),
+                    "magnet_link": t.magnet_link,
+                    "indexer": t.indexer,
+                }
+                for t in search_result.torrents
+            ]
+        }
+
+        if search_result.ai_decision:
+            result_data["ai_decision"] = {
+                "selected_index": search_result.ai_decision.selected_index,
+                "reasoning": search_result.ai_decision.reasoning,
+                "top_candidates": [
+                    {"index": idx, "title": cand.title, "reason": reason}
+                    for idx, cand, reason in (search_result.ai_decision.top_candidates or [])
+                ],
+                "rejected": [
+                    {"index": idx, "title": rej.title, "reason": reason}
+                    for idx, rej, reason in (search_result.ai_decision.rejected or [])
+                ]
+            }
+
+        emit_json_event("result", result_data)
+        import sys
+        sys.exit(0)  # Explicit success exit for JSON events mode
 
     # AI Decision
     if search_result.ai_decision:
@@ -1014,6 +1217,9 @@ def cli(ctx, debug):
 @click.option("--profile", "-p", default=None, help="Indexer profile to use (default: from indexers.yaml)")
 @click.option("--ai/--no-ai", default=True, help="Use AI for intelligent search (default: enabled)")
 @click.option("--ai-model", default=None, help="AI model (auto-detected: claude-3-5-sonnet-20241022, gpt-4o-mini, gemini/gemini-1.5-flash, ollama/llama3.2 [SLOW]). Ollama requires OLLAMA_MODEL env var to enable.")
+@click.option("--partial-ai", is_flag=True, help="Auto-select 'just get it for me' option (option 4) for song searches")
+@click.option("--full-ai", is_flag=True, help="Full automation: auto-select recommended album and 'just get it for me' option (future use)")
+@click.option("--output-json-events", is_flag=True, help="Output as JSON event stream (for Electron/GUI integration)")
 @click.pass_context
 def search(
     ctx,
@@ -1028,6 +1234,9 @@ def search(
     profile,
     ai,
     ai_model,
+    partial_ai,
+    full_ai,
+    output_json_events,
 ):
     """Search for music and find torrents."""
     # Show splash
@@ -1063,7 +1272,7 @@ def search(
         # AI Mode: Conversational flow with intelligent understanding
         if ai and not skip_musicbrainz:
             asyncio.run(run_interactive_ai_search(
-                orchestrator, query_str, ai_model, format_filter, strict, min_seeders, profile, page_size, ai_model_auto_detected
+                orchestrator, query_str, ai_model, format_filter, strict, min_seeders, profile, page_size, ai_model_auto_detected, output_json_events, partial_ai, full_ai
             ))
             return
 
@@ -1118,6 +1327,7 @@ def search(
             result = asyncio.run(orchestrator.search(params, selected_mb))
             result_container.append(result)
 
+        # Show search info
         click.echo(f"\n🔎 Searching torrents...")
         click.echo(f"   Query: '{query_str}'")
         click.echo(f"   Format: {format or 'Any'}")
@@ -1127,39 +1337,80 @@ def search(
         if ai:
             click.echo(f"   AI: {ai_model}")
 
+        # Interactive mode: Show progress bar
         with click.progressbar(
-            length=100,
-            label="   Searching",
-            show_percent=False,
-            show_pos=False,
-            bar_template="%(label)s %(bar)s",
-            fill_char="█",
-            empty_char="░",
-        ) as bar:
-            search_thread = threading.Thread(target=run_search)
-            search_thread.start()
+                length=100,
+                label="   Searching",
+                show_percent=False,
+                show_pos=False,
+                bar_template="%(label)s %(bar)s",
+                fill_char="█",
+                empty_char="░",
+            ) as bar:
+                search_thread = threading.Thread(target=run_search)
+                search_thread.start()
 
-            start_time = time.time()
-            max_duration = 10
+                start_time = time.time()
+                max_duration = 10
 
-            while search_thread.is_alive():
-                elapsed = time.time() - start_time
-                if elapsed >= max_duration:
-                    break
-                progress = min(int((elapsed / max_duration) * 100), 99)
-                current_progress = bar.pos or 0
-                if progress > current_progress:
-                    bar.update(progress - current_progress)
-                time.sleep(0.1)
+                while search_thread.is_alive():
+                    elapsed = time.time() - start_time
+                    if elapsed >= max_duration:
+                        break
+                    progress = min(int((elapsed / max_duration) * 100), 99)
+                    current_progress = bar.pos or 0
+                    if progress > current_progress:
+                        bar.update(progress - current_progress)
+                    time.sleep(0.1)
 
-            search_thread.join()
-            if bar.pos < 100:
-                bar.update(100 - (bar.pos or 0))
+                search_thread.join()
+                if bar.pos < 100:
+                    bar.update(100 - (bar.pos or 0))
 
         search_result = result_container[0] if result_container else None
 
         if not search_result or not search_result.torrents:
             click.echo("\n❌ No torrents found.")
+            sys.exit(0)
+
+        # Display results
+        if False:  # Removed old JSON output mode
+            import json
+            json_output = {
+                "success": True,
+                "query": query_str,
+                "results": [
+                    {
+                        "title": t.title,
+                        "artist": getattr(selected_mb, "artist", None) if selected_mb else None,
+                        "album": getattr(selected_mb, "album", None) if selected_mb else None,
+                        "format": t.format,
+                        "bitrate": t.bitrate,
+                        "size_formatted": t.size_formatted,
+                        "size_bytes": t.size,
+                        "seeders": t.seeders,
+                        "leechers": t.leechers,
+                        "quality_score": t.quality_score,
+                        "torrent_hash": t.info_hash,
+                        "magnet_link": t.magnet_link,
+                        "indexer": t.indexer,
+                    }
+                    for t in search_result.torrents
+                ],
+                "ai_decision": {
+                    "selected_index": search_result.ai_decision.selected_index,
+                    "reasoning": search_result.ai_decision.reasoning,
+                    "selected_torrent": {
+                        "title": search_result.ai_decision.selected_torrent.title,
+                        "format": search_result.ai_decision.selected_torrent.format,
+                        "size": search_result.ai_decision.selected_torrent.size_formatted,
+                        "seeders": search_result.ai_decision.selected_torrent.seeders,
+                        "magnet_link": search_result.ai_decision.selected_torrent.magnet_link,
+                    },
+                    "fallback_used": search_result.ai_decision.fallback_used,
+                } if search_result.ai_decision else None,
+            }
+            print(json.dumps(json_output, indent=2))
             sys.exit(0)
 
         # Step 3: Display results or auto-select with AI
