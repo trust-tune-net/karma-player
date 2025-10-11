@@ -25,19 +25,32 @@ AI-powered music search with intelligent album matching and quality ranking.
       - Run locally: http://localhost:9117 (see README for setup)
       - Or request remote access from team (see README)
 
-3. Enable AI Features (RECOMMENDED):
+3. Enable AI Features (REQUIRED):
    Set ONE of these API keys (auto-detected):
 
-   # Anthropic Claude (recommended for quality)
+   # Anthropic Claude (recommended - best quality, ~$0.01/search)
    export ANTHROPIC_API_KEY="sk-ant-..."
 
-   # OpenAI GPT (fastest, most economical)
+   # OpenAI GPT (fastest, most economical, ~$0.005/search)
    export OPENAI_API_KEY="sk-..."
 
-   # Google Gemini
+   # Google Gemini (good balance, ~$0.003/search)
    export GEMINI_API_KEY="..."
 
    Auto-detection priority: Anthropic > OpenAI > Gemini
+
+   ⚠️  FREE ALTERNATIVE: Ollama (NOT RECOMMENDED)
+   ------------------------------------------------
+   Ollama is FREE but VERY SLOW (30-60s per search vs <2s for cloud).
+   Only use if you can't afford cloud AI (~$15/month for 100 searches/day).
+
+   # Install: https://ollama.ai
+   brew install ollama && ollama pull llama3.2
+
+   # Enable explicitly (opt-in):
+   export OLLAMA_MODEL="llama3.2"
+
+   Ollama is disabled by default due to poor interactive performance.
 
    Add to ~/.bashrc or ~/.zshrc for persistence:
    echo 'export ANTHROPIC_API_KEY="your-key"' >> ~/.bashrc
@@ -70,10 +83,14 @@ Common Options:
 Environment Variables:
    KARMA_PLAYER_NO_SPLASH=1    Disable splash screen (cleaner output)
 
-   AI API Keys (auto-detected, set ONE):
-     ANTHROPIC_API_KEY         Anthropic Claude API key (priority 1)
-     OPENAI_API_KEY            OpenAI GPT API key (priority 2)
-     GEMINI_API_KEY            Google Gemini API key (priority 3)
+   AI Configuration (auto-detected, priority order):
+     ANTHROPIC_API_KEY            Anthropic Claude API key (priority 1)
+     OPENAI_API_KEY               OpenAI GPT API key (priority 2)
+     GEMINI_API_KEY               Google Gemini API key (priority 3)
+
+     Ollama (FREE but SLOW, opt-in only):
+       OLLAMA_MODEL=llama3.2        Enables Ollama (disabled by default)
+       OLLAMA_API_BASE=http://...   Custom URL (default: localhost:11434)
 
    Examples:
    KARMA_PLAYER_NO_SPLASH=1 poetry run karma-player search "miles davis"

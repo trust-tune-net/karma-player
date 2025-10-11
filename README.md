@@ -672,11 +672,12 @@ AI parses natural language:
 - Presents only options that actually exist
 
 **Multi-Provider Support:**
-- 🟣 **Anthropic Claude** (recommended)
-- 🟢 **OpenAI GPT** (fastest, cheapest)
-- 🔵 **Google Gemini**
+- 🟣 **Anthropic Claude** (best quality, ~$0.01/search, <2s response)
+- 🟢 **OpenAI GPT** (fastest, ~$0.005/search, <1s response)
+- 🔵 **Google Gemini** (good balance, ~$0.003/search, <2s response)
+- ⚠️ **Ollama** (FREE but slow, 30-60s response, opt-in only)
 
-Auto-detects based on your API keys. No configuration.
+**Auto-detection priority:** Anthropic → OpenAI → Gemini → Ollama (if enabled). No configuration needed!
 
 #### 2. Intelligent Album Matching
 ```
@@ -962,7 +963,9 @@ Bootstrap Node ←→ Node 2 (You) ←→ Node 3 (Core) ←→ Node 4 (Casual)
 ### Requirements
 - Python 3.10+
 - MusicBrainz API key (free)
-- AI API key (choose one: OpenAI, Anthropic, or Gemini)
+- **AI Provider** (REQUIRED - choose one):
+  - **RECOMMENDED**: OpenAI, Anthropic, or Gemini API key (~$0.003-0.01/search, fast)
+  - **NOT RECOMMENDED**: Ollama (free but 30-60s per search, opt-in only)
 - **Jackett API instance** (torrent indexer aggregator) - see setup below
 
 ### Quick Setup (Development)
@@ -979,12 +982,16 @@ pip install -e .
 karma-player init
 # Enter MusicBrainz API key when prompted
 
-# 3. Set AI key (choose one)
-export ANTHROPIC_API_KEY="sk-ant-..."  # Recommended
+# 3. Set AI key (REQUIRED - choose one)
+export ANTHROPIC_API_KEY="sk-ant-..."  # Best quality, ~$0.01/search
 # OR
-export OPENAI_API_KEY="sk-..."
+export OPENAI_API_KEY="sk-..."  # Fastest, ~$0.005/search
 # OR
-export GEMINI_API_KEY="..."
+export GEMINI_API_KEY="..."  # Good balance, ~$0.003/search
+
+# Optional: FREE but SLOW alternative (30-60s per search)
+# brew install ollama && ollama pull llama3.2
+# export OLLAMA_MODEL="llama3.2"  # Enables Ollama (disabled by default)
 
 # 4. Search!
 karma-player search "radiohead ok computer"

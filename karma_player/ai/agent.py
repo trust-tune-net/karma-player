@@ -107,6 +107,12 @@ class TorrentAgent:
         self.logger = logger or (lambda x: None)
         self.tracker = tracker
 
+        # Set api_base for Ollama models
+        import os
+        self.api_base = None
+        if model.startswith("ollama/"):
+            self.api_base = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
+
     async def select_best_torrent(
         self,
         query: str,
@@ -179,12 +185,17 @@ class TorrentAgent:
         # Call LLM
         self.logger(f"   Querying {self.model}...")
 
-        response = await acompletion(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            api_key=self.api_key,
-            temperature=0,  # Deterministic results
-        )
+        kwargs = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,  # Deterministic results
+        }
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+        if self.api_base:
+            kwargs["api_base"] = self.api_base
+
+        response = await acompletion(**kwargs)
 
         # Track token usage
         if self.tracker:
@@ -225,12 +236,17 @@ Return ONLY the optimized query, nothing else. Consider:
 Optimized query:"""
 
         try:
-            response = await acompletion(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                api_key=self.api_key,
-                temperature=0,  # Deterministic results
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,  # Deterministic results
+            }
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            if self.api_base:
+                kwargs["api_base"] = self.api_base
+
+            response = await acompletion(**kwargs)
 
             # Track token usage
             if self.tracker:

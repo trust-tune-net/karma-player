@@ -38,6 +38,12 @@ class MusicBrainzFilter:
         self.api_key = api_key
         self.tracker = tracker
 
+        # Set api_base for Ollama models
+        import os
+        self.api_base = None
+        if model.startswith("ollama/"):
+            self.api_base = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
+
     async def filter_and_group(
         self,
         mb_results: List[MusicBrainzResult],
@@ -68,12 +74,17 @@ class MusicBrainzFilter:
         prompt = self._build_grouping_prompt(mb_text, parsed, max_groups)
 
         try:
-            response = await acompletion(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                api_key=self.api_key,
-                temperature=0,  # Deterministic results
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,  # Deterministic results
+            }
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            if self.api_base:
+                kwargs["api_base"] = self.api_base
+
+            response = await acompletion(**kwargs)
 
             # Track token usage
             if self.tracker:

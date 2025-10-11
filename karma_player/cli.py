@@ -22,27 +22,56 @@ from karma_player.services.search_orchestrator import SearchOrchestrator, Search
 def get_default_ai_model() -> str:
     """Auto-detect AI model based on available API keys.
 
-    Priority order: Anthropic > OpenAI > Gemini
+    Priority order: Anthropic > OpenAI > Gemini > Ollama (opt-in)
 
     Returns:
         Default model name
 
     Raises:
-        RuntimeError: If no API keys are found
+        RuntimeError: If no AI provider is available
     """
+    # Cloud providers first (fast, high quality)
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "claude-3-5-sonnet-20241022"
     elif os.environ.get("OPENAI_API_KEY"):
         return "gpt-4o-mini"
     elif os.environ.get("GEMINI_API_KEY"):
         return "gemini/gemini-1.5-flash"
+    # Ollama as fallback ONLY if explicitly enabled via OLLAMA_MODEL env var
+    elif os.environ.get("OLLAMA_MODEL") and is_ollama_available():
+        ollama_model = os.environ.get("OLLAMA_MODEL")
+        return f"ollama/{ollama_model}"
     else:
         raise RuntimeError(
-            "No AI API key found. Please set one of:\n"
-            "  - ANTHROPIC_API_KEY (for Claude)\n"
-            "  - OPENAI_API_KEY (for GPT)\n"
-            "  - GEMINI_API_KEY (for Gemini)"
+            "No AI provider found. Options:\n"
+            "\n"
+            "  RECOMMENDED (Fast, $0.001-0.01 per search):\n"
+            "    export ANTHROPIC_API_KEY=\"sk-ant-...\"  # Best quality\n"
+            "    export OPENAI_API_KEY=\"sk-...\"         # Fastest\n"
+            "    export GEMINI_API_KEY=\"...\"            # Good balance\n"
+            "\n"
+            "  FREE but SLOW (30-60s per search, localhost):\n"
+            "    brew install ollama && ollama pull llama3.2\n"
+            "    export OLLAMA_MODEL=\"llama3.2\"         # Enables Ollama\n"
+            "\n"
+            "  ⚠️  Ollama is NOT recommended for interactive use (too slow).\n"
+            "  ⚠️  Use cloud AI for better experience (~$15/month for 100 searches/day)."
         )
+
+
+def is_ollama_available() -> bool:
+    """Check if Ollama is running on localhost.
+
+    Returns:
+        True if Ollama server is responding
+    """
+    try:
+        import httpx
+        ollama_base = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
+        response = httpx.get(f"{ollama_base}/api/tags", timeout=2.0)
+        return response.status_code == 200
+    except Exception:
+        return False
 
 
 async def search_with_format_fallback(torrent_service, query, format_filter, strict, min_seeders):
@@ -984,7 +1013,7 @@ def cli(ctx, debug):
 @click.option("--skip-musicbrainz", is_flag=True, help="Skip MusicBrainz search")
 @click.option("--profile", "-p", default=None, help="Indexer profile to use (default: from indexers.yaml)")
 @click.option("--ai/--no-ai", default=True, help="Use AI for intelligent search (default: enabled)")
-@click.option("--ai-model", default=None, help="AI model (auto-detected from available API keys: claude-3-5-sonnet-20241022, gpt-4o-mini, gemini/gemini-pro)")
+@click.option("--ai-model", default=None, help="AI model (auto-detected: claude-3-5-sonnet-20241022, gpt-4o-mini, gemini/gemini-1.5-flash, ollama/llama3.2 [SLOW]). Ollama requires OLLAMA_MODEL env var to enable.")
 @click.pass_context
 def search(
     ctx,
