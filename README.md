@@ -1442,7 +1442,7 @@ Trust Tune solves quality with distributed proof:
 **Economic alignment:**
 - Casuals benefit from validated network
 - Core benefits from compensation (future)
-- Creators benefit from transparent payments (future)
+- Creators benefit from transparent payments and analytics (future)
 - Everyone benefits from trust infrastructure
 
 **Technical soundness:**
