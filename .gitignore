@@ -50,3 +50,4 @@ Thumbs.db
 *.db-journal
 
 *.cast
+docs/temp_*.md
