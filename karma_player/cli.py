@@ -982,30 +982,49 @@ async def run_interactive_ai_search(
     display_search_results(search_result, page_size, ai_tracker, output_json_events)
 
 
-def display_ai_session_summary(ai_tracker):
+def display_ai_session_summary(ai_tracker, output_json_events=False):
     """Display AI session usage summary.
 
     Args:
         ai_tracker: AISessionTracker instance
+        output_json_events: Whether to output JSON events
     """
     if ai_tracker:
         stats = ai_tracker.stats
-        click.echo(f"\n{'─' * 70}")
-        click.echo(f"📊 {click.style('AI Session Summary:', fg='blue', bold=True)}")
-        click.echo(f"   Model: {click.style(stats.model_name, fg='cyan')}")
+
+        # Output JSON event for cost tracking
+        if output_json_events:
+            import json
+            cost_event = {
+                "type": "cost_summary",
+                "model": stats.model_name,
+                "total_tokens": stats.total_tokens,
+                "prompt_tokens": stats.prompt_tokens,
+                "completion_tokens": stats.completion_tokens,
+                "api_calls": stats.api_calls,
+                "total_cost": stats.total_cost
+            }
+            # Use _REAL_STDOUT to bypass Click's redirection
+            _REAL_STDOUT.write(json.dumps(cost_event) + '\n')
+            _REAL_STDOUT.flush()
+
+        # Display formatted summary for terminal
+        click.echo(f"\n{'─' * 70}", err=True)
+        click.echo(f"📊 {click.style('AI Session Summary:', fg='blue', bold=True)}", err=True)
+        click.echo(f"   Model: {click.style(stats.model_name, fg='cyan')}", err=True)
 
         if stats.total_tokens > 0:
             click.echo(f"   Tokens: {click.style(f'{stats.total_tokens:,}', fg='yellow')} "
                       f"({click.style(f'{stats.prompt_tokens:,}', fg='green')} in / "
-                      f"{click.style(f'{stats.completion_tokens:,}', fg='magenta')} out)")
-            click.echo(f"   API Calls: {click.style(str(stats.api_calls), fg='cyan')}")
+                      f"{click.style(f'{stats.completion_tokens:,}', fg='magenta')} out)", err=True)
+            click.echo(f"   API Calls: {click.style(str(stats.api_calls), fg='cyan')}", err=True)
             if stats.total_cost > 0:
                 cost_str = f"${stats.total_cost:.4f}"
-                click.echo(f"   Cost: {click.style(cost_str, fg='yellow', bold=True)}")
+                click.echo(f"   Cost: {click.style(cost_str, fg='yellow', bold=True)}", err=True)
         else:
-            click.echo(f"   {click.style('No AI calls tracked', dim=True)}")
+            click.echo(f"   {click.style('No AI calls tracked', dim=True)}", err=True)
 
-        click.echo(f"{'─' * 70}")
+        click.echo(f"{'─' * 70}", err=True)
 
 
 def display_search_results(search_result, page_size, ai_tracker=None, output_json_events=False):
@@ -1020,7 +1039,7 @@ def display_search_results(search_result, page_size, ai_tracker=None, output_jso
         else:
             click.echo("\n❌ No torrents found.")
             if ai_tracker:
-                display_ai_session_summary(ai_tracker)
+                display_ai_session_summary(ai_tracker, output_json_events)
         return
 
     # If JSON events mode, emit result and return
@@ -1063,6 +1082,11 @@ def display_search_results(search_result, page_size, ai_tracker=None, output_jso
             }
 
         emit_json_event("result", result_data)
+
+        # Emit cost summary before exit
+        if ai_tracker:
+            display_ai_session_summary(ai_tracker, output_json_events)
+
         import sys
         sys.exit(0)  # Explicit success exit for JSON events mode
 
@@ -1158,7 +1182,7 @@ def display_search_results(search_result, page_size, ai_tracker=None, output_jso
 
         # Show AI session summary
         if ai_tracker:
-            display_ai_session_summary(ai_tracker)
+            display_ai_session_summary(ai_tracker, output_json_events)
     else:
         # Manual selection
         click.echo(f"\n✅ Found {len(search_result.torrents)} torrents")
@@ -1175,7 +1199,7 @@ def display_search_results(search_result, page_size, ai_tracker=None, output_jso
 
         # Show AI session summary
         if ai_tracker:
-            display_ai_session_summary(ai_tracker)
+            display_ai_session_summary(ai_tracker, output_json_events)
 
         if selected_torrent:
             click.echo(f"\n✅ Selected: {selected_torrent.title}")
@@ -1481,41 +1505,74 @@ def search(
 @cli.command()
 @click.option(
     "--musicbrainz-key",
-    prompt="MusicBrainz API key (get one at https://musicbrainz.org/account/applications)",
+    default="",
     help="MusicBrainz API key for metadata queries",
 )
 @click.option(
     "--music-dir",
     type=click.Path(exists=False, file_okay=False, dir_okay=True, path_type=Path),
-    default=Path.home() / "Music",
-    prompt=f"Music directory path (default: {Path.home() / 'Music'})",
     help="Directory where downloaded music will be saved",
 )
 @click.option(
     "--jackett-url",
     default="",
-    prompt="Jackett URL (optional, press Enter to skip)",
     help="Jackett server URL",
 )
 @click.option(
     "--jackett-key",
     default="",
-    prompt="Jackett API key (optional, press Enter to skip)",
     help="Jackett API key",
 )
+@click.option(
+    "--non-interactive",
+    is_flag=True,
+    default=False,
+    help="Run without prompts (for automated setup)",
+)
 @click.pass_context
-def init(ctx, musicbrainz_key: str, music_dir: Path, jackett_url: str, jackett_key: str):
+def init(ctx, musicbrainz_key: str, music_dir: Path, jackett_url: str, jackett_key: str, non_interactive: bool):
     """Initialize Karma Player configuration."""
     config_manager: ConfigManager = ctx.obj["config_manager"]
 
     click.echo("\n🎵 Initializing Karma Player configuration...")
 
+    # Handle interactive prompts if not in non-interactive mode
+    if not non_interactive:
+        if not musicbrainz_key:
+            musicbrainz_key = click.prompt(
+                "MusicBrainz API key (get one at https://musicbrainz.org/account/applications)",
+                default="",
+                show_default=False
+            )
+        if not music_dir:
+            music_dir = click.prompt(
+                f"Music directory path",
+                type=click.Path(exists=False, file_okay=False, dir_okay=True, path_type=Path),
+                default=Path.home() / "Music"
+            )
+        if not jackett_url:
+            jackett_url = click.prompt("Jackett URL (optional, press Enter to skip)", default="")
+        if not jackett_key:
+            jackett_key = click.prompt("Jackett API key (optional, press Enter to skip)", default="")
+
+    # Validate required fields in non-interactive mode
+    if non_interactive:
+        if not music_dir:
+            click.echo("\n❌ Error: --music-dir is required in non-interactive mode.", err=True)
+            sys.exit(1)
+        if not jackett_url or not jackett_key:
+            click.echo("\n❌ Error: --jackett-url and --jackett-key are required in non-interactive mode.", err=True)
+            sys.exit(1)
+
     if config_manager.is_initialized():
-        if not click.confirm("\nConfiguration already exists. Overwrite?", default=False):
+        if non_interactive or click.confirm("\nConfiguration already exists. Overwrite?", default=False):
+            pass  # Continue with overwrite
+        else:
             click.echo("Initialization cancelled.")
             sys.exit(0)
 
-    if not config_manager.validate_musicbrainz_key(musicbrainz_key):
+    # MusicBrainz key is optional
+    if musicbrainz_key and not config_manager.validate_musicbrainz_key(musicbrainz_key):
         click.echo("\n❌ Error: MusicBrainz API key appears invalid.", err=True)
         click.echo("Get a valid key at: https://musicbrainz.org/account/applications", err=True)
         sys.exit(1)
