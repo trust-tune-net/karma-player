@@ -21,6 +21,141 @@
 
 ---
 
+## 🥜 In a Nutshell
+
+<details open>
+<summary><b>Short Pill (30 seconds)</b></summary>
+
+**What:** AI-powered music search that finds the best quality torrents automatically
+**Why:** Spotify pays artists $0.003/stream. We're building transparent alternatives.
+**How:** MusicBrainz metadata + AI ranking + community validation (future)
+**Status:** Phase 0 works today (CLI tool). Network validation coming in Phase 1-5.
+**Odds:** 2-10% wild success, but Phase 0 is useful NOW regardless of future phases.
+
+**Try it:** `pip install -e . && karma-player search "radiohead ok computer"`
+
+</details>
+
+<details>
+<summary><b>Long Pill (3 minutes)</b></summary>
+
+### The Problem
+Streaming platforms exploit creators ($0.003-$0.005/stream, labels take 80-90%), bury indie artists through algorithmic bias, and provide zero transparency about who's listening or why.
+
+### Our Solution (5-Phase Vision)
+
+**Phase 0 (NOW - Working Today):**
+- CLI tool that understands natural language ("miles davis kind of blue")
+- Queries MusicBrainz (35M recordings, canonical metadata)
+- Searches 18+ torrent indexers via Jackett
+- AI selects best quality (FLAC 24-bit > 16-bit > 320kbps MP3)
+- Returns top 3 torrents with reasoning
+
+**Phase 1-2 (Next 2-6 Months):**
+- Gun.js distributed ledger for votes
+- Two-tier validation: Casual users vote → Core validators run cryptographic proofs
+- Acoustic fingerprinting + spectral analysis (no audio storage)
+- Network-first search (check verified files before external indexers)
+
+**Phase 3-5 (If Successful - 2-5 Years):**
+- Artist opt-in dashboard (analytics + permission control)
+- Optional premium tier ($5-15/month)
+- 95% revenue → Creators | 5% → Network (validators + infrastructure)
+- Transparent blockchain-recorded payments
+
+### What Makes This Different
+
+**vs Spotify:** Community validates quality, transparent creator compensation (future)
+**vs Private Trackers:** Open access (donation/invite, no interviews), AI-ranked
+**vs Public Torrents:** MusicBrainz metadata + validation prevents fake files
+**vs Soulseek:** Faster (BitTorrent swarming), canonical metadata, AI intent parsing
+
+### Critical Realities
+
+✅ **Phase 0 works today** (AI torrent search beats manual hunting)
+⚠️ **Gun.js unproven at 10k+ users** (Phase 1 risk)
+⚠️ **Need 5-20 Core validators** (social challenge)
+⚠️ **Legal risk is real** (Napster/Grooveshark precedents)
+⚠️ **2-10% odds of wild success** (honest assessment)
+
+**Infrastructure costs:** $100-300/month (Phase 1) → $5k-50k/month (Phase 5)
+**Success metric:** 500-2k users in 5 years = achievable niche (not 100k+ unicorn)
+
+### Why Build Despite Long Odds?
+
+1. **Phase 0 is valuable NOW** regardless of future phases
+2. **Tech stack finally ready** (AI + MusicBrainz + Gun.js + Chromaprint)
+3. **Cultural moment is right** (artists know they're exploited, users want alternatives)
+4. **Open source = learning in public** (if we fail, community forks and improves)
+5. **Alternative must exist** (or someone builds it with worse incentives)
+
+### Requirements to Try
+
+- Python 3.10+
+- MusicBrainz API key (free)
+- AI provider (Anthropic/OpenAI/Gemini, ~$0.003-0.01/search)
+- Jackett (local or remote, for torrent indexing)
+
+**5-minute setup:** Clone repo → `pip install -e .` → `karma-player init` → Set AI key → Search!
+
+</details>
+
+---
+
+**Quick Navigation:**
+[🚀 Try It Now](#️-installation) |
+[📊 Current Status](#-current-status) |
+[🗺️ Roadmap](#-the-roadmap-from-cli-to-trust-network) |
+[⚖️ Legal](#️-legal-positioning-honest-assessment) |
+[💰 Costs](#-infrastructure-costs-real-numbers) |
+[🚨 Risks](#-known-risks--failure-modes)
+
+---
+
+## 🤔 Should I Use This?
+
+**✅ You should try Karma Player if you:**
+- Want AI to find quality music torrents (saves 5-10 min per search)
+- Prefer FLAC/lossless over MP3 (quality matters to you)
+- Comfortable with command line basics
+- Curious about Phase 1+ vision (community validation network)
+
+**❌ You should skip this if you:**
+- Happy with Spotify/Apple Music (this isn't a replacement)
+- Don't use torrents / uncomfortable with legal gray areas
+- Want instant GUI (we're CLI-first, Phase 0)
+- Looking for guaranteed success (2-10% odds are honest)
+
+**🤷 On the fence? Try the 5-minute install:**
+1. `git clone` + `pip install -e .`
+2. `karma-player search "artist album"`
+3. See if AI + MusicBrainz saves you time
+4. No commitment, no account, no tracking
+
+---
+
+## ⚠️ Reality Check (Read This First)
+
+**Probability of wild success (10k+ users, economic sustainability): 2-10%**
+
+**This is HARD.** Here's what could go wrong:
+
+- **50% chance:** Works great for 100-500 users, never scales beyond niche
+- **25% chance:** Legal shutdown (Napster/Grooveshark precedent)
+- **15% chance:** Technical failure (Gun.js doesn't scale beyond 1,000 users)
+- **8% chance:** Moderate success (sustainable niche with 500-2k users)
+- **2% chance:** Wild success (mainstream adoption, 10k+ users)
+
+**Why we're building anyway:**
+
+Even **Phase 0 is valuable** today (AI + MusicBrainz beats manual torrent search). If we fail at Phases 1-5, we'll **open-source everything** so others can learn from our mistakes and build better systems.
+
+**We're being radically honest** because we respect your time. If you're looking for guaranteed success, this isn't it. If you want to help experiment with community-validated quality + transparent creator compensation, **we'd love your help**.
+
+[Read full risk assessment →](#-known-risks--failure-modes)
+
+---
+
 ## 🎯 The REAL Problem
 
 **The music industry is broken.**
@@ -53,28 +188,6 @@ Meanwhile:
 - 🚫 **No corporate middlemen** - Taking 90% and providing 10% value
 
 **The technical problem** (finding good torrents) is trivial compared to the social problem: *How do we create a system where creators actually benefit from people loving their music?*
-
----
-
-## ⚠️ Reality Check (Read This First)
-
-**Probability of wild success (10k+ users, economic sustainability): 2-10%**
-
-**This is HARD.** Here's what could go wrong:
-
-- **50% chance:** Works great for 100-500 users, never scales beyond niche
-- **25% chance:** Legal shutdown (Napster/Grooveshark precedent)
-- **15% chance:** Technical failure (Gun.js doesn't scale beyond 1,000 users)
-- **8% chance:** Moderate success (sustainable niche with 500-2k users)
-- **2% chance:** Wild success (mainstream adoption, 10k+ users)
-
-**Why we're building anyway:**
-
-Even **Phase 0 is valuable** today (AI + MusicBrainz beats manual torrent search). If we fail at Phases 1-5, we'll **open-source everything** so others can learn from our mistakes and build better systems.
-
-**We're being radically honest** because we respect your time. If you're looking for guaranteed success, this isn't it. If you want to help experiment with community-validated quality + transparent creator compensation, **we'd love your help**.
-
-[Read full risk assessment →](#-known-risks--failure-modes)
 
 ---
 
