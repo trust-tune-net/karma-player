@@ -112,7 +112,8 @@ class TorrentResult:
             format_bonus += 15
 
         # Seeder bonus (availability matters, but not as much as quality)
-        seeder_bonus = min(self.seeders * 3, 120)  # Increased weight, cap at 120
+        # Reduced multiplier so format quality dominates (FLAC > MP3 even with more seeders)
+        seeder_bonus = min(self.seeders * 1, 40)  # Reduced to 1x, cap at 40
 
         # Size bonus (larger usually means better quality, but capped)
         size_gb = self.size_bytes / (1024**3)
