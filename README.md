@@ -27,9 +27,9 @@
 <summary><b>Short Pill (30 seconds)</b></summary>
 
 **What:** AI-powered music search that finds the best quality torrents automatically
-**Why:** Spotify pays artists $0.003/stream. We're building transparent alternatives.
-**How:** MusicBrainz metadata + AI ranking + community validation (future)
-**Status:** Phase 0 works today (CLI tool). Network validation coming in Phase 1-5.
+**Why:** Artists deserve 95% (not 30%) + transparent analytics showing WHO listens and WHERE.
+**How:** MusicBrainz metadata + AI ranking + community validation + blockchain payments (future)
+**Status:** Phase 0 works today (CLI tool). Creator compensation comes in Phase 3-5.
 **Odds:** 2-10% wild success, but Phase 0 is useful NOW regardless of future phases.
 
 **Try it:** `pip install -e . && karma-player search "radiohead ok computer"`
