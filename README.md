@@ -27,9 +27,13 @@
 <summary><b>Short Pill (30 seconds)</b></summary>
 
 **What:** AI-powered music search that finds the best quality torrents automatically
-**Why:** Artists deserve 95% (not 30%) + transparent analytics showing WHO listens and WHERE.
+
+**Why:** Artists deserve 95% (not 30%) + transparent analytics showing WHO listens and WHERE. We're building that.
+
 **How:** MusicBrainz metadata + AI ranking + community validation + blockchain payments (future)
+
 **Status:** Phase 0 works today (CLI tool). Creator compensation comes in Phase 3-5.
+
 **Odds:** 2-10% wild success, but Phase 0 is useful NOW regardless of future phases.
 
 **Try it:** `pip install -e . && karma-player search "radiohead ok computer"`
@@ -66,19 +70,27 @@ Streaming platforms exploit creators ($0.003-$0.005/stream, labels take 80-90%),
 ### What Makes This Different
 
 **vs Spotify:** Community validates quality, transparent creator compensation (future)
+
 **vs Private Trackers:** Open access (donation/invite, no interviews), AI-ranked
+
 **vs Public Torrents:** MusicBrainz metadata + validation prevents fake files
+
 **vs Soulseek:** Faster (BitTorrent swarming), canonical metadata, AI intent parsing
 
 ### Critical Realities
 
 ✅ **Phase 0 works today** (AI torrent search beats manual hunting)
+
 ⚠️ **Gun.js unproven at 10k+ users** (Phase 1 risk)
+
 ⚠️ **Need 5-20 Core validators** (social challenge)
+
 ⚠️ **Legal risk is real** (Napster/Grooveshark precedents)
+
 ⚠️ **2-10% odds of wild success** (honest assessment)
 
 **Infrastructure costs:** $100-300/month (Phase 1) → $5k-50k/month (Phase 5)
+
 **Success metric:** 500-2k users in 5 years = achievable niche (not 100k+ unicorn)
 
 ### Why Build Despite Long Odds?
