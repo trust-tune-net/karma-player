@@ -157,7 +157,7 @@ class NaturalLanguageToSQL:
     @staticmethod
     def convert(natural_query: str) -> str:
         """
-        Convert natural language to SQL-like syntax
+        Convert natural language to SQL-like syntax using AI
 
         Examples:
             "radiohead ok computer flac" →
@@ -169,8 +169,61 @@ class NaturalLanguageToSQL:
             "miles davis from 1959" →
                 SELECT artist WHERE artist="Miles Davis" AND year=1959
         """
+        try:
+            # Try AI-powered parsing first
+            from karma_player.config import Config
+            if Config.OPENAI_API_KEY or Config.ANTHROPIC_API_KEY:
+                from karma_player.services.ai.client import AIClient
+                import asyncio
 
-        # Simple heuristic-based conversion (can be replaced with AI)
+                # Create AI client
+                ai_client = AIClient()
+
+                # Run async parse in sync context
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                parsed = loop.run_until_complete(ai_client.parse_query(natural_query))
+
+                # Convert ParsedQuery to SQL
+                where_clauses = []
+                query_type = "album"  # default
+
+                if parsed.artist:
+                    where_clauses.append(f'artist="{parsed.artist}"')
+                if parsed.album:
+                    where_clauses.append(f'album="{parsed.album}"')
+                    query_type = "album"
+                elif parsed.track:
+                    where_clauses.append(f'track="{parsed.track}"')
+                    query_type = "track"
+                else:
+                    query_type = "artist"
+
+                if parsed.year:
+                    where_clauses.append(f'year={parsed.year}')
+
+                sql_query = f"SELECT {query_type}"
+                if where_clauses:
+                    sql_query += " WHERE " + " AND ".join(where_clauses)
+                sql_query += " ORDER BY quality DESC LIMIT 50"
+
+                return sql_query
+
+        except Exception as e:
+            # Fall back to heuristic parsing
+            pass
+
+        # Fallback: Simple heuristic-based conversion
+        return NaturalLanguageToSQL._fallback_convert(natural_query)
+
+    @staticmethod
+    def _fallback_convert(natural_query: str) -> str:
+        """Fallback heuristic converter when AI is unavailable"""
         query_str = natural_query.lower().strip()
 
         # Detect format requests
@@ -186,22 +239,19 @@ class NaturalLanguageToSQL:
         if year:
             query_str = re.sub(r'\b(from\s+)?(19|20)\d{2}\b', '', query_str).strip()
 
-        # Simple artist/album extraction (crude, would use AI in production)
-        # For now, assume entire query is artist + album
+        # Artist/album extraction - just search the whole thing
         parts = query_str.split()
 
         if len(parts) <= 2:
-            # Likely artist or track
+            # Artist only
             query_type = "artist"
             artist = " ".join(parts).title()
             album = None
         else:
-            # Likely artist + album
+            # Use whole query as search term, let torrent results decide
             query_type = "album"
-            # Very crude: first half = artist, second half = album
-            mid = len(parts) // 2
-            artist = " ".join(parts[:mid]).title()
-            album = " ".join(parts[mid:]).title()
+            artist = " ".join(parts).title()
+            album = None
 
         # Build SQL-like query
         where_clauses = []

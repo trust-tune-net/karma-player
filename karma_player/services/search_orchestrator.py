@@ -164,34 +164,80 @@ class SearchOrchestrator:
         )
 
     def _fallback_parse(self, query: str) -> ParsedQuery:
-        """Simple fallback query parsing without AI"""
-        # Very basic: assume it's an album search
-        parts = query.split()
+        """Improved fallback query parsing without AI"""
 
-        if len(parts) <= 2:
-            artist = " ".join(parts)
+        # Check for explicit separators (dash, slash, etc.)
+        for separator in [' - ', ' / ', ' | ']:
+            if separator in query:
+                parts = query.split(separator, 1)
+                return ParsedQuery(
+                    artist=parts[0].strip(),
+                    album=parts[1].strip() if len(parts) > 1 else None,
+                    track=None,
+                    year=None,
+                    query_type="album",
+                    confidence=0.8
+                )
+
+        words = query.split()
+
+        # Single word or two words = artist only
+        if len(words) <= 2:
             return ParsedQuery(
-                artist=artist,
+                artist=" ".join(words),
                 album=None,
                 track=None,
                 year=None,
                 query_type="artist",
                 confidence=0.5
             )
-        else:
-            # Crude: first half = artist, second half = album
-            mid = len(parts) // 2
-            artist = " ".join(parts[:mid])
-            album = " ".join(parts[mid:])
 
+        # Smarter heuristic: Look for common album indicators
+        # Common pattern: "artist [album words including 'the', 'of', 'in', etc.]"
+        # Strategy: First 1-2 words are usually artist, rest is album
+
+        # If 3-4 words, likely "Artist Album Name"
+        if len(words) == 3:
             return ParsedQuery(
-                artist=artist,
-                album=album,
+                artist=words[0],
+                album=" ".join(words[1:]),
                 track=None,
                 year=None,
                 query_type="album",
                 confidence=0.6
             )
+
+        if len(words) == 4:
+            # Try "Artist Name Album Album" or "Artist Album Album Album"
+            # Default to first word as artist, rest as album
+            return ParsedQuery(
+                artist=words[0],
+                album=" ".join(words[1:]),
+                track=None,
+                year=None,
+                query_type="album",
+                confidence=0.6
+            )
+
+        # 5+ words: First 1-2 words artist, rest album
+        # Check if first two words could be band name (both capitalized or common patterns)
+        if len(words[0]) <= 3 or (len(words) > 1 and words[1][0].isupper()):
+            # Likely two-word artist like "Pink Floyd", "Daft Punk", "The Beatles"
+            artist = " ".join(words[:2])
+            album = " ".join(words[2:])
+        else:
+            # Single-word artist
+            artist = words[0]
+            album = " ".join(words[1:])
+
+        return ParsedQuery(
+            artist=artist,
+            album=album,
+            track=None,
+            year=None,
+            query_type="album",
+            confidence=0.6
+        )
 
     def _generate_explanation(self, torrent: TorrentResult, rank: int) -> str:
         """Generate explanation for torrent ranking"""
