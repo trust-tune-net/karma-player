@@ -927,6 +927,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Album? _selectedAlbum;
   Map<String, double> _downloadProgress = {}; // Maps album names to progress
   Timer? _downloadPollTimer;
+  Timer? _autoRefreshTimer; // Auto-refresh library every 10 minutes
   late final TransmissionClient _transmissionClient;
 
   @override
@@ -936,6 +937,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _scanMusicFolder();
     // Poll downloads every 2 seconds
     _downloadPollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
+    // Auto-refresh library and connection badge every 10 minutes
+    _autoRefreshTimer = Timer.periodic(const Duration(minutes: 10), (_) {
+      print('🔄 Auto-refresh: Scanning library and checking connection...');
+      _scanMusicFolder(); // This also calls _checkHealth() at the end
+    });
     // Check internet health only once on startup
     _checkHealth();
   }
@@ -943,6 +949,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void dispose() {
     _downloadPollTimer?.cancel();
+    _autoRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -972,6 +979,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             // This is a newly completed torrent - add its size to stats
             await appSettings.addDownloadedBytes(torrent.totalSize, torrent.id);
             print('Download completed: ${torrent.name} (${(torrent.totalSize / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB)');
+
+            // Trigger library refresh to show newly downloaded music
+            print('🔄 Download complete: Refreshing library...');
+            _scanMusicFolder(); // This also updates connection badge
           }
           // Skip showing progress for completed torrents
           continue;
@@ -1332,31 +1343,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Tooltip(
-              message: 'Refresh library',
-              child: InkWell(
-                onTap: _isScanning ? null : _scanMusicFolder,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2A2A2A)),
-                  ),
-                  child: Icon(
-                    Icons.refresh,
-                    size: 22,
-                    color: _isScanning ? Colors.grey : Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Column(
         children: [
