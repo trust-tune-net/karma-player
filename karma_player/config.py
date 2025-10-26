@@ -78,7 +78,7 @@ class Config:
 
     # === Application Info ===
     APP_NAME = "TrustTune"
-    VERSION = "0.1.0"
+    VERSION = "0.3.1-beta"
 
     # === Directories ===
     @staticmethod

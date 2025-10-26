@@ -2,7 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 
-class AppSettings {
+class AppSettings extends ChangeNotifier {
   static final AppSettings _instance = AppSettings._internal();
   factory AppSettings() => _instance;
   AppSettings._internal();
@@ -57,6 +57,7 @@ class AppSettings {
     totalPlays++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('total_plays', totalPlays);
+    notifyListeners(); // Notify all listeners that stats changed
   }
 
   Future<void> addDownloadedBytes(int bytes, int torrentId) async {
@@ -72,6 +73,7 @@ class AppSettings {
         'completed_torrent_ids',
         completedTorrentIds.map((id) => id.toString()).toList(),
       );
+      notifyListeners(); // Notify all listeners that download stats changed
     }
   }
 
@@ -101,11 +103,13 @@ class AppSettings {
       apiResponseTimeMs = endTime.difference(startTime).inMilliseconds;
       apiHealthy = response.statusCode == 200;
       lastHealthCheck = DateTime.now();
+      notifyListeners(); // Notify all listeners that connection status changed
       return apiHealthy;
     } catch (e) {
       apiHealthy = false;
       apiResponseTimeMs = 9999; // High value to indicate failure
       lastHealthCheck = DateTime.now();
+      notifyListeners(); // Notify all listeners that connection failed
       return false;
     }
   }

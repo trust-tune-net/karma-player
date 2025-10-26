@@ -118,7 +118,7 @@ class DiagnosticsService {
     return DiagnosticResult(
       name: 'App Version',
       status: DiagnosticStatus.info,
-      message: '1.0.0-alpha',
+      message: 'v0.3.1-beta',
       details: 'TrustTune GUI',
     );
   }

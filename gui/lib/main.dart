@@ -158,6 +158,139 @@ class MainScreen extends StatefulWidget {
 
 enum RepeatMode { off, all, one }
 
+// Reusable stats badges widget for AppBar
+// Uses ListenableBuilder to rebuild when appSettings changes (ChangeNotifier)
+class StatsBadges extends StatelessWidget {
+  final int? albumsCount; // Optional - only shown in Library screen
+  final VoidCallback? onConnectionTap; // Callback for connection badge tap
+
+  const StatsBadges({
+    super.key,
+    this.albumsCount,
+    this.onConnectionTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Listen to appSettings changes and rebuild automatically
+    return ListenableBuilder(
+      listenable: appSettings,
+      builder: (context, child) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(width: screenWidth > 1200 ? 32 : 20),
+
+        // Albums count badge (only if provided)
+        if (albumsCount != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2A2A2A)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.album, size: 14, color: AppColors.purple.withOpacity(0.8)),
+                const SizedBox(width: 5),
+                Text(
+                  '$albumsCount',
+                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+
+        // Total plays badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2A2A2A)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.play_circle_outline, size: 14, color: Color(0xFF10B981)),
+              const SizedBox(width: 5),
+              Text(
+                '${appSettings.totalPlays}',
+                style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Downloaded GB badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2A2A2A)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.download_outlined, size: 14, color: Color(0xFF3B82F6)),
+              const SizedBox(width: 5),
+              Text(
+                '${appSettings.downloadedGigabytes} GB',
+                style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Connection badge (clickable)
+        InkWell(
+          onTap: onConnectionTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: appSettings.connectionBadge.$1.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: appSettings.connectionBadge.$1.withOpacity(0.5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: appSettings.connectionBadge.$1,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  appSettings.connectionBadge.$2,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: appSettings.connectionBadge.$1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+    );
+  }
+}
+
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedIndex = 0;
   final Player _player = Player();
@@ -954,10 +1087,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _checkHealth() async {
+    // appSettings.checkApiHealth() calls notifyListeners()
+    // which automatically updates all StatsBadges via ListenableBuilder
     await appSettings.checkApiHealth();
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   Future<void> _loadDownloads() async {
@@ -1244,102 +1376,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 letterSpacing: 0.3,
               ),
             ),
-            SizedBox(width: screenWidth > 1200 ? 32 : 20), // More space when maximized
-            // Statistics badges with color
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2A2A2A)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.album, size: 14, color: AppColors.purple.withOpacity(0.8)),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${_albums.length}',
-                    style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2A2A2A)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.play_circle_outline, size: 14, color: const Color(0xFF10B981)),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${appSettings.totalPlays}',
-                    style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2A2A2A)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.download_outlined, size: 14, color: const Color(0xFF3B82F6)),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${appSettings.downloadedGigabytes} GB',
-                    style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Connection badge with full color - clickable to refresh
-            InkWell(
-              onTap: _checkHealth,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: appSettings.connectionBadge.$1.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: appSettings.connectionBadge.$1.withOpacity(0.5)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: appSettings.connectionBadge.$1,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      appSettings.connectionBadge.$2,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: appSettings.connectionBadge.$1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            StatsBadges(
+              albumsCount: _albums.length,
+              onConnectionTap: _checkHealth,
             ),
           ],
         ),
@@ -2266,7 +2305,20 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     super.build(context);  // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Discover Music'),
+        toolbarHeight: 52,
+        title: Row(
+          children: [
+            Text(
+              'Discover Music',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const StatsBadges(), // No albums count for Search screen
+          ],
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -2560,7 +2612,20 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Downloads'),
+        toolbarHeight: 52,
+        title: Row(
+          children: [
+            Text(
+              'Downloads',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const StatsBadges(), // No albums count for Downloads screen
+          ],
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -3057,7 +3122,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        toolbarHeight: 52,
+        title: Row(
+          children: [
+            Text(
+              'Settings',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const StatsBadges(), // No albums count for Settings screen
+          ],
+        ),
       ),
       body: ListView(
         children: [
@@ -3232,37 +3310,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.music_note),
+            leading: const Icon(Icons.music_note, color: Color(0xFFA855F7)),
             title: const Text('Trust Tune Network'),
             subtitle: Text(
-              'Phase 0 of the Trust Tune Network\n\nA distributed trust validation infrastructure where communities validate content quality through a two-tier system.',
+              'Phase 0 of the Trust Tune Network\n\nA fair music ecosystem where artists get 95% of revenue and listeners get high-quality, DRM-free music. Built on transparency, community validation, and decentralized infrastructure.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
           const ListTile(
             leading: Icon(Icons.search, color: Color(0xFFA855F7)),
             title: Text('What'),
-            subtitle: Text('AI-powered music search that finds the best quality torrents automatically'),
+            subtitle: Text('AI-powered music discovery that finds the highest quality audio (FLAC, hi-res) from multiple sources, ranked and explained by AI.'),
           ),
           const ListTile(
             leading: Icon(Icons.favorite, color: Color(0xFFA855F7)),
             title: Text('Why'),
-            subtitle: Text('Artists deserve 95% (not 30%) + transparent analytics showing WHO listens and WHERE. We\'re building that.'),
+            subtitle: Text('Spotify pays \$0.003/stream (30% to artists). We\'re building a protocol where artists get 95% + transparent analytics showing WHO listens and WHERE.'),
           ),
           const ListTile(
             leading: Icon(Icons.lightbulb_outline, color: Color(0xFFA855F7)),
             title: Text('How'),
-            subtitle: Text('MusicBrainz metadata + AI ranking + community validation + blockchain payments (future)'),
+            subtitle: Text('Search → MusicBrainz canonical metadata → Multi-source torrent search (Jackett/1337x) → AI quality ranking → Transmission downloads → Local library. Future: Community validation + creator payments.'),
           ),
           const ListTile(
             leading: Icon(Icons.info_outline, color: Color(0xFFA855F7)),
             title: Text('Status'),
-            subtitle: Text('Phase 0 works today (GUI player). Creator compensation comes in Phase 3-5.'),
+            subtitle: Text('Phase 0 (Beta): Desktop player with AI search works today. Phase 1-2: Federation & web app. Phase 3-5: Creator compensation + community validation.'),
           ),
           ListTile(
-            leading: const Icon(Icons.code),
+            leading: const Icon(Icons.code, color: Color(0xFFA855F7)),
             title: const Text('Version'),
-            subtitle: const Text('1.0.0-alpha'),
+            subtitle: const Text('v0.3.1-beta'),
           ),
           if (kDebugMode)
             ListTile(
