@@ -7,6 +7,7 @@ import platform
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
+from karma_player import __version__
 
 
 # Load .env file if it exists
@@ -78,7 +79,7 @@ class Config:
 
     # === Application Info ===
     APP_NAME = "TrustTune"
-    VERSION = "0.3.1-beta"
+    VERSION = __version__
 
     # === Directories ===
     @staticmethod

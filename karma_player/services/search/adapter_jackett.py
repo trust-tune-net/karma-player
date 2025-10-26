@@ -11,6 +11,7 @@ import aiohttp
 from karma_player.services.search.adapter_base import IndexerAdapter
 from karma_player.models.torrent import TorrentResult
 from karma_player.services.search.metadata import MetadataExtractor
+from karma_player import __version__
 
 
 class AdapterJackett(IndexerAdapter):
@@ -86,7 +87,7 @@ class AdapterJackett(IndexerAdapter):
                 }
 
                 headers = {
-                    "User-Agent": "karma-player/0.1.0"
+                    "User-Agent": f"karma-player/{__version__}"
                 }
 
                 timeout = aiohttp.ClientTimeout(total=self.timeout)

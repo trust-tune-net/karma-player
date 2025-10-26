@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from karma_player.models.search import MBResult, ParsedQuery
+from karma_player import __version__
 
 
 class MusicBrainzService:
@@ -13,7 +14,7 @@ class MusicBrainzService:
     Interface to MusicBrainz API for canonical music metadata
     """
 
-    def __init__(self, app_name: str = "karma-player", app_version: str = "0.1.0", contact: str = ""):
+    def __init__(self, app_name: str = "karma-player", app_version: str = __version__, contact: str = ""):
         """
         Initialize MusicBrainz client
 
