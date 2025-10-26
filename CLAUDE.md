@@ -1,0 +1,1 @@
+- always do a flutter analyze before commiting/pushing/tagging front-end flutter/dart /gui

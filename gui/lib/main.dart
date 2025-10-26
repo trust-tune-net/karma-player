@@ -162,12 +162,10 @@ enum RepeatMode { off, all, one }
 // Reusable stats badges widget for AppBar
 // Uses ListenableBuilder to rebuild when appSettings changes (ChangeNotifier)
 class StatsBadges extends StatelessWidget {
-  final int? albumsCount; // Optional - only shown in Library screen
   final VoidCallback? onConnectionTap; // Callback for connection badge tap
 
   const StatsBadges({
     super.key,
-    this.albumsCount,
     this.onConnectionTap,
   });
 
@@ -183,29 +181,27 @@ class StatsBadges extends StatelessWidget {
       children: [
         SizedBox(width: screenWidth > 1200 ? 32 : 20),
 
-        // Albums count badge (only if provided)
-        if (albumsCount != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF2A2A2A)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.album, size: 14, color: AppColors.purple.withOpacity(0.8)),
-                const SizedBox(width: 5),
-                Text(
-                  '$albumsCount',
-                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
+        // Albums count badge (from global state)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2A2A2A)),
           ),
-          const SizedBox(width: 8),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.album, size: 14, color: AppColors.purple.withOpacity(0.8)),
+              const SizedBox(width: 5),
+              Text(
+                '${appSettings.albumCount}',
+                style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
 
         // Total plays badge
         Container(
@@ -1164,6 +1160,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           _statusMessage = 'Could not find home directory';
           _isScanning = false;
         });
+        appSettings.updateAlbumCount(0);
         return;
       }
 
@@ -1173,6 +1170,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           _statusMessage = 'Music folder not found';
           _isScanning = false;
         });
+        appSettings.updateAlbumCount(0);
         return;
       }
 
@@ -1344,11 +1342,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ? 'No music found in ~/Music'
             : 'Found ${albums.length} albums';
       });
+
+      // Update global album count so it's visible on all screens
+      appSettings.updateAlbumCount(albums.length);
     } catch (e) {
       setState(() {
         _statusMessage = 'Error scanning: $e';
         _isScanning = false;
       });
+      appSettings.updateAlbumCount(0);
     }
 
     // Refresh top bar stats (connection quality, plays, GB downloaded)
@@ -1378,7 +1380,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
             StatsBadges(
-              albumsCount: _albums.length,
               onConnectionTap: _checkHealth,
             ),
           ],

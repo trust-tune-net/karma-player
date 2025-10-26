@@ -15,6 +15,7 @@ class AppSettings extends ChangeNotifier {
   // Statistics
   int totalPlays = 0;
   int totalDownloadedBytes = 0;
+  int albumCount = 0;
   Set<int> completedTorrentIds = {}; // Track which torrents we've already counted
 
   // Health status
@@ -29,6 +30,7 @@ class AppSettings extends ChangeNotifier {
     customDownloadDir = prefs.getString('custom_download_dir');
     totalPlays = prefs.getInt('total_plays') ?? 0;
     totalDownloadedBytes = prefs.getInt('total_downloaded_bytes') ?? 0;
+    albumCount = prefs.getInt('album_count') ?? 0;
 
     // Load completed torrent IDs
     final completedIds = prefs.getStringList('completed_torrent_ids') ?? [];
@@ -75,6 +77,13 @@ class AppSettings extends ChangeNotifier {
       );
       notifyListeners(); // Notify all listeners that download stats changed
     }
+  }
+
+  Future<void> updateAlbumCount(int count) async {
+    albumCount = count;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('album_count', albumCount);
+    notifyListeners(); // Notify all listeners that library stats changed
   }
 
   bool get isUsingDefaultApi => searchApiUrl == defaultSearchApiUrl;
