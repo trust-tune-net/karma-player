@@ -239,10 +239,11 @@ Both modes produce the same high-quality results, just different input styles.
 **Technology Stack:**
 - **Backend:** Python + FastAPI
 - **Desktop:** Flutter (cross-platform)
-- **Search:** Jackett + DHT
-- **AI:** OpenAI + Anthropic
+- **Search:** Plugin architecture (Jackett, 1337x, DHT - easy to add more)
+- **AI:** OpenAI + Anthropic (Groq for speed)
 - **Metadata:** MusicBrainz API
 - **Player:** media_kit (MPV)
+- **Architecture:** See [Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md) for adding sources
 
 ---
 
@@ -250,6 +251,7 @@ Both modes produce the same high-quality results, just different input styles.
 
 - **[Vision Document](docs/VISION.md)** - Full project vision and roadmap
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture details
+- **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)** - How to add new sources (adapters)
 - **[Implementation](docs/IMPLEMENTATION.md)** - Development progress
 - **[Progress](docs/PROGRESS.md)** - Current status
 
