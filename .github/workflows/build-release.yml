@@ -1,0 +1,245 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          cd gui
+          flutter pub get
+
+      - name: Build macOS app
+        run: |
+          cd gui
+          flutter build macos --release
+
+      - name: Create DMG
+        run: |
+          cd gui
+          # Install create-dmg
+          brew install create-dmg
+
+          # Create DMG
+          create-dmg \
+            --volname "TrustTune" \
+            --volicon "macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "TrustTune.app" 200 190 \
+            --hide-extension "TrustTune.app" \
+            --app-drop-link 600 185 \
+            "TrustTune-macOS-universal.dmg" \
+            "build/macos/Build/Products/Release/trusttune_gui.app" \
+            || true
+
+          # Fallback: create zip if DMG fails
+          if [ ! -f "TrustTune-macOS-universal.dmg" ]; then
+            ditto -c -k --sequesterRsrc --keepParent \
+              build/macos/Build/Products/Release/trusttune_gui.app \
+              TrustTune-macOS-universal.zip
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrustTune-macOS
+          path: |
+            gui/TrustTune-macOS-universal.dmg
+            gui/TrustTune-macOS-universal.zip
+          if-no-files-found: ignore
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          cd gui
+          flutter pub get
+
+      - name: Build Windows app
+        run: |
+          cd gui
+          flutter build windows --release
+
+      - name: Create installer
+        run: |
+          cd gui
+
+          # Create portable zip
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath TrustTune-Windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrustTune-Windows
+          path: gui/TrustTune-Windows-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev mpv
+          cd gui
+          flutter pub get
+
+      - name: Build Linux app
+        run: |
+          cd gui
+          flutter build linux --release
+
+      - name: Create AppImage
+        run: |
+          cd gui
+
+          # Install AppImage tools
+          wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/lib
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+
+          # Copy app files
+          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+
+          # Create desktop entry
+          cat > AppDir/usr/share/applications/trusttune.desktop << 'EOF'
+          [Desktop Entry]
+          Name=TrustTune
+          Exec=trusttune_gui
+          Icon=trusttune
+          Type=Application
+          Categories=AudioVideo;Audio;
+          EOF
+
+          # Copy icon (use a placeholder if not exists)
+          if [ -f "linux/flutter/generated_plugin_registrant.h" ]; then
+            touch AppDir/usr/share/icons/hicolor/512x512/apps/trusttune.png
+          fi
+
+          # Create AppRun
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin/:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib/:${LD_LIBRARY_PATH}"
+          exec "${HERE}/usr/bin/trusttune_gui" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          # Build AppImage
+          ARCH=x86_64 ./appimagetool AppDir TrustTune-Linux-x86_64.AppImage || \
+            tar -czf TrustTune-Linux-x86_64.tar.gz -C build/linux/x64/release/bundle .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrustTune-Linux
+          path: |
+            gui/TrustTune-Linux-x86_64.AppImage
+            gui/TrustTune-Linux-x86_64.tar.gz
+          if-no-files-found: ignore
+
+  create-release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/TrustTune-macOS/*
+            artifacts/TrustTune-Windows/*
+            artifacts/TrustTune-Linux/*
+          draft: false
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            ## 🎵 TrustTune Beta Release
+
+            **AI-powered music discovery with built-in player**
+
+            ### Downloads
+
+            - **macOS**: Download the `.dmg` file (Intel & Apple Silicon)
+            - **Windows**: Download the `.zip` file, extract and run
+            - **Linux**: Download the `.AppImage` file, make executable and run
+
+            ### What's New
+            - 🎨 Improved GUI with responsive design
+            - 📊 Statistics badges (albums, plays, downloads)
+            - 🌐 Connection quality indicator
+            - 🔄 Prominent refresh button
+            - 📖 Updated concise README
+
+            ### Requirements
+            - **macOS**: 10.15 (Catalina) or later
+            - **Windows**: Windows 10/11
+            - **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+
+
+            ### First Run
+            1. Download for your platform
+            2. Launch TrustTune
+            3. Choose your music folder
+            4. Start searching!
+
+            ---
+
+            *This is a beta release. Please report bugs on [GitHub Issues](https://github.com/trust-tune-net/karma-player/issues)*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

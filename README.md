@@ -71,9 +71,11 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 <td align="center" width="33%">
 
 #### macOS
-[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/fcavalcanti/karma-player/releases)
+[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/trust-tune-net/karma-player/releases)
 
-[**TrustTune.dmg**](https://github.com/fcavalcanti/karma-player/releases/latest/download/TrustTune.dmg)
+[**Download DMG**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS-universal.dmg)
+
+[Zip Archive](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS-universal.zip)
 
 *Intel & Apple Silicon*
 
@@ -81,9 +83,9 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 <td align="center" width="33%">
 
 #### Windows
-[![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/fcavalcanti/karma-player/releases)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/trust-tune-net/karma-player/releases)
 
-[**TrustTune-Setup.exe**](https://github.com/fcavalcanti/karma-player/releases/latest/download/TrustTune-Setup.exe)
+[**Download ZIP**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows-x64.zip)
 
 *Windows 10/11*
 
@@ -91,15 +93,19 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 <td align="center" width="33%">
 
 #### Linux
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/fcavalcanti/karma-player/releases)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/trust-tune-net/karma-player/releases)
 
-[**TrustTune.AppImage**](https://github.com/fcavalcanti/karma-player/releases/latest/download/TrustTune.AppImage)
+[**Download AppImage**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux-x86_64.AppImage)
+
+[TAR.GZ Archive](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux-x86_64.tar.gz)
 
 *Ubuntu/Debian/Fedora*
 
 </td>
 </tr>
 </table>
+
+> 📦 **Latest Release**: [View all releases](https://github.com/trust-tune-net/karma-player/releases)
 
 ### CLI Tool
 
@@ -108,7 +114,7 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 pip install karma-player
 
 # Or install from source
-git clone https://github.com/fcavalcanti/karma-player.git
+git clone https://github.com/trust-tune-net/karma-player.git
 cd karma-player
 pip install -e .
 ```
@@ -266,8 +272,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 💬 Community
 
-- **GitHub Issues:** [Report bugs or request features](https://github.com/fcavalcanti/karma-player/issues)
-- **Discussions:** [Join the conversation](https://github.com/fcavalcanti/karma-player/discussions)
+- **GitHub Issues:** [Report bugs or request features](https://github.com/trust-tune-net/karma-player/issues)
+- **Discussions:** [Join the conversation](https://github.com/trust-tune-net/karma-player/discussions)
 
 ---
 
@@ -285,7 +291,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 <div align="center">
 
-**[Download Now](#-download)** • **[Read the Vision](docs/VISION.md)** • **[Star on GitHub](https://github.com/fcavalcanti/karma-player)**
+**[Download Now](#-download)** • **[Read the Vision](docs/VISION.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
 
 *Made with ❤️ for music lovers and creators*
 
