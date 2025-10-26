@@ -74,9 +74,7 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 #### macOS
 [![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/trust-tune-net/karma-player/releases)
 
-[**Download DMG**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS-universal.dmg)
-
-[Zip Archive](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS-universal.zip)
+[**Download ZIP**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS.zip)
 
 *Intel & Apple Silicon*
 
@@ -86,7 +84,7 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 #### Windows
 [![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/trust-tune-net/karma-player/releases)
 
-[**Download ZIP**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows-x64.zip)
+[**Download ZIP**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows.zip)
 
 *Windows 10/11*
 
@@ -96,9 +94,7 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 #### Linux
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/trust-tune-net/karma-player/releases)
 
-[**Download AppImage**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux-x86_64.AppImage)
-
-[TAR.GZ Archive](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux-x86_64.tar.gz)
+[**Download TAR.GZ**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux.tar.gz)
 
 *Ubuntu/Debian/Fedora*
 

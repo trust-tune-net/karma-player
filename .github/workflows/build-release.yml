@@ -30,41 +30,17 @@ jobs:
           cd gui
           flutter build macos --release
 
-      - name: Create DMG
+      - name: Create ZIP
         run: |
-          cd gui
-          # Install create-dmg
-          brew install create-dmg
-
-          # Create DMG
-          create-dmg \
-            --volname "TrustTune" \
-            --volicon "macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png" \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --icon "TrustTune.app" 200 190 \
-            --hide-extension "TrustTune.app" \
-            --app-drop-link 600 185 \
-            "TrustTune-macOS-universal.dmg" \
-            "build/macos/Build/Products/Release/trusttune_gui.app" \
-            || true
-
-          # Fallback: create zip if DMG fails
-          if [ ! -f "TrustTune-macOS-universal.dmg" ]; then
-            ditto -c -k --sequesterRsrc --keepParent \
-              build/macos/Build/Products/Release/trusttune_gui.app \
-              TrustTune-macOS-universal.zip
-          fi
+          cd gui/build/macos/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent trusttune_gui.app ../../../../../TrustTune-macOS.zip
+          cd ../../../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TrustTune-macOS
-          path: |
-            gui/TrustTune-macOS-universal.dmg
-            gui/TrustTune-macOS-universal.zip
-          if-no-files-found: ignore
+          path: gui/TrustTune-macOS.zip
 
   build-windows:
     runs-on: windows-latest
@@ -89,18 +65,16 @@ jobs:
           cd gui
           flutter build windows --release
 
-      - name: Create installer
+      - name: Create ZIP
         run: |
           cd gui
-
-          # Create portable zip
-          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath TrustTune-Windows-x64.zip
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath TrustTune-Windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TrustTune-Windows
-          path: gui/TrustTune-Windows-x64.zip
+          path: gui/TrustTune-Windows.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -127,61 +101,16 @@ jobs:
           cd gui
           flutter build linux --release
 
-      - name: Create AppImage
+      - name: Create TAR.GZ
         run: |
           cd gui
-
-          # Install AppImage tools
-          wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-          chmod +x appimagetool
-
-          # Create AppDir structure
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/lib
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
-
-          # Copy app files
-          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
-
-          # Create desktop entry
-          cat > AppDir/usr/share/applications/trusttune.desktop << 'EOF'
-          [Desktop Entry]
-          Name=TrustTune
-          Exec=trusttune_gui
-          Icon=trusttune
-          Type=Application
-          Categories=AudioVideo;Audio;
-          EOF
-
-          # Copy icon (use a placeholder if not exists)
-          if [ -f "linux/flutter/generated_plugin_registrant.h" ]; then
-            touch AppDir/usr/share/icons/hicolor/512x512/apps/trusttune.png
-          fi
-
-          # Create AppRun
-          cat > AppDir/AppRun << 'EOF'
-          #!/bin/bash
-          SELF=$(readlink -f "$0")
-          HERE=${SELF%/*}
-          export PATH="${HERE}/usr/bin/:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib/:${LD_LIBRARY_PATH}"
-          exec "${HERE}/usr/bin/trusttune_gui" "$@"
-          EOF
-          chmod +x AppDir/AppRun
-
-          # Build AppImage
-          ARCH=x86_64 ./appimagetool AppDir TrustTune-Linux-x86_64.AppImage || \
-            tar -czf TrustTune-Linux-x86_64.tar.gz -C build/linux/x64/release/bundle .
+          tar -czf TrustTune-Linux.tar.gz -C build/linux/x64/release/bundle .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TrustTune-Linux
-          path: |
-            gui/TrustTune-Linux-x86_64.AppImage
-            gui/TrustTune-Linux-x86_64.tar.gz
-          if-no-files-found: ignore
+          path: gui/TrustTune-Linux.tar.gz
 
   create-release:
     needs: [build-macos, build-windows, build-linux]
