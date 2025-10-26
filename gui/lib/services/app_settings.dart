@@ -7,7 +7,7 @@ class AppSettings {
   factory AppSettings() => _instance;
   AppSettings._internal();
 
-  static const String defaultSearchApiUrl = 'https://d88a7255951d.ngrok-free.app';
+  static const String defaultSearchApiUrl = 'https://trust-tune-trust-tune-community-api.62ickh.easypanel.host';
   String searchApiUrl = defaultSearchApiUrl;
   String transmissionRpcUrl = 'http://localhost:9091';
   String? customDownloadDir;
@@ -92,9 +92,9 @@ class AppSettings {
   Future<bool> checkApiHealth() async {
     try {
       final startTime = DateTime.now();
-      // Check internet connectivity using a reliable endpoint
+      // Check our API health endpoint
       final response = await http.get(
-        Uri.parse('https://www.google.com'),
+        Uri.parse('$searchApiUrl/health'),
       ).timeout(const Duration(seconds: 3));
       final endTime = DateTime.now();
 
