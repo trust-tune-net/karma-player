@@ -181,6 +181,7 @@ async def search(request: SearchRequest):
         ranked_torrents = []
         for ranked in result.results:
             t = ranked.torrent
+            # Explicitly call property methods to get computed values
             ranked_torrents.append(
                 RankedTorrent(
                     rank=ranked.rank,
@@ -188,13 +189,13 @@ async def search(request: SearchRequest):
                         title=t.title,
                         magnet_link=t.magnet_link,
                         size_bytes=t.size_bytes,
-                        size_formatted=t.size_formatted,
+                        size_formatted=t.size_formatted,  # Property method
                         seeders=t.seeders,
                         leechers=t.leechers,
-                        format=t.format,
-                        bitrate=t.bitrate,
-                        source=t.source,
-                        quality_score=t.quality_score,
+                        format=t.format if t.format else None,
+                        bitrate=t.bitrate if t.bitrate else None,
+                        source=t.source if t.source else None,
+                        quality_score=t.quality_score,  # Property method
                         indexer=t.indexer
                     ),
                     explanation=ranked.explanation,
