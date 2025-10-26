@@ -1,0 +1,64 @@
+# TrustTune - Docker Compose for Local Development & Testing
+# This sets up the search API for local testing before cloud deployment
+
+version: '3.8'
+
+services:
+  # Search API - Lightweight search-only service
+  search-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trusttune-search-api
+    ports:
+      - "3000:3000"
+    environment:
+      # API Configuration
+      - SEARCH_API_HOST=0.0.0.0
+      - SEARCH_API_PORT=3000
+
+      # Jackett Configuration (use your own Jackett instance)
+      - JACKETT_URL=${JACKETT_URL:-https://trust-tune-trust-tune-jack.62ickh.easypanel.host}
+      - JACKETT_API_KEY=${JACKETT_API_KEY:-ugokmbv2cfeghwcsm27mtnjva5ch7948}
+      - JACKETT_INDEXER=all
+
+      # AI Configuration (optional - better results with AI)
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Feature Flags
+      - USE_PARTIAL_AI=${USE_PARTIAL_AI:-true}
+      - USE_FULL_AI=${USE_FULL_AI:-false}
+      - SKIP_MUSICBRAINZ=${SKIP_MUSICBRAINZ:-false}
+
+      # MusicBrainz (optional - for metadata enrichment)
+      - MUSICBRAINZ_API_KEY=${MUSICBRAINZ_API_KEY}
+
+      # Settings
+      - MIN_SEEDERS=1
+      - MAX_TORRENTS=50
+      - LOG_LEVEL=INFO
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+networks:
+  default:
+    name: trusttune-network

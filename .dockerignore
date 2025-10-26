@@ -1,0 +1,93 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.production
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Tests (not needed in production)
+tests/
+test_*.py
+*_test.py
+
+# Flutter (not needed for backend API)
+gui/
+*.dart
+pubspec.yaml
+pubspec.lock
+
+# Development files
+.editorconfig
+.flake8
+.pre-commit-config.yaml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Legacy/unused code
+karma_player_legacy/
+*_old.py
+*.bak
+
+# Local data (never in container)
+*.db
+*.sqlite
+*.sqlite3
+downloads/
+Music/
+
+# Logs
+*.log
+logs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

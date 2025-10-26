@@ -220,6 +220,7 @@ Both modes produce the same high-quality results, just different input styles.
 - **[Vision Document](docs/VISION.md)** - Full project vision and roadmap
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture details
 - **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)** - How to add new sources (adapters)
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Deploy search API to cloud (Easypanel, Railway, Render, etc.)
 - **[Implementation](docs/IMPLEMENTATION.md)** - Development progress
 - **[Progress](docs/PROGRESS.md)** - Current status
 
