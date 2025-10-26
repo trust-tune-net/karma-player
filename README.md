@@ -4,6 +4,8 @@
 
 <img src="https://img.shields.io/github/stars/trust-tune-net/karma-player?style=social" alt="GitHub stars"/>
 <img src="https://github.com/trust-tune-net/karma-player/actions/workflows/build-release.yml/badge.svg" alt="Build Status"/>
+<img src="https://img.shields.io/github/v/release/trust-tune-net/karma-player?include_prereleases&label=latest%20release" alt="Latest Release"/>
+<img src="https://img.shields.io/github/downloads/trust-tune-net/karma-player/total" alt="Total Downloads"/>
 <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
 <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python"/>
 <img src="https://img.shields.io/badge/flutter-3.9+-blue.svg" alt="Flutter"/>
