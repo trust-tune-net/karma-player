@@ -1,0 +1,229 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+void main() {
+  runApp(const TrustTuneApp());
+}
+
+class TrustTuneApp extends StatelessWidget {
+  const TrustTuneApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'TrustTune',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: const SearchScreen(),
+    );
+  }
+}
+
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  WebSocketChannel? _channel;
+
+  String _statusMessage = 'Enter a search query';
+  int _progress = 0;
+  List<Map<String, dynamic>> _results = [];
+  bool _isSearching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _channel?.sink.close();
+    super.dispose();
+  }
+
+  void _search() async {
+    if (_searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _progress = 0;
+      _statusMessage = 'Connecting...';
+      _results = [];
+    });
+
+    try {
+      // Connect to WebSocket
+      _channel = WebSocketChannel.connect(
+        Uri.parse('ws://localhost:3000/ws/search'),
+      );
+
+      // Send search request
+      final request = {
+        'query': _searchController.text,
+        'format_filter': null,
+        'min_seeders': 1,
+        'limit': 50,
+      };
+
+      _channel!.sink.add(json.encode(request));
+
+      // Listen for responses
+      _channel!.stream.listen(
+        (data) {
+          final message = json.decode(data);
+          final type = message['type'];
+
+          setState(() {
+            if (type == 'progress') {
+              _progress = message['percent'];
+              _statusMessage = message['message'];
+            } else if (type == 'result') {
+              _statusMessage = 'Search complete!';
+              final resultData = message['data'];
+              _results = List<Map<String, dynamic>>.from(resultData['results']);
+              _isSearching = false;
+              _channel?.sink.close();
+            } else if (type == 'error') {
+              _statusMessage = 'Error: ${message['message']}';
+              _isSearching = false;
+              _channel?.sink.close();
+            }
+          });
+        },
+        onError: (error) {
+          setState(() {
+            _statusMessage = 'Connection error: $error';
+            _isSearching = false;
+          });
+        },
+        onDone: () {
+          setState(() {
+            if (_isSearching) {
+              _statusMessage = 'Connection closed';
+              _isSearching = false;
+            }
+          });
+        },
+      );
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Failed to connect: $e';
+        _isSearching = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('TrustTune Search'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Search Input
+            TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                labelText: 'Search for music',
+                hintText: 'e.g., radiohead ok computer',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.search),
+              ),
+              enabled: !_isSearching,
+              onSubmitted: (_) => _search(),
+            ),
+            const SizedBox(height: 16),
+
+            // Search Button
+            ElevatedButton(
+              onPressed: _isSearching ? null : _search,
+              child: _isSearching
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Search'),
+            ),
+            const SizedBox(height: 24),
+
+            // Status and Progress
+            if (_isSearching) ...[
+              LinearProgressIndicator(value: _progress / 100),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              _statusMessage,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            // Results List
+            if (_results.isNotEmpty) ...[
+              Text(
+                'Found ${_results.length} results:',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+            ],
+            Expanded(
+              child: ListView.builder(
+                itemCount: _results.length,
+                itemBuilder: (context, index) {
+                  final result = _results[index];
+                  final torrent = result['torrent'];
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Text('${result['rank']}'),
+                      ),
+                      title: Text(
+                        torrent['title'],
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(result['explanation']),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              if (torrent['format'] != null)
+                                Chip(
+                                  label: Text(torrent['format']),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              const SizedBox(width: 4),
+                              Text('${torrent['seeders']} seeders'),
+                              const SizedBox(width: 8),
+                              Text(torrent['size_formatted']),
+                            ],
+                          ),
+                        ],
+                      ),
+                      isThreeLine: true,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

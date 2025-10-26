@@ -1,0 +1,2779 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:path/path.dart' as path;
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'models/song.dart';
+import 'models/album.dart';
+import 'models/torrent.dart' as torrent_model;
+import 'services/transmission_client.dart';
+import 'services/daemon_manager.dart';
+import 'package:flutter/foundation.dart';
+
+// App Color Palette (like Melo)
+class AppColors {
+  // Primary brand
+  static const purple = Color(0xFFA855F7);
+  static const purpleLight = Color(0xFF8B5CF6);
+
+  // Accent colors
+  static const orange = Color(0xFFFF6B4A); // CTA buttons, like Melo's Upgrade
+  static const green = Color(0xFF10B981); // Success states
+  static const red = Color(0xFFEF4444); // Errors, delete
+  static const amber = Color(0xFFF59E0B); // Warnings
+
+  // Neutrals
+  static const black = Color(0xFF000000);
+  static const darkestGray = Color(0xFF0A0A0A);
+  static const darkerGray = Color(0xFF1C1C1E);
+  static const darkGray = Color(0xFF2A2A2E);
+  static const gray = Color(0xFF666666);
+  static const lightGray = Color(0xFF888888);
+  static const lighterGray = Color(0xFFAAAAAA);
+  static const white = Color(0xFFFFFFFF);
+}
+
+// Global Settings Manager
+class AppSettings {
+  static final AppSettings _instance = AppSettings._internal();
+  factory AppSettings() => _instance;
+  AppSettings._internal();
+
+  static const String defaultSearchApiUrl = 'https://d88a7255951d.ngrok-free.app';
+  String searchApiUrl = defaultSearchApiUrl;
+  String transmissionRpcUrl = 'http://localhost:9091';
+  String? customDownloadDir;
+
+  // Statistics
+  int totalPlays = 0;
+  int totalDownloadedBytes = 0;
+  Set<int> completedTorrentIds = {}; // Track which torrents we've already counted
+
+  // Health status
+  bool apiHealthy = false;
+  DateTime? lastHealthCheck;
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    searchApiUrl = prefs.getString('search_api_url') ?? defaultSearchApiUrl;
+    transmissionRpcUrl = prefs.getString('transmission_rpc_url') ?? 'http://localhost:9091';
+    customDownloadDir = prefs.getString('custom_download_dir');
+    totalPlays = prefs.getInt('total_plays') ?? 0;
+    totalDownloadedBytes = prefs.getInt('total_downloaded_bytes') ?? 0;
+
+    // Load completed torrent IDs
+    final completedIds = prefs.getStringList('completed_torrent_ids') ?? [];
+    completedTorrentIds = completedIds.map((id) => int.parse(id)).toSet();
+  }
+
+  Future<void> saveSearchApiUrl(String url) async {
+    searchApiUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('search_api_url', url);
+  }
+
+  Future<void> saveTransmissionRpcUrl(String url) async {
+    transmissionRpcUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('transmission_rpc_url', url);
+  }
+
+  Future<void> saveDownloadDir(String dir) async {
+    customDownloadDir = dir;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('custom_download_dir', dir);
+  }
+
+  Future<void> incrementPlays() async {
+    totalPlays++;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('total_plays', totalPlays);
+  }
+
+  Future<void> addDownloadedBytes(int bytes, int torrentId) async {
+    // Only add if we haven't already counted this torrent
+    if (!completedTorrentIds.contains(torrentId)) {
+      completedTorrentIds.add(torrentId);
+      totalDownloadedBytes += bytes;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('total_downloaded_bytes', totalDownloadedBytes);
+      // Save completed IDs
+      await prefs.setStringList(
+        'completed_torrent_ids',
+        completedTorrentIds.map((id) => id.toString()).toList(),
+      );
+    }
+  }
+
+  bool get isUsingDefaultApi => searchApiUrl == defaultSearchApiUrl;
+
+  String get displaySearchApiUrl {
+    if (isUsingDefaultApi) {
+      return '•••••••••••••••••••••••';
+    }
+    return searchApiUrl;
+  }
+
+  String get downloadedGigabytes {
+    final gb = totalDownloadedBytes / (1024 * 1024 * 1024);
+    return gb.toStringAsFixed(2);
+  }
+
+  Future<bool> checkApiHealth() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$searchApiUrl/health'),
+      ).timeout(const Duration(seconds: 5));
+
+      apiHealthy = response.statusCode == 200;
+      lastHealthCheck = DateTime.now();
+      return apiHealthy;
+    } catch (e) {
+      apiHealthy = false;
+      lastHealthCheck = DateTime.now();
+      return false;
+    }
+  }
+}
+
+// Global instances
+final appSettings = AppSettings();
+final daemonManager = DaemonManager();
+
+// Status Bar Widget
+class StatusBar extends StatefulWidget {
+  const StatusBar({super.key});
+
+  @override
+  State<StatusBar> createState() => _StatusBarState();
+}
+
+class _StatusBarState extends State<StatusBar> {
+  bool _daemonRunning = false;
+  Timer? _statusTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+    // Update status every 10 seconds
+    _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkStatus());
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkStatus() async {
+    final daemonStatus = await daemonManager.isDaemonRunning();
+    await appSettings.checkApiHealth();
+
+    if (mounted) {
+      setState(() {
+        _daemonRunning = daemonStatus;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // API Status Indicator
+          Tooltip(
+            message: appSettings.isUsingDefaultApi ? 'Using default API' : 'Using custom API',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  appSettings.isUsingDefaultApi ? Icons.cloud : Icons.cloud_done,
+                  size: 16,
+                  color: appSettings.isUsingDefaultApi
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: appSettings.apiHealthy ? Colors.green : Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 16),
+          const Text('|', style: TextStyle(color: Colors.grey)),
+          const SizedBox(width: 16),
+
+          // Daemon Status
+          Tooltip(
+            message: _daemonRunning ? 'Daemon running' : 'Daemon stopped',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.downloading,
+                  size: 16,
+                  color: _daemonRunning ? Colors.green : Colors.red,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _daemonRunning ? 'ON' : 'OFF',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _daemonRunning ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+          ),
+
+          const Spacer(),
+
+          // Statistics
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.play_circle_outline,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${appSettings.totalPlays}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                Icons.download_outlined,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${appSettings.downloadedGigabytes} GB',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
+
+  // Load settings
+  await appSettings.load();
+
+  // Start transmission daemon on app launch
+  print('Starting transmission daemon...');
+  final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+  if (started) {
+    print('Transmission daemon started successfully');
+  } else {
+    print('Warning: Failed to start transmission daemon');
+  }
+
+  runApp(const KarmaPlayerApp());
+}
+
+class KarmaPlayerApp extends StatelessWidget {
+  const KarmaPlayerApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Karma Player',
+      theme: ThemeData(
+        colorScheme: ColorScheme.dark(
+          primary: const Color(0xFFA855F7), // Vibrant purple
+          secondary: const Color(0xFF8B5CF6),
+          surface: const Color(0xFF1C1C1E),
+          background: const Color(0xFF000000),
+          onPrimary: Colors.white,
+          onSecondary: Colors.white,
+          onSurface: const Color(0xFFFFFFFF),
+          onBackground: const Color(0xFFFFFFFF),
+        ),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF000000),
+        fontFamily: GoogleFonts.inter().fontFamily, // Use Inter font like Melo
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Color(0xFFFFFFFF),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+          iconTheme: IconThemeData(
+            color: Color(0xFFA855F7),
+          ),
+        ),
+        cardTheme: const CardThemeData(
+          color: Color(0xFF1C1C1E),
+          elevation: 0, // Flat design
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+        ),
+        textTheme: const TextTheme(
+          headlineLarge: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFFFFFFF),
+            height: 1.2,
+          ),
+          headlineSmall: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFFFFFFF),
+            height: 1.3,
+          ),
+          titleLarge: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFA855F7),
+          ),
+          bodyLarge: TextStyle(
+            fontSize: 16,
+            color: Color(0xFFAAAAAA),
+          ),
+          bodyMedium: TextStyle(
+            fontSize: 14,
+            color: Color(0xFF888888),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      themeMode: ThemeMode.dark,
+      home: const MainScreen(),
+    );
+  }
+}
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _selectedIndex = 0;
+  final Player _player = Player();
+  Song? _currentSong;
+  bool _isPlaying = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.stream.playing.listen((playing) {
+      setState(() {
+        _isPlaying = playing;
+      });
+    });
+    _player.stream.position.listen((position) {
+      setState(() {
+        _position = position;
+      });
+    });
+    _player.stream.duration.listen((duration) {
+      setState(() {
+        _duration = duration;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  void _playSong(Song song) {
+    setState(() {
+      _currentSong = song;
+    });
+    _player.open(Media(song.filePath));
+    _player.play();
+    // Track play count
+    appSettings.incrementPlays();
+  }
+
+  void _togglePlayPause() {
+    if (_isPlaying) {
+      _player.pause();
+    } else {
+      _player.play();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screens = [
+      LibraryScreen(onSongTap: _playSong, currentSong: _currentSong),
+      const SearchScreen(),
+      const DownloadsScreen(),
+      const SettingsScreen(),
+    ];
+
+    return Scaffold(
+      body: Column(
+        children: [
+          // Top status bar
+          const StatusBar(),
+
+          // Main content with sidebar
+          Expanded(
+            child: Row(
+              children: [
+                // Left Sidebar Navigation (like Melo)
+                Container(
+                  width: 220,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A0A0A),
+                    border: Border(
+                      right: BorderSide(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Logo/App Name
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text(
+                          'TRUSTTUNE',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+
+                      // Navigation items
+                      _buildNavItem(
+                        icon: Icons.library_music_outlined,
+                        selectedIcon: Icons.library_music,
+                        label: 'Library',
+                        index: 0,
+                      ),
+                      _buildNavItem(
+                        icon: Icons.search_outlined,
+                        selectedIcon: Icons.search,
+                        label: 'Search',
+                        index: 1,
+                      ),
+                      _buildNavItem(
+                        icon: Icons.download_outlined,
+                        selectedIcon: Icons.download,
+                        label: 'Downloads',
+                        index: 2,
+                      ),
+
+                      const Spacer(),
+
+                      // Settings at bottom
+                      _buildNavItem(
+                        icon: Icons.settings_outlined,
+                        selectedIcon: Icons.settings,
+                        label: 'Settings',
+                        index: 3,
+                      ),
+
+                      const SizedBox(height: 80), // Space for player bar
+                    ],
+                  ),
+                ),
+
+                // Main content area
+                Expanded(
+                  child: screens[_selectedIndex],
+                ),
+              ],
+            ),
+          ),
+
+          // Full-width player bar at bottom (like Spotify/Melo)
+          _buildPlayerBar(context),
+        ],
+      ),
+    );
+  }
+
+  // Sidebar navigation item
+  Widget _buildNavItem({
+    required IconData icon,
+    required IconData selectedIcon,
+    required String label,
+    required int index,
+  }) {
+    final isSelected = _selectedIndex == index;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? selectedIcon : icon,
+              size: 20,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : const Color(0xFFAAAAAA),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : const Color(0xFFAAAAAA),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Full-width player bar (like Melo/Spotify)
+  Widget _buildPlayerBar(BuildContext context) {
+    if (_currentSong == null) return const SizedBox.shrink();
+
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Progress bar
+          SizedBox(
+            height: 4,
+            child: LinearProgressIndicator(
+              value: _duration.inMilliseconds > 0
+                  ? _position.inMilliseconds / _duration.inMilliseconds
+                  : 0.0,
+              backgroundColor: const Color(0xFF2A2A2E),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+
+          // Player controls
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  // Album artwork
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      Icons.music_note,
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  // Track info
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _currentSong!.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _currentSong!.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFF888888),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  // Playback controls
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous),
+                        iconSize: 24,
+                        color: const Color(0xFFAAAAAA),
+                        onPressed: () {
+                          // TODO: Previous track
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            size: 20,
+                          ),
+                          color: Colors.white,
+                          onPressed: _togglePlayPause,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next),
+                        iconSize: 24,
+                        color: const Color(0xFFAAAAAA),
+                        onPressed: () {
+                          // TODO: Next track
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(width: 24),
+
+                  // Time display
+                  Text(
+                    '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF888888),
+                    ),
+                  ),
+
+                  const SizedBox(width: 24),
+
+                  // Volume control (placeholder for now)
+                  IconButton(
+                    icon: const Icon(Icons.volume_up_outlined),
+                    iconSize: 20,
+                    color: const Color(0xFFAAAAAA),
+                    onPressed: () {
+                      // TODO: Volume control
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    return '$minutes:${twoDigits(seconds)}';
+  }
+}
+
+// LIBRARY SCREEN
+class LibraryScreen extends StatefulWidget {
+  final Function(Song) onSongTap;
+  final Song? currentSong;
+
+  const LibraryScreen({super.key, required this.onSongTap, this.currentSong});
+
+  @override
+  State<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends State<LibraryScreen> {
+  List<Album> _albums = [];
+  bool _isScanning = false;
+  String _statusMessage = 'No music loaded';
+  Album? _selectedAlbum;
+  Map<String, double> _downloadProgress = {}; // Maps album names to progress
+  Timer? _downloadPollTimer;
+  late final TransmissionClient _transmissionClient;
+
+  @override
+  void initState() {
+    super.initState();
+    _transmissionClient = TransmissionClient(baseUrl: appSettings.transmissionRpcUrl);
+    _scanMusicFolder();
+    // Poll downloads every 2 seconds
+    _downloadPollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
+  }
+
+  @override
+  void dispose() {
+    _downloadPollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadDownloads() async {
+    try {
+      // Get all active torrents from transmission
+      final torrents = await _transmissionClient.getTorrents();
+
+      // Map torrent names to album names and update progress
+      final newProgress = <String, double>{};
+
+      for (final torrent in torrents) {
+        final torrentName = torrent.name;
+        final progress = torrent.percentDone.toDouble();
+
+        // Track completed torrents for statistics
+        if (progress >= 1.0) {
+          // Use global settings to track completions (prevents duplicate logging)
+          if (!appSettings.completedTorrentIds.contains(torrent.id)) {
+            // This is a newly completed torrent - add its size to stats
+            await appSettings.addDownloadedBytes(torrent.totalSize, torrent.id);
+            print('Download completed: ${torrent.name} (${(torrent.totalSize / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB)');
+          }
+          // Skip showing progress for completed torrents
+          continue;
+        }
+
+        // Try to match torrent name with album names
+        for (final album in _albums) {
+          // Check if album name is in torrent name (fuzzy match)
+          if (torrentName.toLowerCase().contains(album.name.toLowerCase()) ||
+              album.name.toLowerCase().contains(torrentName.toLowerCase())) {
+            newProgress[album.name] = progress;
+            break;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _downloadProgress = newProgress;
+        });
+      }
+    } catch (e) {
+      // Silently fail - transmission might not be ready
+    }
+  }
+
+  Future<void> _scanMusicFolder() async {
+    setState(() {
+      _isScanning = true;
+      _statusMessage = 'Scanning ~/Music folder...';
+      _albums = [];
+    });
+
+    try {
+      final homeDir = Platform.environment['HOME'];
+      if (homeDir == null) {
+        setState(() {
+          _statusMessage = 'Could not find home directory';
+          _isScanning = false;
+        });
+        return;
+      }
+
+      final musicDir = Directory('$homeDir/Music');
+      if (!await musicDir.exists()) {
+        setState(() {
+          _statusMessage = 'Music folder not found';
+          _isScanning = false;
+        });
+        return;
+      }
+
+      // Group songs by album folder
+      final Map<String, List<Song>> albumMap = {};
+      final supportedExtensions = ['.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg'];
+      final artworkNames = ['folder.jpg', 'folder.png', 'cover.jpg', 'cover.png', 'artwork.jpg'];
+
+      // Regex patterns for disc folders (case-insensitive)
+      final discPatterns = [
+        RegExp(r'^disc\s*\d+$', caseSensitive: false),
+        RegExp(r'^cd\s*\d+$', caseSensitive: false),
+        RegExp(r'^disk\s*\d+$', caseSensitive: false),
+      ];
+
+      await for (final entity in musicDir.list(recursive: true)) {
+        if (entity is File) {
+          final ext = path.extension(entity.path).toLowerCase();
+          if (supportedExtensions.contains(ext)) {
+            var albumPath = path.dirname(entity.path);
+            var folderName = path.basename(albumPath);
+
+            // Check if this is a disc folder (Disc 1, CD 2, etc.)
+            bool isDiscFolder = discPatterns.any((pattern) => pattern.hasMatch(folderName));
+
+            // If it's a disc folder, use the parent folder as the album
+            if (isDiscFolder) {
+              albumPath = path.dirname(albumPath);
+            }
+
+            final albumName = path.basename(albumPath);
+
+            // Extract artist from album folder name (format: "Artist - Album")
+            String artistName = 'Unknown Artist';
+            final nameParts = albumName.split(' - ');
+            if (nameParts.length >= 2) {
+              artistName = nameParts[0].trim();
+            } else {
+              // If no " - " separator, use the folder name as artist
+              artistName = albumName;
+            }
+
+            if (!albumMap.containsKey(albumPath)) {
+              albumMap[albumPath] = [];
+            }
+
+            albumMap[albumPath]!.add(Song.fromFile(entity.path, albumName: albumName, artistName: artistName));
+          }
+        }
+      }
+
+      // Create Album objects with artwork
+      final albums = <Album>[];
+      for (final entry in albumMap.entries) {
+        final albumPath = entry.key;
+        final songs = entry.value;
+
+        // Sort songs by track number
+        songs.sort((a, b) {
+          if (a.trackNumber != null && b.trackNumber != null) {
+            return a.trackNumber!.compareTo(b.trackNumber!);
+          }
+          return a.title.compareTo(b.title);
+        });
+
+        // Look for artwork in album folder
+        String? artworkPath;
+        final albumDir = Directory(albumPath);
+
+        // First try common artwork names in parent folder
+        for (final artworkName in artworkNames) {
+          final artFile = File(path.join(albumPath, artworkName));
+          if (await artFile.exists()) {
+            artworkPath = artFile.path;
+            break;
+          }
+        }
+
+        // If not found, check if this is a multi-disc album and look inside disc folders
+        if (artworkPath == null && await albumDir.exists()) {
+          // Check for disc folders
+          await for (final entity in albumDir.list()) {
+            if (entity is Directory) {
+              final folderName = path.basename(entity.path);
+              bool isDiscFolder = discPatterns.any((pattern) => pattern.hasMatch(folderName));
+
+              if (isDiscFolder) {
+                // Look for artwork inside the disc folder
+                await for (final file in entity.list()) {
+                  if (file is File) {
+                    final ext = path.extension(file.path).toLowerCase();
+                    if (['.jpg', '.jpeg', '.png', '.webp'].contains(ext)) {
+                      artworkPath = file.path;
+                      break;
+                    }
+                  }
+                }
+                if (artworkPath != null) break;
+              }
+            }
+          }
+        }
+
+        // If still not found, search for ANY image file in parent folder
+        if (artworkPath == null && await albumDir.exists()) {
+          await for (final entity in albumDir.list()) {
+            if (entity is File) {
+              final ext = path.extension(entity.path).toLowerCase();
+              if (['.jpg', '.jpeg', '.png', '.webp'].contains(ext)) {
+                artworkPath = entity.path;
+                break;
+              }
+            }
+          }
+        }
+
+        albums.add(Album(
+          id: albumPath.hashCode.toString(),
+          name: path.basename(albumPath),
+          path: albumPath,
+          artworkPath: artworkPath,
+          songs: songs,
+        ));
+      }
+
+      setState(() {
+        _albums = albums;
+        _isScanning = false;
+        _statusMessage = albums.isEmpty
+            ? 'No music found in ~/Music'
+            : 'Found ${albums.length} albums';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error scanning: $e';
+        _isScanning = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_selectedAlbum != null) {
+      return _buildAlbumDetailScreen(_selectedAlbum!);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Library'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isScanning ? null : _scanMusicFolder,
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_statusMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  if (_isScanning)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  if (_isScanning) const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _statusMessage,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: _albums.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.library_music_outlined,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _isScanning ? 'Scanning for music...' : 'No albums found',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Add music to ~/Music',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  )
+                : GridView.builder(
+                    padding: const EdgeInsets.all(24),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 200, // Fixed maximum width (like Melo)
+                      childAspectRatio: 0.75, // Width:height ratio
+                      crossAxisSpacing: 20,
+                      mainAxisSpacing: 20,
+                    ),
+                    itemCount: _albums.length,
+                    itemBuilder: (context, index) {
+                      final album = _albums[index];
+                      return _buildAlbumCard(album);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlbumCard(Album album) {
+    final isDownloading = _downloadProgress.containsKey(album.name);
+    final progress = _downloadProgress[album.name] ?? 0.0;
+    final showProgress = isDownloading && progress < 1.0;
+
+    return _AlbumCardWidget(
+      album: album,
+      showProgress: showProgress,
+      progress: progress,
+      onTap: () {
+        setState(() {
+          _selectedAlbum = album;
+        });
+      },
+    );
+  }
+
+  Widget _buildAlbumDetailScreen(Album album) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: const Color(0xFF000000),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                setState(() {
+                  _selectedAlbum = null;
+                });
+              },
+            ),
+            expandedHeight: 280,
+            pinned: true,
+            flexibleSpace: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double expandRatio = (constraints.maxHeight - kToolbarHeight) /
+                    (280 - kToolbarHeight);
+
+                return FlexibleSpaceBar(
+                  title: Text(
+                    album.title,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      shadows: expandRatio > 0.3 ? [
+                        const Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 3.0,
+                          color: Color.fromARGB(128, 0, 0, 0),
+                        ),
+                      ] : null,
+                    ),
+                  ),
+                  titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
+                  background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  album.artworkPath != null
+                      ? Image.file(
+                          File(album.artworkPath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              child: const Icon(Icons.album, size: 128),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          child: const Icon(Icons.album, size: 128),
+                        ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+                );
+              },
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    album.artist,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${album.trackCount} tracks',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          if (album.songs.isNotEmpty) {
+                            widget.onSongTap(album.songs.first);
+                          }
+                        },
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Play'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          if (album.songs.isNotEmpty) {
+                            widget.onSongTap(album.songs.first);
+                          }
+                        },
+                        icon: const Icon(Icons.shuffle),
+                        label: const Text('Shuffle'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Tracks',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final song = album.songs[index];
+                final isPlaying = widget.currentSong?.id == song.id;
+
+                return _TrackListItem(
+                  song: song,
+                  isPlaying: isPlaying,
+                  onTap: () => widget.onSongTap(song),
+                );
+              },
+              childCount: album.songs.length,
+            ),
+          ),
+          const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+        ],
+      ),
+    );
+  }
+}
+
+// Separate StatefulWidget for album card with hover state
+class _AlbumCardWidget extends StatefulWidget {
+  final Album album;
+  final bool showProgress;
+  final double progress;
+  final VoidCallback onTap;
+
+  const _AlbumCardWidget({
+    required this.album,
+    required this.showProgress,
+    required this.progress,
+    required this.onTap,
+  });
+
+  @override
+  State<_AlbumCardWidget> createState() => _AlbumCardWidgetState();
+}
+
+class _AlbumCardWidgetState extends State<_AlbumCardWidget> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, _isHovered ? -4 : 0, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(_isHovered ? 0.4 : 0.2),
+                        blurRadius: _isHovered ? 16 : 8,
+                        offset: Offset(0, _isHovered ? 8 : 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Album artwork
+                        widget.album.artworkPath != null
+                            ? Image.file(
+                                File(widget.album.artworkPath!),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Center(
+                                    child: Icon(Icons.album, size: 64),
+                                  );
+                                },
+                              )
+                            : const Center(
+                                child: Icon(Icons.album, size: 64),
+                              ),
+
+                        // Play button overlay on hover
+                        if (_isHovered && !widget.showProgress)
+                          Container(
+                            color: Colors.black.withOpacity(0.4),
+                            child: Center(
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFFA855F7),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFA855F7).withOpacity(0.4),
+                                      blurRadius: 16,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 32,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        // Download progress indicator overlay
+                        if (widget.showProgress)
+                          Container(
+                            color: Colors.black.withOpacity(0.5),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 64,
+                                    height: 64,
+                                    child: CircularProgressIndicator(
+                                      value: widget.progress,
+                                      strokeWidth: 6,
+                                      backgroundColor: Colors.white.withOpacity(0.3),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    '${(widget.progress * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.album.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.album.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFF888888),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${widget.album.trackCount} tracks',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFF666666),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Hoverable track list item
+class _TrackListItem extends StatefulWidget {
+  final Song song;
+  final bool isPlaying;
+  final VoidCallback onTap;
+
+  const _TrackListItem({
+    required this.song,
+    required this.isPlaying,
+    required this.onTap,
+  });
+
+  @override
+  State<_TrackListItem> createState() => _TrackListItemState();
+}
+
+class _TrackListItemState extends State<_TrackListItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(
+          color: widget.isPlaying
+              ? AppColors.purple.withOpacity(0.15)
+              : _isHovered
+                  ? AppColors.darkGray.withOpacity(0.5)
+                  : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          leading: Container(
+            width: 36,
+            alignment: Alignment.center,
+            child: widget.isPlaying
+                ? Icon(
+                    Icons.volume_up,
+                    color: AppColors.purple,
+                    size: 20,
+                  )
+                : _isHovered
+                    ? Icon(
+                        Icons.play_circle_filled,
+                        color: AppColors.purple,
+                        size: 24,
+                      )
+                    : Text(
+                        widget.song.trackNumber?.toString().padLeft(2, '0') ?? '–',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.lightGray,
+                        ),
+                      ),
+          ),
+          title: Text(
+            widget.song.title,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: widget.isPlaying ? FontWeight.w600 : FontWeight.w500,
+              color: widget.isPlaying ? AppColors.purple : AppColors.white,
+            ),
+          ),
+          subtitle: Text(
+            path.extension(widget.song.filePath).substring(1).toUpperCase(),
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: AppColors.gray,
+            ),
+          ),
+          trailing: widget.isPlaying
+              ? Icon(
+                  Icons.equalizer,
+                  color: AppColors.purple,
+                  size: 20,
+                )
+              : null,
+          onTap: widget.onTap,
+        ),
+      ),
+    );
+  }
+}
+
+  Widget _buildAlbumDetailScreen(Album album) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: const Color(0xFF000000), // Solid background when collapsed
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                setState(() {
+                  _selectedAlbum = null;
+                });
+              },
+            ),
+            expandedHeight: 280,
+            pinned: true,
+            flexibleSpace: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                // Calculate collapse ratio
+                final double expandRatio = (constraints.maxHeight - kToolbarHeight) /
+                    (280 - kToolbarHeight);
+
+                return FlexibleSpaceBar(
+                  title: Text(
+                    album.title,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      shadows: expandRatio > 0.3 ? [
+                        const Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 3.0,
+                          color: Color.fromARGB(128, 0, 0, 0),
+                        ),
+                      ] : null, // Remove shadow when collapsed
+                    ),
+                  ),
+                  titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
+                  background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  album.artworkPath != null
+                      ? Image.file(
+                          File(album.artworkPath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              child: const Icon(Icons.album, size: 128),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          child: const Icon(Icons.album, size: 128),
+                        ),
+                  // Gradient overlay for better text readability
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+                );
+              },
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    album.artist,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${album.trackCount} tracks',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () {
+                          if (album.songs.isNotEmpty) {
+                            widget.onSongTap(album.songs.first);
+                          }
+                        },
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Play'),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          // TODO: Shuffle play
+                          if (album.songs.isNotEmpty) {
+                            widget.onSongTap(album.songs.first);
+                          }
+                        },
+                        icon: const Icon(Icons.shuffle),
+                        label: const Text('Shuffle'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Tracks',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final song = album.songs[index];
+                final isPlaying = widget.currentSong?.id == song.id;
+
+                return _TrackListItem(
+                  song: song,
+                  isPlaying: isPlaying,
+                  onTap: () => widget.onSongTap(song),
+                );
+              },
+              childCount: album.songs.length,
+            ),
+          ),
+          // Add some bottom padding
+          const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+        ],
+      ),
+    );
+  }
+}
+
+// SEARCH SCREEN (preserved from original)
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClientMixin {
+  final TextEditingController _searchController = TextEditingController();
+  WebSocketChannel? _channel;
+
+  String _statusMessage = 'Enter a search query';
+  int _progress = 0;
+  List<Map<String, dynamic>> _results = [];
+  bool _isSearching = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _channel?.sink.close();
+    super.dispose();
+  }
+
+  void _search() async {
+    if (_searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _progress = 0;
+      _statusMessage = 'Searching...';
+      _results = [];
+    });
+
+    try {
+      // Make HTTP POST request to search API
+      final response = await http.post(
+        Uri.parse('${appSettings.searchApiUrl}/api/search'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'query': _searchController.text,
+          'format_filter': null,
+          'min_seeders': 1,
+          'limit': 50,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _results = List<Map<String, dynamic>>.from(data['results'] ?? []);
+          _statusMessage = 'Found ${_results.length} results';
+          _isSearching = false;
+        });
+      } else {
+        setState(() {
+          _statusMessage = 'Search failed: ${response.statusCode}';
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Search error: $e';
+        _isSearching = false;
+      });
+    }
+  }
+
+  void _startDownload(Map<String, dynamic> torrent) async {
+    final magnetLink = torrent['magnet_link'];
+    final title = torrent['title'];
+
+    if (magnetLink == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No magnet link available')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Starting download: $title')),
+    );
+
+    try {
+      final transmissionClient = TransmissionClient(baseUrl: appSettings.transmissionRpcUrl);
+
+      // Add torrent to transmission
+      final torrentId = await transmissionClient.addTorrent(magnetLink: magnetLink);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Download started: $title'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      print('Torrent ID: $torrentId');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error starting download: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      print('Download error: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);  // Required for AutomaticKeepAliveClientMixin
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Discover Music'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Search Input
+            TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                labelText: 'Search for music',
+                hintText: 'e.g., radiohead ok computer',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.search),
+              ),
+              enabled: !_isSearching,
+              onSubmitted: (_) => _search(),
+            ),
+            const SizedBox(height: 16),
+
+            // Search Button
+            FilledButton.icon(
+              onPressed: _isSearching ? null : _search,
+              icon: _isSearching
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search),
+              label: const Text('Search'),
+            ),
+            const SizedBox(height: 24),
+
+            // Status and Progress
+            if (_isSearching) ...[
+              LinearProgressIndicator(value: _progress / 100),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              _statusMessage,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            // Results List
+            if (_results.isNotEmpty) ...[
+              Text(
+                'Found ${_results.length} results:',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+            ],
+            Expanded(
+              child: ListView.builder(
+                itemCount: _results.length,
+                itemBuilder: (context, index) {
+                  final result = _results[index];
+                  final torrent = result['torrent'];
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: result['rank'] == 1
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Text(
+                          '${result['rank']}',
+                          style: TextStyle(
+                            color: result['rank'] == 1
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.onSurface,
+                            fontWeight: result['rank'] == 1
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        torrent['title'],
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(result['explanation']),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              if (torrent['format'] != null)
+                                Chip(
+                                  label: Text(torrent['format']),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                              Chip(
+                                label: Text('${torrent['seeders']} seeders'),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                              Chip(
+                                label: Text(torrent['size_formatted']),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.download),
+                        onPressed: () => _startDownload(torrent),
+                        tooltip: 'Download',
+                      ),
+                      isThreeLine: true,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// DOWNLOADS SCREEN
+class DownloadsScreen extends StatefulWidget {
+  const DownloadsScreen({super.key});
+
+  @override
+  State<DownloadsScreen> createState() => _DownloadsScreenState();
+}
+
+class _DownloadsScreenState extends State<DownloadsScreen> {
+  List<Map<String, dynamic>> _downloads = [];
+  bool _isLoading = true;
+  Timer? _pollTimer;
+  late final TransmissionClient _transmissionClient;
+
+  // Format bytes per second to human-readable speed
+  String _formatSpeed(int bytesPerSecond) {
+    if (bytesPerSecond <= 0) return '0 B/s';
+    if (bytesPerSecond > 1024 * 1024) {
+      return '${(bytesPerSecond / (1024 * 1024)).toStringAsFixed(1)} MB/s';
+    }
+    if (bytesPerSecond > 1024) {
+      return '${(bytesPerSecond / 1024).toStringAsFixed(1)} KB/s';
+    }
+    return '$bytesPerSecond B/s';
+  }
+
+  // Format ETA seconds to human-readable time
+  String _formatETA(int seconds) {
+    if (seconds < 0) return 'Unknown';
+    if (seconds < 60) return '${seconds}s';
+    if (seconds < 3600) return '${seconds ~/ 60}m ${seconds % 60}s';
+    return '${seconds ~/ 3600}h ${(seconds % 3600) ~/ 60}m';
+  }
+
+  // Get human-friendly status text
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'download':
+        return 'Downloading';
+      case 'seed':
+        return 'Seeding';
+      case 'check':
+        return 'Verifying';
+      case 'stopped':
+        return 'Stopped';
+      default:
+        return status;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _transmissionClient = TransmissionClient(baseUrl: appSettings.transmissionRpcUrl);
+    _loadDownloads();
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadDownloads() async {
+    try {
+      print('[Downloads] Fetching torrents from transmission...');
+      final torrents = await _transmissionClient.getTorrents();
+      print('[Downloads] Got ${torrents.length} torrents from transmission');
+
+      for (var t in torrents) {
+        print('[Downloads]   - [${t.id}] ${t.name} (${(t.percentDone * 100).toStringAsFixed(1)}%)');
+      }
+
+      if (mounted) {
+        setState(() {
+          // Filter: only show active downloads (not completed/stopped)
+          final activeTorrents = torrents.where((t) =>
+            t.percentDone < 1.0 || t.status != 'stopped'
+          ).toList();
+
+          // Convert torrents to the same format expected by UI
+          _downloads = activeTorrents.map((t) => {
+            'id': t.id.toString(),
+            'title': t.name,
+            'progress': t.percentDone,  // Already 0.0-1.0
+            'status': t.status,
+            'download_speed': t.rateDownload,
+            'upload_speed': t.rateUpload,
+            'eta': t.eta,
+          }).toList();
+          _isLoading = false;
+          print('[Downloads] Updated UI with ${_downloads.length} active downloads (${torrents.length} total)');
+        });
+      } else {
+        print('[Downloads] Widget not mounted, skipping setState');
+      }
+    } catch (e) {
+      print('[Downloads] Error loading downloads: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteDownload(String downloadId, String title) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Download'),
+        content: Text('Are you sure you want to delete "$title"?\n\nThis will remove the download but keep any completed files.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Delete via transmission
+    try {
+      final torrentId = int.parse(downloadId);
+      await _transmissionClient.removeTorrents(ids: [torrentId], deleteData: false);
+
+      // Refresh the list
+      _loadDownloads();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted "$title"')),
+        );
+      }
+    } catch (e) {
+      print('Error deleting download: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error deleting download')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Downloads'),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _downloads.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.download_outlined,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No downloads yet',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Start downloading music from the Search tab',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _downloads.length,
+                  itemBuilder: (context, index) {
+                    final download = _downloads[index];
+                    final progress = (download['progress'] ?? 0.0) as double;
+                    final status = download['status'] ?? 'unknown';
+                    final title = download['title'] ?? 'Unknown';
+                    final downloadId = download['id'] ?? '';
+                    final downloadSpeed = download['download_speed'] as int? ?? 0;
+                    final uploadSpeed = download['upload_speed'] as int? ?? 0;
+                    final eta = download['eta'] as int? ?? -1;
+
+                    // Build status line with speed and ETA
+                    String statusLine = '${(progress * 100).toStringAsFixed(1)}%';
+                    if (status == 'download' && downloadSpeed > 0) {
+                      statusLine += ' • ↓ ${_formatSpeed(downloadSpeed)}';
+                      if (uploadSpeed > 0) {
+                        statusLine += ' • ↑ ${_formatSpeed(uploadSpeed)}';
+                      }
+                      if (eta > 0) {
+                        statusLine += ' • ${_formatETA(eta)}';
+                      }
+                    } else if (status == 'seed') {
+                      statusLine += ' • Seeding';
+                      if (uploadSpeed > 0) {
+                        statusLine += ' • ↑ ${_formatSpeed(uploadSpeed)}';
+                      }
+                    } else {
+                      statusLine += ' • ${_getStatusText(status)}';
+                    }
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: status == 'download'
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          status == 'download'
+                              ? Icons.downloading
+                              : status == 'seed'
+                                  ? Icons.upload
+                                  : status == 'check'
+                                      ? Icons.check_circle_outline
+                                      : Icons.download,
+                          color: status == 'download'
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : null,
+                        ),
+                      ),
+                      title: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            statusLine,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _deleteDownload(downloadId, title),
+                        tooltip: 'Remove',
+                      ),
+                      isThreeLine: true,
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+// NOW PLAYING SCREEN
+class NowPlayingScreen extends StatelessWidget {
+  final Song? song;
+  final bool isPlaying;
+  final VoidCallback onPlayPause;
+  final Duration position;
+  final Duration duration;
+
+  const NowPlayingScreen({
+    super.key,
+    required this.song,
+    required this.isPlaying,
+    required this.onPlayPause,
+    required this.position,
+    required this.duration,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (song == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Now Playing'),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.music_note_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No song playing',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Select a song from your library',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Now Playing'),
+        automaticallyImplyLeading: false, // Remove back button - we're in a tab view!
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView( // FIX: Make scrollable to prevent overflow
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+              const SizedBox(height: 20),
+
+              // Album artwork - Flexible size
+              Container(
+                width: 280, // Smaller to fit better
+                height: 280,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2E),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.album,
+                size: 160,
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // Song info with better typography
+            Text(
+              song!.title,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFFFFFFF),
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              song!.artist,
+              style: const TextStyle(
+                fontSize: 18,
+                color: Color(0xFFA855F7), // Purple like references
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 50),
+
+            // Progress bar and time
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Column(
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 4.0,
+                      activeTrackColor: const Color(0xFFA855F7),
+                      inactiveTrackColor: const Color(0xFF3A3A3E),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7.0,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 14.0,
+                      ),
+                      thumbColor: const Color(0xFFA855F7),
+                      overlayColor: Color(0xFFA855F7).withOpacity(0.2),
+                    ),
+                    child: Slider(
+                      value: duration.inMilliseconds > 0
+                          ? position.inMilliseconds / duration.inMilliseconds
+                          : 0.0,
+                      onChanged: null, // Read-only for now
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(position),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF888888),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(duration),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF888888),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // Player controls
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.skip_previous_rounded),
+                  iconSize: 40,
+                  color: const Color(0xFFCCCCCC),
+                  onPressed: () {
+                    // TODO: Previous track
+                  },
+                ),
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFA855F7),
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    ),
+                    iconSize: 40,
+                    color: Colors.white,
+                    onPressed: onPlayPause,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.skip_next_rounded),
+                  iconSize: 40,
+                  color: const Color(0xFFCCCCCC),
+                  onPressed: () {
+                    // TODO: Next track
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 40), // Bottom padding for scrolling
+            ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
+    } else {
+      return '$minutes:${twoDigits(seconds)}';
+    }
+  }
+}
+
+// SETTINGS SCREEN
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _downloadDir = '';
+  String _configDir = '';
+  bool _daemonRunning = false;
+  bool _isCheckingDaemon = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+    _checkDaemonStatus();
+  }
+
+  Future<void> _loadSettings() async {
+    setState(() {
+      _downloadDir = daemonManager.getDownloadDir(appSettings.customDownloadDir);
+      _configDir = daemonManager.configDir;
+    });
+  }
+
+  Future<void> _checkDaemonStatus() async {
+    setState(() {
+      _isCheckingDaemon = true;
+    });
+
+    final isRunning = await daemonManager.isDaemonRunning();
+
+    setState(() {
+      _daemonRunning = isRunning;
+      _isCheckingDaemon = false;
+    });
+  }
+
+  Future<void> _restartDaemon() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Restarting daemon...')),
+    );
+
+    await daemonManager.stopDaemon();
+    await Future.delayed(const Duration(seconds: 1));
+    final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(started ? 'Daemon restarted successfully' : 'Failed to restart daemon'),
+          backgroundColor: started ? Colors.green : Colors.red,
+        ),
+      );
+      _checkDaemonStatus();
+      _loadSettings(); // Reload to show updated directory
+    }
+  }
+
+  Future<void> _editSearchApiUrl() async {
+    final controller = TextEditingController(text: appSettings.searchApiUrl);
+    final newUrl = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Search API URL'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Search API URL',
+            hintText: 'https://example.com',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newUrl != null && newUrl.isNotEmpty && newUrl != appSettings.searchApiUrl) {
+      await appSettings.saveSearchApiUrl(newUrl);
+      setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Search API URL updated'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _editDownloadDir() async {
+    final controller = TextEditingController(text: _downloadDir);
+    final newDir = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Download Directory'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Download Directory',
+            hintText: '/Users/username/Downloads',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newDir != null && newDir.isNotEmpty && newDir != _downloadDir) {
+      await appSettings.saveDownloadDir(newDir);
+      setState(() {
+        _downloadDir = newDir;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Download directory updated. Restart daemon to apply changes.'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Restart',
+              onPressed: _restartDaemon,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Settings'),
+      ),
+      body: ListView(
+        children: [
+          // Daemon Settings Section
+          ListTile(
+            title: Text(
+              'Transmission Daemon',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          ListTile(
+            leading: Icon(
+              _daemonRunning ? Icons.check_circle : Icons.error,
+              color: _daemonRunning ? Colors.green : Colors.red,
+            ),
+            title: const Text('Daemon Status'),
+            subtitle: Text(
+              _isCheckingDaemon
+                  ? 'Checking...'
+                  : _daemonRunning
+                      ? 'Running'
+                      : 'Not running',
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _checkDaemonStatus,
+                  tooltip: 'Check status',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.restart_alt),
+                  onPressed: _restartDaemon,
+                  tooltip: 'Restart daemon',
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.terminal),
+            title: const Text('Daemon Port'),
+            subtitle: const Text('9091'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings_applications),
+            title: const Text('Config Directory'),
+            subtitle: Text(
+              _configDir.isNotEmpty ? _configDir : 'Loading...',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+          ),
+          const Divider(),
+
+          // Download Settings Section
+          ListTile(
+            title: Text(
+              'Downloads',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.folder),
+            title: const Text('Download Directory'),
+            subtitle: Text(
+              _downloadDir.isNotEmpty ? _downloadDir : 'Loading...',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _editDownloadDir,
+              tooltip: 'Change download directory',
+            ),
+          ),
+          const Divider(),
+
+          // API Settings Section
+          ListTile(
+            title: Text(
+              'API Configuration',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.search,
+              color: appSettings.isUsingDefaultApi
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.secondary,
+            ),
+            title: Row(
+              children: [
+                const Text('Search API URL'),
+                const SizedBox(width: 8),
+                if (!appSettings.isUsingDefaultApi)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'CUSTOM',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSecondaryContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Text(
+              appSettings.displaySearchApiUrl,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _editSearchApiUrl,
+              tooltip: 'Change search API URL',
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud),
+            title: const Text('Transmission RPC URL'),
+            subtitle: Text(
+              appSettings.transmissionRpcUrl,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+          ),
+          const Divider(),
+
+          // About Section
+          ListTile(
+            title: Text(
+              'About',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.info),
+            title: const Text('Karma Player'),
+            subtitle: Text(
+              'A privacy-focused music player with P2P downloads',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.code),
+            title: const Text('Version'),
+            subtitle: const Text('1.0.0'),
+          ),
+          if (kDebugMode)
+            ListTile(
+              leading: Icon(
+                Icons.bug_report,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: const Text('Debug Mode'),
+              subtitle: const Text('Running in development mode'),
+            ),
+        ],
+      ),
+    );
+  }
+}
