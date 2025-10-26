@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'daemon_manager.dart';
 import 'app_settings.dart';
 import 'transmission_client.dart';
@@ -66,7 +67,7 @@ class DiagnosticsService {
 
     // 2. App Version
     onProgress?.call('Checking app version...');
-    results.add(_checkAppVersion());
+    results.add(await _checkAppVersion());
 
     // 3. Transmission Daemon
     onProgress?.call('Checking Transmission daemon...');
@@ -114,13 +115,23 @@ class DiagnosticsService {
     }
   }
 
-  DiagnosticResult _checkAppVersion() {
-    return DiagnosticResult(
-      name: 'App Version',
-      status: DiagnosticStatus.info,
-      message: 'v0.3.1-beta',
-      details: 'TrustTune GUI',
-    );
+  Future<DiagnosticResult> _checkAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      return DiagnosticResult(
+        name: 'App Version',
+        status: DiagnosticStatus.info,
+        message: 'v${packageInfo.version}',
+        details: 'TrustTune GUI (Build ${packageInfo.buildNumber})',
+      );
+    } catch (e) {
+      return DiagnosticResult(
+        name: 'App Version',
+        status: DiagnosticStatus.error,
+        message: 'Failed to read version',
+        details: e.toString(),
+      );
+    }
   }
 
   Future<DiagnosticResult> _checkTransmissionDaemon() async {

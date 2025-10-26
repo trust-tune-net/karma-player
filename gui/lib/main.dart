@@ -18,6 +18,7 @@ import 'services/app_settings.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/diagnostics_dialog.dart';
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // App Color Palette (like Melo)
 class AppColors {
@@ -3337,10 +3338,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text('Status'),
             subtitle: Text('Phase 0 (Beta): Desktop player with AI search works today. Phase 1-2: Federation & web app. Phase 3-5: Creator compensation + community validation.'),
           ),
-          ListTile(
-            leading: const Icon(Icons.code, color: Color(0xFFA855F7)),
-            title: const Text('Version'),
-            subtitle: const Text('v0.3.1-beta'),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.hasData ? 'v${snapshot.data!.version}' : 'Loading...';
+              return ListTile(
+                leading: const Icon(Icons.code, color: Color(0xFFA855F7)),
+                title: const Text('Version'),
+                subtitle: Text(version),
+              );
+            },
           ),
           if (kDebugMode)
             ListTile(

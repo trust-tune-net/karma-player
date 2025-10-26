@@ -57,6 +57,9 @@ dependencies:
   # Settings Storage
   shared_preferences: ^2.3.4
 
+  # App Info (for dynamic version reading)
+  package_info_plus: ^8.0.0
+
   # UI Enhancements
   google_fonts: ^6.2.1  # Already included - will use Inter font
   flutter_slidable: ^3.1.1
