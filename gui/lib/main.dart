@@ -2120,19 +2120,9 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Try to open settings tab
-              setState(() {
-                _currentView = 'settings';
-              });
-            },
-            child: const Text('Open Settings'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got It'),
           ),
         ],
       ),
