@@ -155,7 +155,7 @@ class NaturalLanguageToSQL:
     """
 
     @staticmethod
-    def convert(natural_query: str) -> str:
+    async def convert(natural_query: str) -> str:
         """
         Convert natural language to SQL-like syntax using AI
 
@@ -172,22 +172,38 @@ class NaturalLanguageToSQL:
         try:
             # Try AI-powered parsing first
             from karma_player.config import Config
-            if Config.OPENAI_API_KEY or Config.ANTHROPIC_API_KEY:
-                from karma_player.services.ai.client import AIClient
-                import asyncio
+            if Config.OPENAI_API_KEY:
+                from openai import AsyncOpenAI
+                import json
 
-                # Create AI client
-                ai_client = AIClient()
+                # Use OpenAI directly
+                client = AsyncOpenAI(api_key=Config.OPENAI_API_KEY)
 
-                # Run async parse in sync context
-                loop = None
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{
+                        "role": "system",
+                        "content": "Extract artist, album, track, and year from music search queries. Return JSON with keys: artist, album, track, year. Set values to null if not present."
+                    }, {
+                        "role": "user",
+                        "content": natural_query
+                    }],
+                    response_format={"type": "json_object"},
+                    temperature=0
+                )
 
-                parsed = loop.run_until_complete(ai_client.parse_query(natural_query))
+                result = json.loads(response.choices[0].message.content)
+
+                # Create ParsedQuery from result
+                from karma_player.models.search import ParsedQuery
+                parsed = ParsedQuery(
+                    artist=result.get("artist"),
+                    album=result.get("album"),
+                    track=result.get("track"),
+                    year=result.get("year"),
+                    query_type="album" if result.get("album") else ("track" if result.get("track") else "artist"),
+                    confidence=0.9
+                )
 
                 # Convert ParsedQuery to SQL
                 where_clauses = []

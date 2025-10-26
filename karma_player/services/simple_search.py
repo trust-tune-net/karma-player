@@ -82,7 +82,7 @@ class SimpleSearch:
             logger.info(f"   → SQL query detected: {sql_query}")
         else:
             # Convert natural language to SQL
-            sql_query = NaturalLanguageToSQL.convert(query)
+            sql_query = await NaturalLanguageToSQL.convert(query)
             music_query = SQLLikeParser.parse(sql_query)
             logger.info(f"   → Converted to SQL: {sql_query}")
 
