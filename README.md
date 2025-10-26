@@ -39,14 +39,14 @@ TrustTune combines **conversational AI** with **multi-source search** to make hi
 
 ## ✨ Features
 
-### Current (Phase 0 - Working Today)
+### Current (Phase 0.5 - Available Now)
 
-- ✅ **CLI Tool** - Search and download from terminal
+- ✅ **Desktop GUI** - Cross-platform app with built-in player (macOS/Windows/Linux)
 - ✅ **AI-Powered Search** - Understands natural language queries
 - ✅ **Multi-Source** - 18+ torrent indexers via Jackett
 - ✅ **Quality Scoring** - Automatic best quality selection
 - ✅ **MusicBrainz Integration** - Accurate metadata
-- ✅ **Desktop GUI** - Flutter app with built-in player (Beta)
+- ✅ **CLI Tool** - Also available for terminal use
 
 ### Coming Soon (Phase 1-2)
 
@@ -234,8 +234,8 @@ We welcome contributions! TrustTune is Phase 0 of a larger vision to build a fai
 
 ## 🎯 Roadmap
 
-- [x] **Phase 0:** CLI tool with AI search (Working today)
-- [x] **Phase 0.5:** Desktop GUI with built-in player (Beta)
+- [x] **Phase 0:** CLI tool with AI search
+- [x] **Phase 0.5:** Desktop GUI with built-in player (Available now)
 - [ ] **Phase 1:** Community validation network
 - [ ] **Phase 2:** Mobile apps + federation
 - [ ] **Phase 3:** Creator payment system
@@ -276,7 +276,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🌟 Why TrustTune?
 
-**Phase 0 is useful NOW** - Better torrent search saves you time today.
+**Available NOW** - Desktop app with AI-powered search and built-in player.
 
 **Phase 1-2 builds trust** - Community validation makes quality reliable.
 
