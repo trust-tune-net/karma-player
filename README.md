@@ -16,7 +16,14 @@
 
 **[Download](#installation)** • **[Quick Start](#usage)** • **[Documentation](docs/VISION.md)** • **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)**
 
-![Demo](demo_full.gif)
+<br/>
+
+### 🎬 See It In Action
+
+<!-- TODO: Add GUI demo GIF here -->
+<p align="center">
+  <i>Coming soon: Animated demo of TrustTune GUI</i>
+</p>
 
 </div>
 
