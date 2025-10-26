@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  flutter_media_metadata
   media_kit_video
   volume_controller
 )
