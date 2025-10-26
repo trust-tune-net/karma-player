@@ -1187,6 +1187,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _isScanning = false;
       });
     }
+
+    // Refresh top bar stats (connection quality, plays, GB downloaded)
+    await _checkHealth();
   }
 
   @override
