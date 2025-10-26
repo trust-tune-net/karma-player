@@ -157,7 +157,7 @@ class MainScreen extends StatefulWidget {
 
 enum RepeatMode { off, all, one }
 
-class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedIndex = 0;
   final Player _player = Player();
   Song? _currentSong;
@@ -182,6 +182,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+
+    // Register lifecycle observer
+    WidgetsBinding.instance.addObserver(this);
 
     // Initialize soundwave animation controller
     _soundwaveController = AnimationController(
@@ -225,9 +228,23 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    // Unregister lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+
     _soundwaveController.dispose();
     _player.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Stop player when app is being terminated or going to background
+    // This ensures MPV shuts down cleanly before the app process is killed
+    if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
+      _player.pause();
+    }
   }
 
   void _playSong(Song song, {List<Song>? queue, bool? isShuffled}) {
