@@ -16,6 +16,7 @@ import 'services/transmission_client.dart';
 import 'services/daemon_manager.dart';
 import 'services/app_settings.dart';
 import 'widgets/status_bar.dart';
+import 'widgets/diagnostics_dialog.dart';
 import 'package:flutter/foundation.dart';
 
 // App Color Palette (like Melo)
@@ -2991,6 +2992,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _openDiagnostics() async {
+    await showDialog(
+      context: context,
+      builder: (context) => DiagnosticsDialog(
+        daemonManager: daemonManager,
+        appSettings: appSettings,
+      ),
+    );
+  }
+
   Future<void> _editDownloadDir() async {
     final controller = TextEditingController(text: _downloadDir);
     final newDir = await showDialog<String>(
@@ -3046,6 +3057,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
+          // Diagnostics Button
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: FilledButton.icon(
+              onPressed: _openDiagnostics,
+              icon: const Icon(Icons.bug_report),
+              label: const Text('Run System Diagnostics'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          const Divider(),
+
           // Daemon Settings Section
           ListTile(
             title: Text(
