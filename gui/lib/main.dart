@@ -2491,17 +2491,20 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
     return '${seconds ~/ 3600}h ${(seconds % 3600) ~/ 60}m';
   }
 
-  // Get human-friendly status text
+  // Get human-friendly status text (abstract torrent complexity)
   String _getStatusText(String status) {
     switch (status) {
       case 'download':
+      case 'download_wait':
         return 'Downloading';
       case 'seed':
-        return 'Seeding';
+      case 'seed_wait':
+        return 'Complete'; // Abstract "seeding" - file is ready to play
       case 'check':
-        return 'Verifying';
+      case 'check_wait':
+        return 'Checking';
       case 'stopped':
-        return 'Stopped';
+        return 'Paused';
       default:
         return status;
     }
@@ -2668,7 +2671,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
                     final uploadSpeed = download['upload_speed'] as int? ?? 0;
                     final eta = download['eta'] as int? ?? -1;
 
-                    // Build status line with speed and ETA
+                    // Build status line with speed and ETA (user-friendly, abstract torrent complexity)
                     String statusLine = '${(progress * 100).toStringAsFixed(1)}%';
                     if (status == 'download' && downloadSpeed > 0) {
                       statusLine += ' • ↓ ${_formatSpeed(downloadSpeed)}';
@@ -2679,9 +2682,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
                         statusLine += ' • ${_formatETA(eta)}';
                       }
                     } else if (status == 'seed') {
-                      statusLine += ' • Seeding';
+                      // Don't show "seeding" - just show upload speed if actively uploading
                       if (uploadSpeed > 0) {
-                        statusLine += ' • ↑ ${_formatSpeed(uploadSpeed)}';
+                        statusLine += ' • Sharing • ↑ ${_formatSpeed(uploadSpeed)}';
+                      } else {
+                        statusLine += ' • ${_getStatusText(status)}';
                       }
                     } else {
                       statusLine += ' • ${_getStatusText(status)}';
@@ -2691,18 +2696,22 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
                       leading: CircleAvatar(
                         backgroundColor: status == 'download'
                             ? Theme.of(context).colorScheme.primaryContainer
-                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            : status == 'seed'
+                                ? const Color(0xFF10B981).withOpacity(0.2) // Green for complete
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
                         child: Icon(
                           status == 'download'
                               ? Icons.downloading
                               : status == 'seed'
-                                  ? Icons.upload
+                                  ? Icons.check_circle // Complete checkmark instead of upload
                                   : status == 'check'
                                       ? Icons.check_circle_outline
-                                      : Icons.download,
+                                      : Icons.pause_circle_outline,
                           color: status == 'download'
                               ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : null,
+                              : status == 'seed'
+                                  ? const Color(0xFF10B981) // Green for complete
+                                  : null,
                         ),
                       ),
                       title: Text(
