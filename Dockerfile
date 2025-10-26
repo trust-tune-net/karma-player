@@ -28,9 +28,13 @@ RUN poetry install --no-dev --no-interaction --no-ansi
 # Copy application code
 COPY karma_player/ ./karma_player/
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+
 # Create non-root user for security
 RUN useradd -m -u 1000 trusttune && \
-    chown -R trusttune:trusttune /app
+    chown -R trusttune:trusttune /app && \
+    chmod +x /app/docker-entrypoint.sh
 
 USER trusttune
 
@@ -41,5 +45,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
-# Run search API (not server.py - this is cloud-only search service)
-CMD ["python", "-m", "uvicorn", "karma_player.api.search_api:app", "--host", "0.0.0.0", "--port", "3000"]
+# Run search API using entrypoint script (supports dynamic PORT env var)
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
