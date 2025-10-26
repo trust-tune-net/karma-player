@@ -5,11 +5,14 @@ Just: Query → Parse → Search → Rank → Return
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 import time
+import logging
 
 from karma_player.models.torrent import TorrentResult, RankedResult
 from karma_player.models.query import MusicQuery
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.ai.query_parser import SQLLikeParser, NaturalLanguageToSQL
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -59,6 +62,9 @@ class SimpleSearch:
         """
         start_time = time.time()
 
+        # Log incoming query
+        logger.info(f"🔍 Search query received: '{query}'")
+
         async def progress(percent: int, message: str):
             if progress_callback:
                 await progress_callback(percent, message)
@@ -73,10 +79,12 @@ class SimpleSearch:
             # Already SQL-like
             music_query = SQLLikeParser.parse(query)
             sql_query = query
+            logger.info(f"   → SQL query detected: {sql_query}")
         else:
             # Convert natural language to SQL
             sql_query = NaturalLanguageToSQL.convert(query)
             music_query = SQLLikeParser.parse(sql_query)
+            logger.info(f"   → Converted to SQL: {sql_query}")
 
         # Override with explicit filters
         if format_filter:
@@ -85,6 +93,18 @@ class SimpleSearch:
             music_query.min_seeders = min_seeders
         if limit:
             music_query.limit = limit
+
+        # Log parsed query details
+        parsed_details = []
+        if music_query.artist:
+            parsed_details.append(f"artist='{music_query.artist}'")
+        if music_query.album:
+            parsed_details.append(f"album='{music_query.album}'")
+        if music_query.track:
+            parsed_details.append(f"track='{music_query.track}'")
+        if music_query.format:
+            parsed_details.append(f"format={music_query.format}")
+        logger.info(f"   → Parsed: {', '.join(parsed_details) if parsed_details else 'no specific fields'}")
 
         await progress(30, "Searching torrents...")
 
@@ -98,6 +118,7 @@ class SimpleSearch:
             search_terms.append(music_query.track)
 
         search_str = " ".join(search_terms) if search_terms else query
+        logger.info(f"   → Search terms: '{search_str}' (min_seeders={music_query.min_seeders})")
 
         # Search
         torrents = await self.search_engine.search(
@@ -106,6 +127,7 @@ class SimpleSearch:
             min_seeders=music_query.min_seeders
         )
 
+        logger.info(f"   → Found {len(torrents)} torrents from indexers")
         await progress(70, "Ranking results...")
 
         # Rank (already sorted by quality_score)
@@ -124,6 +146,9 @@ class SimpleSearch:
         await progress(100, "Complete!")
 
         search_time_ms = int((time.time() - start_time) * 1000)
+
+        # Log final results
+        logger.info(f"   ✅ Returning {len(ranked)} results (from {len(torrents)} total) in {search_time_ms}ms")
 
         return SimpleSearchResult(
             query=query,
