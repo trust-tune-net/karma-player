@@ -101,6 +101,8 @@ Both get you the same results: AI-ranked, quality-scored, ready to play.
 | **Windows** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows.zip) | Windows 10/11 |
 | **Linux** | [Download TAR.GZ](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux.tar.gz) | Ubuntu/Debian/Fedora |
 
+> **📦 Requires Transmission:** TrustTune uses Transmission to download torrents. See **[Setup Guide](SETUP.md)** for a 5-minute setup. The app will guide you if Transmission isn't running.
+
 ### CLI (For Power Users)
 
 ```bash
