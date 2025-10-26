@@ -258,7 +258,7 @@
 │  Local Python Service (FastAPI)             │
 │  ┌───────────────────────────────────────┐  │
 │  │ Core Services                         │  │
-│  │ - Torrent client (libtorrent)         │  │
+│  │ - Transmission RPC wrapper            │  │
 │  │ - File organizer (tagging, moving)    │  │
 │  │ - Audio player backend (mpv)          │  │
 │  │ - Local database (SQLite)             │  │
@@ -298,7 +298,7 @@
 |-----------|-----------|-----|
 | **Desktop GUI** | Flutter | Cross-platform, beautiful, native |
 | **Backend** | Python + FastAPI | Existing codebase, rich ecosystem |
-| **Torrent Engine** | libtorrent-rasterbar | Mature, fast, DHT support |
+| **Torrent Client** | Transmission (via RPC) | Mature, stable, process isolation |
 | **Audio Player** | media_kit (MPV) | Like Spotube, plays everything |
 | **Database** | SQLite | Local-first, zero config |
 | **AI (Community)** | Groq (Llama 3.1 70B) | Free tier, 500 tok/sec |
@@ -337,7 +337,7 @@ Community API: Rank & explain
      ↓
 Display to User
      ↓ (User clicks Download)
-libtorrent: Download torrent
+Transmission daemon: Download torrent
      ↓ (Progress updates via WebSocket)
 Flutter: Show progress bar
      ↓ (Download complete)
@@ -574,7 +574,7 @@ Phase 0-2 are stepping stones.
 - ✅ Conversational search (2-3 questions max)
 - ✅ Multi-source search (DHT + Jackett + Reddit)
 - ✅ AI ranking & explanation (Community API)
-- ✅ Built-in torrent download (libtorrent)
+- ✅ Built-in torrent download (Transmission)
 - ✅ Built-in music player (media_kit)
 - ✅ Auto file organization
 - ✅ Zero configuration

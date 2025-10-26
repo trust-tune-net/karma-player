@@ -41,7 +41,7 @@ a = Analysis(
         'uvicorn.lifespan.on',
         'pydantic',
         'pydantic_core',
-        'libtorrent',
+        'transmission_rpc',
         'dotenv',
         'python_dotenv',
     ],

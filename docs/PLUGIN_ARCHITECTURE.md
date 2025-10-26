@@ -344,7 +344,7 @@ except Exception:
 if magnet_link and magnet_link.startswith("magnet:"):
     return TorrentResult(...)
 
-# ❌ BAD - Will break libtorrent
+# ❌ BAD - Will break Transmission
 if link:  # Could be HTTP URL
     return TorrentResult(magnet_link=link, ...)
 ```

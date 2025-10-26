@@ -7,42 +7,53 @@
 ## System Overview
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                    User's Computer                          │
+┌─────────────────────────────────────────────────────────────┐
+│                    User's Computer (Local)                  │
 │                                                             │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │  TrustTune.app (Flutter)                           │   │
 │  │  - Search UI                                       │   │
 │  │  - Results display                                 │   │
-│  │  - Download manager                                │   │
-│  │  - Music player                                    │   │
-│  └──────────────┬─────────────────────────────────────┘   │
-│                 │ localhost:8765 (HTTP/WS)                │
-│  ┌──────────────▼─────────────────────────────────────┐   │
-│  │  Python Service (FastAPI)                          │   │
-│  │  - Torrent engine (libtorrent)                     │   │
-│  │  - File manager                                    │   │
-│  │  - Search aggregator                               │   │
-│  │  - Database (SQLite)                               │   │
-│  └──────────────┬─────────────────────────────────────┘   │
-│                 │                                          │
-└─────────────────┼──────────────────────────────────────────┘
-                  │ HTTPS (rate-limited)
-┌─────────────────▼──────────────────────────────────────────┐
-│              Community API Server                          │
-│         https://api.trusttune.community                    │
+│  │  - Download manager UI                             │   │
+│  │  - Music player (media_kit/MPV)                    │   │
+│  └─────┬───────────────────────────┬──────────────────┘   │
+│        │                           │                       │
+│        │ HTTPS (to cloud)          │ HTTP (localhost:3001)│
+│        │                           │                       │
+│        │                  ┌────────▼────────────────────┐ │
+│        │                  │ Download Daemon (Python)    │ │
+│        │                  │ Port: 3001                  │ │
+│        │                  │ Host: 127.0.0.1 ONLY        │ │
+│        │                  │ - Transmission RPC wrapper  │ │
+│        │                  │ - File organization         │ │
+│        │                  └────────┬────────────────────┘ │
+│        │                           │ RPC (localhost:9091)  │
+│        │                  ┌────────▼────────────────────┐ │
+│        │                  │ transmission-daemon         │ │
+│        │                  │ (Bundled with app)          │ │
+│        │                  │ - Actual torrenting         │ │
+│        │                  │ - Downloads → ~/Music/      │ │
+│        │                  └─────────────────────────────┘ │
+└────────┼─────────────────────────────────────────────────┘
+         │ HTTPS (over internet)
+┌────────▼────────────────────────────────────────────────────┐
+│  Cloud Server (Remote - Easypanel, Railway, etc.)          │
 │                                                             │
 │  ┌────────────────────────────────────────────────────┐   │
-│  │  AI Services (Groq/Together.ai/Mistral)            │   │
-│  │  - Query parsing                                   │   │
-│  │  - MusicBrainz filtering                           │   │
-│  │  - Torrent ranking                                 │   │
-│  │  - Result explanation                              │   │
+│  │  Search API (Python FastAPI)                       │   │
+│  │  Port: 3000                                        │   │
+│  │  Host: 0.0.0.0 (public)                           │   │
+│  │                                                    │   │
+│  │  ✅ Multi-source search (Jackett, 1337x)          │   │
+│  │  ✅ AI ranking (OpenAI/Anthropic)                 │   │
+│  │  ✅ MusicBrainz metadata                          │   │
+│  │                                                    │   │
+│  │  ❌ NO file system access                         │   │
+│  │  ❌ NO downloads                                   │   │
+│  │  ❌ NO Transmission                                │   │
+│  │  ❌ NO local resources                             │   │
 │  └────────────────────────────────────────────────────┘   │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │  Rate Limiting & Auth (Redis + PostgreSQL)         │   │
-│  └────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -138,27 +149,34 @@ class DownloadManager extends _$DownloadManager {
 ```
 karma_player/
 ├── api/
-│   ├── server.py           # FastAPI app
-│   ├── routes/
-│   │   ├── search.py       # Search endpoints
-│   │   ├── download.py     # Download management
-│   │   └── player.py       # Playback control
-│   └── websocket.py        # Real-time updates
+│   ├── search_api.py       # Search API (remote-deployable)
+│   ├── download_daemon.py  # Download Daemon (local-only)
+│   └── server.py           # Combined server (dev mode)
 ├── services/
-│   ├── ai_client.py        # Community API client
-│   ├── musicbrainz.py      # MusicBrainz lookup
-│   ├── torrent_search.py   # DHT + Jackett
-│   ├── torrent_engine.py   # libtorrent wrapper
-│   ├── file_manager.py     # Organization + tagging
-│   └── reddit_scraper.py   # Quality signals
+│   ├── ai/
+│   │   ├── client.py       # AI client (OpenAI/Anthropic)
+│   │   ├── local_ai.py     # Local AI wrapper
+│   │   └── query_parser.py # Query parsing
+│   ├── search/
+│   │   ├── engine.py       # Multi-source coordinator
+│   │   ├── adapter_base.py # Plugin base class
+│   │   ├── adapter_jackett.py # Jackett adapter
+│   │   ├── adapter_1337x.py   # 1337x adapter
+│   │   └── metadata.py     # Format/bitrate extraction
+│   ├── torrent/
+│   │   └── download_manager.py # Transmission RPC wrapper
+│   ├── musicbrainz_service.py  # MusicBrainz lookup
+│   ├── search_orchestrator.py  # AI + search coordination
+│   └── simple_search.py    # Simplified search flow
 ├── models/
-│   ├── search.py           # Request/response models
+│   ├── search.py           # Search request/response
 │   ├── torrent.py          # Torrent data classes
-│   └── config.py           # User settings
+│   ├── query.py            # Query models
+│   └── config.py           # Configuration models
 ├── database/
-│   ├── schema.py           # SQLite schema
-│   └── dao.py              # Data access
-└── main.py                 # Entry point
+│   └── __init__.py         # Database stub (future)
+├── cli.py                  # CLI entry point
+└── config.py               # Configuration management
 ```
 
 **API Endpoints:**
@@ -226,42 +244,72 @@ class CommunityAPIClient:
 ```
 
 ```python
-# services/torrent_engine.py
-import libtorrent as lt
+# services/torrent/download_manager.py
+import transmission_rpc
 
-class TorrentEngine:
-    def __init__(self, download_dir: Path):
-        self.session = lt.session()
-        self.session.listen_on(6881, 6891)
-        self.downloads = {}
+class DownloadManager:
+    """
+    Thin wrapper around Transmission RPC.
+    Does NOT run its own torrent engine - delegates to transmission-daemon.
+    """
 
-    def add_torrent(
-        self, magnet: str, callback: Callable
+    def __init__(
+        self,
+        download_path: str = None,
+        transmission_host: str = "localhost",
+        transmission_port: int = 9091
+    ):
+        self.download_path = download_path or os.path.expanduser("~/Music")
+
+        # Connect to existing transmission-daemon (started by Flutter)
+        self.client = transmission_rpc.Client(
+            host=transmission_host,
+            port=transmission_port,
+            timeout=10
+        )
+
+        # Cache for download metadata
+        self._metadata: Dict[str, dict] = {}
+
+    def add_magnet(
+        self,
+        magnet_link: str,
+        title: str,
+        save_path: Optional[str] = None
     ) -> str:
-        params = {
-            "save_path": str(self.download_dir),
-            "storage_mode": lt.storage_mode_t.storage_mode_sparse,
-        }
-        handle = lt.add_magnet_uri(self.session, magnet, params)
+        """Add magnet to Transmission, return torrent hash"""
+        download_dir = save_path or self.download_path
 
-        download_id = str(uuid.uuid4())
-        self.downloads[download_id] = {
-            "handle": handle,
-            "callback": callback
+        torrent = self.client.add_torrent(
+            magnet_link,
+            download_dir=download_dir
+        )
+
+        download_id = torrent.hashString
+
+        # Store metadata (Transmission doesn't have a "title" field)
+        self._metadata[download_id] = {
+            "title": title,
+            "magnet_link": magnet_link
         }
 
         return download_id
 
-    def get_progress(self, download_id: str) -> DownloadProgress:
-        handle = self.downloads[download_id]["handle"]
-        status = handle.status()
+    def get_download_info(self, download_id: str) -> Optional[DownloadInfo]:
+        """Get current download status from Transmission"""
+        torrent = self.client.get_torrent(download_id)
+        metadata = self._metadata.get(download_id, {})
 
-        return DownloadProgress(
-            percent=status.progress * 100,
-            download_rate=status.download_rate,
-            upload_rate=status.upload_rate,
-            num_seeds=status.num_seeds,
-            state=status.state
+        return DownloadInfo(
+            magnet_link=metadata.get("magnet_link", ""),
+            title=metadata.get("title", torrent.name),
+            save_path=torrent.downloadDir,
+            status=self._map_status(torrent),
+            progress=torrent.progress / 100.0,  # Transmission: 0-100, we use 0-1
+            download_rate=float(torrent.rateDownload),
+            upload_rate=float(torrent.rateUpload),
+            num_peers=torrent.peersConnected,
+            error_message=torrent.errorString if torrent.error else None
         )
 ```
 
