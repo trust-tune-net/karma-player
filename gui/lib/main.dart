@@ -19,6 +19,8 @@ import 'widgets/status_bar.dart';
 import 'widgets/diagnostics_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'services/playback_service.dart';
+import 'screens/now_playing_screen.dart';
 
 // App Color Palette (like Melo)
 class AppColors {
@@ -157,8 +159,6 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-enum RepeatMode { off, all, one }
-
 // Reusable stats badges widget for AppBar
 // Uses ListenableBuilder to rebuild when appSettings changes (ChangeNotifier)
 class StatsBadges extends StatelessWidget {
@@ -290,19 +290,9 @@ class StatsBadges extends StatelessWidget {
 
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedIndex = 0;
-  final Player _player = Player();
-  Song? _currentSong;
-  bool _isPlaying = false;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
 
-  // Queue management
-  List<Song> _queue = [];
-  List<Song> _originalQueue = []; // Store original order for unshuffle
-  int _currentIndex = 0;
-  bool _isShuffled = false;
-  RepeatMode _repeatMode = RepeatMode.off;
-  double _volume = 0.5; // 0.0 to 1.0
+  // Centralized playback service (single source of truth)
+  final PlaybackService _playbackService = PlaybackService();
 
   // Animation for soundwave
   late AnimationController _soundwaveController;
@@ -323,38 +313,15 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       vsync: this,
     )..repeat(reverse: true);
 
-    _player.stream.playing.listen((playing) {
-      setState(() {
-        _isPlaying = playing;
-      });
-
+    // Listen to playback service changes for animation control
+    _playbackService.addListener(() {
       // Control animation based on playing state
-      if (playing) {
+      if (_playbackService.isPlaying) {
         _soundwaveController.repeat(reverse: true);
       } else {
         _soundwaveController.stop();
       }
     });
-    _player.stream.position.listen((position) {
-      setState(() {
-        _position = position;
-      });
-    });
-    _player.stream.duration.listen((duration) {
-      setState(() {
-        _duration = duration;
-      });
-    });
-
-    // Auto-play next track when current finishes
-    _player.stream.completed.listen((completed) {
-      if (completed) {
-        _playNext();
-      }
-    });
-
-    // Set initial volume
-    _player.setVolume(_volume * 100);
   }
 
   @override
@@ -363,7 +330,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     WidgetsBinding.instance.removeObserver(this);
 
     _soundwaveController.dispose();
-    _player.dispose();
+    _playbackService.dispose();
     super.dispose();
   }
 
@@ -374,147 +341,15 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     // Stop player when app is being terminated or going to background
     // This ensures MPV shuts down cleanly before the app process is killed
     if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
-      _player.pause();
+      _playbackService.player.pause();
     }
   }
 
+  // Wrapper methods to integrate with PlaybackService
   void _playSong(Song song, {List<Song>? queue, bool? isShuffled}) {
-    setState(() {
-      _currentSong = song;
-      if (queue != null) {
-        // Always save the original unshuffled queue
-        _originalQueue = List<Song>.from(queue);
-
-        // If shuffle requested, shuffle the queue
-        if (isShuffled == true) {
-          final shuffled = List<Song>.from(queue)..shuffle();
-          // Keep the selected song at the start
-          shuffled.remove(song);
-          shuffled.insert(0, song);
-          _queue = shuffled;
-          _currentIndex = 0;
-          _isShuffled = true;
-        } else {
-          _queue = queue;
-          _currentIndex = queue.indexOf(song);
-          _isShuffled = false;
-        }
-      } else {
-        _queue = [song];
-        _currentIndex = 0;
-        _originalQueue = [song];
-      }
-    });
-    _player.open(Media(song.filePath));
-    _player.play();
+    _playbackService.playSong(song, queue: queue, isShuffled: isShuffled ?? false);
     // Track play count
     appSettings.incrementPlays();
-  }
-
-  void _togglePlayPause() {
-    if (_isPlaying) {
-      _player.pause();
-    } else {
-      _player.play();
-    }
-  }
-
-  void _playNext() {
-    if (_queue.isEmpty) return;
-
-    // Handle repeat one - replay current song
-    if (_repeatMode == RepeatMode.one && _currentSong != null) {
-      _player.seek(Duration.zero);
-      _player.play();
-      return;
-    }
-
-    int nextIndex = _currentIndex + 1;
-
-    // Handle end of queue
-    if (nextIndex >= _queue.length) {
-      if (_repeatMode == RepeatMode.all) {
-        nextIndex = 0; // Loop back to start
-      } else {
-        return; // Stop at end
-      }
-    }
-
-    // Don't pass queue parameter - we're moving within existing queue
-    // Passing queue would overwrite _originalQueue with shuffled queue
-    setState(() {
-      _currentIndex = nextIndex;
-      _currentSong = _queue[nextIndex];
-    });
-    _player.open(Media(_queue[nextIndex].filePath));
-    _player.play();
-    appSettings.incrementPlays();
-  }
-
-  void _playPrevious() {
-    if (_queue.isEmpty) return;
-
-    final prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length;
-    if (prevIndex >= 0) {
-      // Don't pass queue parameter - we're moving within existing queue
-      setState(() {
-        _currentIndex = prevIndex;
-        _currentSong = _queue[prevIndex];
-      });
-      _player.open(Media(_queue[prevIndex].filePath));
-      _player.play();
-      appSettings.incrementPlays();
-    }
-  }
-
-  void _toggleShuffle() {
-    setState(() {
-      _isShuffled = !_isShuffled;
-      if (_isShuffled) {
-        // Store original queue if not already stored
-        if (_originalQueue.isEmpty || _originalQueue.length != _queue.length) {
-          _originalQueue = List<Song>.from(_queue);
-        }
-        // Shuffle the queue
-        final currentSong = _currentSong;
-        final shuffled = List<Song>.from(_queue)..shuffle();
-        // Keep current song at current position
-        if (currentSong != null) {
-          shuffled.remove(currentSong);
-          shuffled.insert(_currentIndex, currentSong);
-        }
-        _queue = shuffled;
-      } else {
-        // Restore original order
-        if (_originalQueue.isNotEmpty && _currentSong != null) {
-          _queue = List<Song>.from(_originalQueue);
-          _currentIndex = _queue.indexOf(_currentSong!);
-        }
-      }
-    });
-  }
-
-  void _toggleRepeat() {
-    setState(() {
-      switch (_repeatMode) {
-        case RepeatMode.off:
-          _repeatMode = RepeatMode.all;
-          break;
-        case RepeatMode.all:
-          _repeatMode = RepeatMode.one;
-          break;
-        case RepeatMode.one:
-          _repeatMode = RepeatMode.off;
-          break;
-      }
-    });
-  }
-
-  void _setVolume(double volume) {
-    setState(() {
-      _volume = volume.clamp(0.0, 1.0);
-    });
-    _player.setVolume(_volume * 100);
   }
 
   @override
@@ -648,6 +483,12 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         label: 'Downloads',
                         index: 2,
                       ),
+                      _buildNavItem(
+                        icon: Icons.play_circle_outline,
+                        selectedIcon: Icons.play_circle,
+                        label: 'Now Playing',
+                        index: 3,
+                      ),
 
                       const Spacer(),
 
@@ -656,7 +497,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         icon: Icons.settings_outlined,
                         selectedIcon: Icons.settings,
                         label: 'Settings',
-                        index: 3,
+                        index: 4,
                       ),
 
                       const SizedBox(height: 16), // Minimal space for player bar
@@ -666,14 +507,20 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
                 // Main content area
                 Expanded(
-                  child: IndexedStack(
-                    index: _selectedIndex,
-                    children: [
-                      LibraryScreen(key: _libraryKey, onSongTap: _playSong, currentSong: _currentSong),
-                      const SearchScreen(),
-                      const DownloadsScreen(),
-                      const SettingsScreen(),
-                    ],
+                  child: ListenableBuilder(
+                    listenable: _playbackService,
+                    builder: (context, _) {
+                      return IndexedStack(
+                        index: _selectedIndex,
+                        children: [
+                          LibraryScreen(key: _libraryKey, onSongTap: _playSong, currentSong: _playbackService.currentSong),
+                          const SearchScreen(),
+                          const DownloadsScreen(),
+                          NowPlayingScreen(playbackService: _playbackService),
+                          const SettingsScreen(),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -756,28 +603,42 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   // Full-width player bar (like Melo/Spotify)
   Widget _buildPlayerBar(BuildContext context) {
-    if (_currentSong == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: _playbackService,
+      builder: (context, _) {
+        final currentSong = _playbackService.currentSong;
+        if (currentSong == null) return const SizedBox.shrink();
 
-    return Container(
-      height: 80,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A0A0A),
-      ),
-      child: Column(
-        children: [
-          // Progress bar
-          SizedBox(
-            height: 4,
-            child: LinearProgressIndicator(
-              value: _duration.inMilliseconds > 0
-                  ? _position.inMilliseconds / _duration.inMilliseconds
-                  : 0.0,
-              backgroundColor: const Color(0xFF2A2A2E),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.primary,
-              ),
-            ),
+        final position = _playbackService.position;
+        final duration = _playbackService.duration;
+        final isPlaying = _playbackService.isPlaying;
+        final queue = _playbackService.queue;
+        final isShuffle = _playbackService.isShuffle;
+        final repeatMode = _playbackService.repeatMode;
+        final volume = _playbackService.volume;
+
+        print('[PLAYER BAR] Building with isShuffle=$isShuffle, queue=${queue.length}');
+
+        return Container(
+          height: 80,
+          decoration: const BoxDecoration(
+            color: Color(0xFF0A0A0A),
           ),
+          child: Column(
+            children: [
+              // Progress bar
+              SizedBox(
+                height: 4,
+                child: LinearProgressIndicator(
+                  value: duration.inMilliseconds > 0
+                      ? position.inMilliseconds / duration.inMilliseconds
+                      : 0.0,
+                  backgroundColor: const Color(0xFF2A2A2E),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
 
           // Player controls - responsive layout
           Expanded(
@@ -804,9 +665,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(6),
-                          child: _currentSong!.artworkPath != null
+                          child: currentSong.artworkPath != null
                               ? Image.file(
-                                  File(_currentSong!.artworkPath!),
+                                  File(currentSong.artworkPath!),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
                                     return Icon(
@@ -832,7 +693,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _currentSong!.title,
+                              currentSong.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
@@ -843,7 +704,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _currentSong!.artist,
+                              currentSong.artist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
@@ -865,14 +726,14 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           IconButton(
                             icon: const Icon(Icons.skip_previous),
                             iconSize: 24,
-                            color: _queue.length > 1
+                            color: queue.length > 1
                                 ? const Color(0xFFAAAAAA)
                                 : const Color(0xFF444444),
-                            onPressed: _queue.length > 1 ? _playPrevious : null,
+                            onPressed: queue.length > 1 ? _playbackService.playPrevious : null,
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
-                            onTap: _togglePlayPause,
+                            onTap: _playbackService.togglePlayPause,
                             child: Container(
                               width: 40,
                               height: 40,
@@ -883,7 +744,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                               child: AnimatedBuilder(
                                 animation: _soundwaveController,
                                 builder: (context, child) {
-                                  return _isPlaying
+                                  return isPlaying
                                       ? Row(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -908,10 +769,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           IconButton(
                             icon: const Icon(Icons.skip_next),
                             iconSize: 24,
-                            color: _queue.length > 1
+                            color: queue.length > 1
                                 ? const Color(0xFFAAAAAA)
                                 : const Color(0xFF444444),
-                            onPressed: _queue.length > 1 ? _playNext : null,
+                            onPressed: queue.length > 1 ? _playbackService.playNext : null,
                           ),
                         ],
                       ),
@@ -920,7 +781,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
                       // Time display
                       Text(
-                        '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+                        '${_formatDuration(position)} / ${_formatDuration(duration)}',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
@@ -936,28 +797,28 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         IconButton(
                           icon: const Icon(Icons.shuffle),
                           iconSize: 20,
-                          color: _isShuffled ? AppColors.purple : const Color(0xFFAAAAAA),
+                          color: isShuffle ? AppColors.purple : const Color(0xFFAAAAAA),
                           splashColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           hoverColor: Colors.transparent,
-                          onPressed: _queue.length > 1 ? _toggleShuffle : null,
+                          onPressed: queue.length > 1 ? _playbackService.toggleShuffle : null,
                         ),
 
                         // Repeat button
                         IconButton(
                           icon: Icon(
-                            _repeatMode == RepeatMode.one
+                            repeatMode == RepeatMode.one
                                 ? Icons.repeat_one_rounded
                                 : Icons.repeat_rounded,
                           ),
                           iconSize: 20,
-                          color: _repeatMode != RepeatMode.off
+                          color: repeatMode != RepeatMode.off
                               ? AppColors.purple
                               : const Color(0xFFAAAAAA),
                           splashColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           hoverColor: Colors.transparent,
-                          onPressed: _queue.length > 0 ? _toggleRepeat : null,
+                          onPressed: queue.length > 0 ? _playbackService.toggleRepeatMode : null,
                         ),
                       ],
 
@@ -970,9 +831,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           children: [
                             IconButton(
                               icon: Icon(
-                                _volume == 0
+                                volume == 0
                                     ? Icons.volume_off_outlined
-                                    : _volume < 0.5
+                                    : volume < 0.5
                                         ? Icons.volume_down_outlined
                                         : Icons.volume_up_outlined,
                               ),
@@ -980,14 +841,14 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                               color: const Color(0xFFAAAAAA),
                               onPressed: () {
                                 // Toggle mute
-                                _setVolume(_volume == 0 ? 0.5 : 0);
+                                _playbackService.setVolume(volume == 0 ? 0.5 : 0);
                               },
                             ),
                             SizedBox(
                               width: volumeSliderWidth,
                               child: Slider(
-                                value: _volume,
-                                onChanged: _setVolume,
+                                value: volume,
+                                onChanged: _playbackService.setVolume,
                                 activeColor: AppColors.purple,
                                 inactiveColor: const Color(0xFF3A3A3E),
                               ),
@@ -997,7 +858,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                               SizedBox(
                                 width: 32,
                                 child: Text(
-                                  '${(_volume * 100).round()}%',
+                                  '${(volume * 100).round()}%',
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
@@ -1017,6 +878,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           ),
         ],
       ),
+    );
+      },
     );
   }
 
@@ -1581,7 +1444,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       OutlinedButton.icon(
                         onPressed: () {
                           if (album.songs.isNotEmpty) {
-                            // Shuffle the queue first, then play first song of shuffled queue
+                            // Pick random song but pass original queue - PlaybackService shuffles internally
                             final shuffled = List<Song>.from(album.songs)..shuffle();
                             widget.onSongTap(shuffled.first, queue: album.songs, isShuffled: true);
                           }
@@ -2748,227 +2611,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
     );
   }
 }
-
-// NOW PLAYING SCREEN
-class NowPlayingScreen extends StatelessWidget {
-  final Song? song;
-  final bool isPlaying;
-  final VoidCallback onPlayPause;
-  final Duration position;
-  final Duration duration;
-
-  const NowPlayingScreen({
-    super.key,
-    required this.song,
-    required this.isPlaying,
-    required this.onPlayPause,
-    required this.position,
-    required this.duration,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (song == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Now Playing'),
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.music_note_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.outline,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No song playing',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Select a song from your library',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Now Playing'),
-        automaticallyImplyLeading: false, // Remove back button - we're in a tab view!
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView( // FIX: Make scrollable to prevent overflow
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-              const SizedBox(height: 20),
-
-              // Album artwork - Flexible size
-              Container(
-                width: 280, // Smaller to fit better
-                height: 280,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A2E),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.album,
-                size: 160,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-              ),
-            ),
-            const SizedBox(height: 40),
-
-            // Song info with better typography
-            Text(
-              song!.title,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFFFFFFF),
-                height: 1.2,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              song!.artist,
-              style: const TextStyle(
-                fontSize: 18,
-                color: Color(0xFFA855F7), // Purple like references
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 50),
-
-            // Progress bar and time
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: Column(
-                children: [
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4.0,
-                      activeTrackColor: const Color(0xFFA855F7),
-                      inactiveTrackColor: const Color(0xFF3A3A3E),
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 7.0,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 14.0,
-                      ),
-                      thumbColor: const Color(0xFFA855F7),
-                      overlayColor: Color(0xFFA855F7).withOpacity(0.2),
-                    ),
-                    child: Slider(
-                      value: duration.inMilliseconds > 0
-                          ? position.inMilliseconds / duration.inMilliseconds
-                          : 0.0,
-                      onChanged: null, // Read-only for now
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _formatDuration(position),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF888888),
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        Text(
-                          _formatDuration(duration),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF888888),
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-
-            // Player controls
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.skip_previous_rounded),
-                  iconSize: 40,
-                  color: const Color(0xFFCCCCCC),
-                  onPressed: () {
-                    // TODO: Previous track
-                  },
-                ),
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFA855F7),
-                  ),
-                  child: IconButton(
-                    icon: Icon(
-                      isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    ),
-                    iconSize: 40,
-                    color: Colors.white,
-                    onPressed: onPlayPause,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.skip_next_rounded),
-                  iconSize: 40,
-                  color: const Color(0xFFCCCCCC),
-                  onPressed: () {
-                    // TODO: Next track
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 40), // Bottom padding for scrolling
-            ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
-    } else {
-      return '$minutes:${twoDigits(seconds)}';
-    }
-  }
-}
-
 // SETTINGS SCREEN
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
