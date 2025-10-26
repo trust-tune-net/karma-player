@@ -2069,6 +2069,79 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   }
 
   void _showTransmissionHelp() {
+    // Detect platform and build appropriate instructions
+    String platformTitle;
+    List<Widget> platformInstructions;
+
+    if (Platform.isLinux) {
+      platformTitle = 'Quick Setup (Linux):';
+      platformInstructions = [
+        const Text('1. Install Transmission:'),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   sudo apt install transmission-daemon',
+          style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+        ),
+        const SizedBox(height: 4),
+        const Text('   Or for Fedora:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   sudo dnf install transmission-daemon',
+          style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+        ),
+        const SizedBox(height: 12),
+        const Text('2. Start Transmission daemon:'),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   sudo systemctl start transmission-daemon',
+          style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+        ),
+      ];
+    } else if (Platform.isWindows) {
+      platformTitle = 'Quick Setup (Windows):';
+      platformInstructions = [
+        const Text('1. Download Transmission from:'),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   https://transmissionbt.com/download',
+          style: TextStyle(fontSize: 13, color: Colors.blue),
+        ),
+        const SizedBox(height: 12),
+        const Text('2. Install and run Transmission'),
+        const SizedBox(height: 4),
+        const Text('   Keep it running in the background', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 12),
+        const Text('3. (Optional) Auto-start with Windows:'),
+        const SizedBox(height: 4),
+        const Text('   Right-click system tray icon → "Start when Windows starts"', style: TextStyle(fontSize: 12)),
+      ];
+    } else {
+      // macOS
+      platformTitle = 'Quick Setup (macOS):';
+      platformInstructions = [
+        const Text('1. Install Transmission:'),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   brew install transmission',
+          style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+        ),
+        const SizedBox(height: 12),
+        const Text('2. Start Transmission daemon:'),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   transmission-daemon',
+          style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+        ),
+        const SizedBox(height: 12),
+        const Text('Or download the GUI app from:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        const SelectableText(
+          '   https://transmissionbt.com/download',
+          style: TextStyle(fontSize: 13, color: Colors.blue),
+        ),
+      ];
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2079,42 +2152,26 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             Text('Transmission Not Running'),
           ],
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'TrustTune needs Transmission to download torrents.',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text(
-                'Quick Setup (macOS):',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                platformTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              SizedBox(height: 8),
-              Text('1. Install Transmission:'),
-              SizedBox(height: 4),
-              SelectableText(
-                '   brew install transmission',
-                style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
-              ),
-              SizedBox(height: 12),
-              Text('2. Start Transmission daemon:'),
-              SizedBox(height: 4),
-              SelectableText(
-                '   transmission-daemon',
-                style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Or download from:',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              SelectableText(
-                'https://transmissionbt.com/download',
-                style: TextStyle(fontSize: 13, color: Colors.blue),
+              const SizedBox(height: 8),
+              ...platformInstructions,
+              const SizedBox(height: 16),
+              const Text(
+                'See full setup guide at: github.com/trust-tune-net/karma-player',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
