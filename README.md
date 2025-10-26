@@ -6,6 +6,7 @@
 
 *Like talking to a music-savvy friend who knows where to find everything*
 
+[![Build Status](https://github.com/trust-tune-net/karma-player/actions/workflows/build-release.yml/badge.svg)](https://github.com/trust-tune-net/karma-player/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Flutter](https://img.shields.io/badge/flutter-3.9+-blue.svg)](https://flutter.dev/)
