@@ -2190,10 +2190,28 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     final magnetLink = torrent['magnet_link'];
     final title = torrent['title'];
 
-    if (magnetLink == null) {
+    // Validate magnet link exists and is properly formatted
+    if (magnetLink == null || magnetLink.toString().trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No magnet link available')),
+        const SnackBar(
+          content: Text('No magnet link available for this torrent'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
       );
+      return;
+    }
+
+    // Validate it starts with magnet:
+    if (!magnetLink.toString().startsWith('magnet:')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid magnet link format: ${magnetLink.toString().substring(0, 20)}...'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      print('Invalid magnet link: $magnetLink');
       return;
     }
 
