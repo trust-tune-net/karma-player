@@ -1,276 +1,258 @@
-"""Orchestrator for the complete music search workflow."""
-
+"""
+Search orchestrator - Combines AI, MusicBrainz, and torrent search
+"""
+import os
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-from typing import List, Optional
 
-from karma_player.config import Config
-from karma_player.musicbrainz import MusicBrainzResult
-from karma_player.torrent.models import TorrentResult
-from karma_player.services.adapter_factory import AdapterFactory
+from karma_player.models.search import ParsedQuery
+from karma_player.models.torrent import TorrentResult, RankedResult
+from karma_player.models.query import QueryIntent, MusicQuery
 from karma_player.services.musicbrainz_service import MusicBrainzService
-from karma_player.services.torrent_service import TorrentSearchService
-from karma_player.ai.agent import TorrentAgent, AIDecision
-from karma_player.ai.query_parser import QueryParser, ParsedQuery
-from karma_player.ai.musicbrainz_filter import MusicBrainzFilter, MusicBrainzSelection
+from karma_player.services.search.engine import SearchEngine
+from karma_player.services.ai.local_ai import LocalAIClient
 
 
 @dataclass
-class SearchParams:
-    """Parameters for search operation."""
-
-    query: str
-    artist: Optional[str] = None
-    limit: int = 10
-    format_filter: Optional[str] = None
-    min_seeders: int = 5
-    skip_musicbrainz: bool = False
-    profile: Optional[str] = None
-    use_ai: bool = False
-    ai_model: str = "gpt-4o-mini"
-    prefer_song_only: bool = False  # Prioritize single-track torrents over albums
+class SearchProgress:
+    """Progress updates during search"""
+    stage: str  # "parsing", "musicbrainz", "searching", "ranking", "complete"
+    message: str
+    progress_percent: int  # 0-100
 
 
 @dataclass
 class SearchResult:
-    """Result of search operation."""
-
-    torrents: List[TorrentResult]
-    musicbrainz_result: Optional[MusicBrainzResult] = None
-    query_used: str = ""
-    ai_decision: Optional[AIDecision] = None
-    parsed_query: Optional[ParsedQuery] = None
-    mb_selection: Optional[MusicBrainzSelection] = None
+    """Complete search result"""
+    query: str
+    parsed_query: Optional[ParsedQuery]
+    musicbrainz_match: Optional[str]  # MBID or description
+    results: List[RankedResult]
+    total_found: int
+    search_time_ms: int
 
 
 class SearchOrchestrator:
-    """Orchestrates the complete search workflow."""
+    """
+    Orchestrates the complete search flow:
+    1. Parse natural language query (AI)
+    2. Look up canonical metadata (MusicBrainz)
+    3. Search torrents (multi-source)
+    4. Rank and explain results (AI + scoring)
+    """
 
-    def __init__(self, config: Config):
-        """Initialize orchestrator.
+    def __init__(
+        self,
+        search_engine: SearchEngine,
+        musicbrainz: Optional[MusicBrainzService] = None,
+        ai_client: Optional[LocalAIClient] = None
+    ):
+        self.search_engine = search_engine
+        self.musicbrainz = musicbrainz or MusicBrainzService()
+        self.ai_client = ai_client
 
-        Args:
-            config: User configuration
-        """
-        self.config = config
-        self.mb_service = MusicBrainzService()
-        self.adapter_factory = AdapterFactory(config)
+        # Try to initialize AI if not provided
+        if not self.ai_client:
+            try:
+                # Try Groq first (fastest)
+                if os.getenv("GROQ_API_KEY"):
+                    self.ai_client = LocalAIClient(provider="groq")
+                # Fallback to OpenAI
+                elif os.getenv("OPENAI_API_KEY"):
+                    self.ai_client = LocalAIClient(provider="openai")
+            except:
+                pass  # No AI available, will use fallback
 
     async def search(
         self,
-        params: SearchParams,
-        selected_recording: Optional[MusicBrainzResult] = None,
+        query: str,
+        progress_callback: Optional[callable] = None
     ) -> SearchResult:
-        """Execute complete search workflow.
+        """
+        Execute complete search flow
 
         Args:
-            params: Search parameters
-            selected_recording: Optional pre-selected MusicBrainz recording
+            query: Natural language search query
+            progress_callback: Optional callback for progress updates
 
         Returns:
-            SearchResult with torrents and metadata
+            SearchResult with ranked torrents
         """
-        result = SearchResult(torrents=[], query_used=params.query)
+        import time
+        start_time = time.time()
 
-        # Step 1: Determine search query
-        if selected_recording:
-            result.musicbrainz_result = selected_recording
-            result.query_used = self.build_torrent_query_from_musicbrainz(selected_recording)
-        elif params.skip_musicbrainz:
-            result.query_used = params.query
-        else:
-            # MusicBrainz search will be handled by CLI for user selection
-            # This is just torrent search
-            result.query_used = params.query
+        def report_progress(stage: str, message: str, percent: int):
+            if progress_callback:
+                progress_callback(SearchProgress(stage, message, percent))
 
-        # Step 2: Create adapters
-        adapters = self.adapter_factory.create_adapters(profile_name=params.profile)
+        # Stage 1: Parse query
+        report_progress("parsing", "Understanding your request...", 10)
 
-        # Step 3: Search torrents
-        torrent_service = TorrentSearchService(adapters)
-        result.torrents = await torrent_service.search(
-            query=result.query_used,
-            format_filter=params.format_filter,
-            min_seeders=params.min_seeders,
+        parsed_query = None
+        if self.ai_client:
+            try:
+                parsed_query = await self.ai_client.parse_query(query)
+            except:
+                pass  # Fall back to simple parsing
+
+        # Fallback: Extract key terms
+        if not parsed_query:
+            parsed_query = self._fallback_parse(query)
+
+        # Stage 2: MusicBrainz lookup
+        report_progress("musicbrainz", "Looking up music metadata...", 30)
+
+        mb_match = None
+        if parsed_query.artist or parsed_query.album:
+            mb_results = await self.musicbrainz.search_from_parsed_query(
+                parsed_query,
+                limit=1
+            )
+            if mb_results:
+                mb_match = self.musicbrainz.format_release_info(mb_results[0])
+
+        # Stage 3: Search torrents
+        report_progress("searching", f"Searching for {parsed_query.artist or query}...", 50)
+
+        # Build search query
+        search_terms = []
+        if parsed_query.artist:
+            search_terms.append(parsed_query.artist)
+        if parsed_query.album:
+            search_terms.append(parsed_query.album)
+        if parsed_query.track:
+            search_terms.append(parsed_query.track)
+
+        search_query = " ".join(search_terms) if search_terms else query
+
+        # Execute search
+        torrent_results = await self.search_engine.search(
+            query=search_query,
+            min_seeders=1
         )
 
-        # Step 4: AI selection (if enabled)
-        if params.use_ai and result.torrents:
-            # If user wants song-only, filter to small torrents first
-            torrents_to_analyze = result.torrents
-            if params.prefer_song_only:
-                # Prioritize small torrents (<150MB) that are likely song-only
-                def is_likely_song_only(t):
-                    size_mb = t.size_bytes / (1024 * 1024) if t.size_bytes else 999999
-                    return size_mb < 150 or 'single' in t.title.lower()
+        # Stage 4: Rank results
+        report_progress("ranking", "Ranking results by quality...", 80)
 
-                song_only_candidates = [t for t in result.torrents if is_likely_song_only(t)]
-                # Use song-only torrents if available, otherwise fallback to all
-                if song_only_candidates:
-                    torrents_to_analyze = song_only_candidates
+        # Create ranked results with simple explanations
+        ranked_results = []
+        for i, torrent in enumerate(torrent_results[:50], 1):  # Limit to top 50
+            explanation = self._generate_explanation(torrent, i)
+            tags = self._generate_tags(torrent, i)
 
-            agent = TorrentAgent(model=params.ai_model)
-            try:
-                result.ai_decision = await agent.select_best_torrent(
-                    query=result.query_used,
-                    results=torrents_to_analyze,
-                    preferences={
-                        "format": params.format_filter,
-                        "prefer_song_only": params.prefer_song_only,
-                    },
+            ranked_results.append(
+                RankedResult(
+                    torrent=torrent,
+                    rank=i,
+                    explanation=explanation,
+                    tags=tags
                 )
-            except Exception:
-                # Fallback handled in agent
-                pass
-
-        return result
-
-    def get_musicbrainz_results(
-        self, query: str, artist: Optional[str] = None, limit: int = 10
-    ) -> List[MusicBrainzResult]:
-        """Search MusicBrainz for recordings.
-
-        Args:
-            query: Search query
-            artist: Optional artist filter
-            limit: Maximum results
-
-        Returns:
-            List of MusicBrainz recordings
-        """
-        return self.mb_service.search_recordings(query, artist=artist, limit=limit)
-
-    async def optimize_query(
-        self, original_query: str, context: Optional[str] = None, ai_model: str = "gpt-4o-mini"
-    ) -> str:
-        """Use AI to optimize search query.
-
-        Args:
-            original_query: Original search query
-            context: Optional context about search results
-            ai_model: AI model to use
-
-        Returns:
-            Optimized query
-        """
-        agent = TorrentAgent(model=ai_model)
-        return await agent.optimize_query(original_query, context=context)
-
-    async def interactive_search(
-        self,
-        query: str,
-        ai_model: str = "gpt-4o-mini",
-        format_filter: Optional[str] = None,
-        min_seeders: int = 5,
-        ai_tracker=None
-    ) -> tuple[SearchResult, ParsedQuery, MusicBrainzSelection]:
-        """Interactive search with AI understanding and MusicBrainz integration.
-
-        This is Phase 1 of conversational search:
-        1. AI parses query to understand intent
-        2. MusicBrainz lookup for metadata
-        3. AI filters/groups results
-        4. Return for CLI to prompt user
-        5. CLI calls search() with selected option
-
-        Args:
-            query: User's natural language query
-            ai_model: AI model to use
-            format_filter: Optional format filter
-            min_seeders: Minimum seeders
-            ai_tracker: Optional AI session tracker
-
-        Returns:
-            Tuple of (empty SearchResult, ParsedQuery, MusicBrainzSelection)
-        """
-        # Step 1: AI parses query
-        parser = QueryParser(model=ai_model, tracker=ai_tracker)
-        parsed = await parser.parse_query(query)
-
-        # Step 2: MusicBrainz lookup
-        mb_results = []
-        if parsed.artist or parsed.song or parsed.album:
-            # Build MusicBrainz query
-            mb_query = self._build_musicbrainz_query(parsed)
-            mb_results = self.mb_service.search_recordings(
-                mb_query,
-                artist=parsed.artist,
-                limit=20
             )
 
-        # Step 3: AI filters and groups MusicBrainz results
-        mb_filter = MusicBrainzFilter(model=ai_model, tracker=ai_tracker)
-        mb_selection = await mb_filter.filter_and_group(mb_results, parsed)
+        # Complete
+        report_progress("complete", "Search complete!", 100)
 
-        # Return for CLI to handle user selection
-        result = SearchResult(
-            torrents=[],
-            query_used=query,
-            parsed_query=parsed,
-            mb_selection=mb_selection
+        search_time_ms = int((time.time() - start_time) * 1000)
+
+        return SearchResult(
+            query=query,
+            parsed_query=parsed_query,
+            musicbrainz_match=mb_match,
+            results=ranked_results,
+            total_found=len(torrent_results),
+            search_time_ms=search_time_ms
         )
 
-        return result, parsed, mb_selection
+    def _fallback_parse(self, query: str) -> ParsedQuery:
+        """Simple fallback query parsing without AI"""
+        # Very basic: assume it's an album search
+        parts = query.split()
 
-    def _build_musicbrainz_query(self, parsed: ParsedQuery) -> str:
-        """Build MusicBrainz query from parsed query."""
+        if len(parts) <= 2:
+            artist = " ".join(parts)
+            return ParsedQuery(
+                artist=artist,
+                album=None,
+                track=None,
+                year=None,
+                query_type="artist",
+                confidence=0.5
+            )
+        else:
+            # Crude: first half = artist, second half = album
+            mid = len(parts) // 2
+            artist = " ".join(parts[:mid])
+            album = " ".join(parts[mid:])
+
+            return ParsedQuery(
+                artist=artist,
+                album=album,
+                track=None,
+                year=None,
+                query_type="album",
+                confidence=0.6
+            )
+
+    def _generate_explanation(self, torrent: TorrentResult, rank: int) -> str:
+        """Generate explanation for torrent ranking"""
         parts = []
 
-        if parsed.song:
-            parts.append(parsed.song)
-        if parsed.album:
-            parts.append(parsed.album)
-        if parsed.artist and not parsed.song and not parsed.album:
-            # Artist-only search
-            parts.append(parsed.artist)
+        if rank == 1:
+            parts.append("🏆 Best match")
+        elif rank <= 3:
+            parts.append(f"#{rank} Top result")
 
-        return " ".join(parts) if parts else ""
+        if torrent.format:
+            if torrent.format == "FLAC":
+                parts.append("Lossless quality")
+            else:
+                parts.append(f"{torrent.format}")
 
-    def build_torrent_query_from_musicbrainz(
-        self,
-        mb_result: MusicBrainzResult,
-        prefer_song_only: bool = False,
-        include_year: bool = True
-    ) -> str:
-        """Build precise torrent query from MusicBrainz result.
+        if torrent.bitrate:
+            parts.append(f"{torrent.bitrate}")
 
-        Args:
-            mb_result: Selected MusicBrainz result
-            prefer_song_only: If True, prioritize song title over album
-            include_year: Include year in query
+        if torrent.seeders >= 50:
+            parts.append(f"{torrent.seeders} seeders (very fast)")
+        elif torrent.seeders >= 10:
+            parts.append(f"{torrent.seeders} seeders (fast)")
+        elif torrent.seeders > 0:
+            parts.append(f"{torrent.seeders} seeders")
 
-        Returns:
-            Formatted torrent search query
-        """
-        # Sanitize function to clean up album/song names for torrent search
-        def sanitize_for_torrent(text: str) -> str:
-            # Remove everything after common delimiters (years, edition info, etc.)
-            # "OK Computer: OKNOTOK 1997 2017" → "OK Computer"
-            if ":" in text:
-                text = text.split(":")[0]
+        size_gb = torrent.size_bytes / (1024 * 1024 * 1024)
+        if size_gb >= 1:
+            parts.append(f"{size_gb:.1f} GB")
+        else:
+            size_mb = torrent.size_bytes / (1024 * 1024)
+            parts.append(f"{size_mb:.0f} MB")
 
-            # Remove years and extra info in parentheses/brackets
-            import re
-            text = re.sub(r'\b(19|20)\d{2}\b', '', text)  # Remove years
-            text = re.sub(r'\[.*?\]', '', text)  # Remove [brackets]
-            text = re.sub(r'\(.*?\)', '', text)  # Remove (parens)
+        if torrent.source:
+            parts.append(f"Source: {torrent.source}")
 
-            return " ".join(text.split())  # Normalize whitespace
+        return " • ".join(parts)
 
-        # Always include artist name
-        query = mb_result.artist
+    def _generate_tags(self, torrent: TorrentResult, rank: int) -> List[str]:
+        """Generate tags for torrent"""
+        tags = []
 
-        # If user wants song-only, prioritize song title
-        if prefer_song_only and mb_result.title:
-            title_clean = sanitize_for_torrent(mb_result.title)
-            query = f"{mb_result.artist} {title_clean}"
-        # Otherwise prefer album over song title for better torrent matches
-        elif mb_result.album:
-            # Album search - more likely to find torrents
-            album_clean = sanitize_for_torrent(mb_result.album)
-            query = f"{mb_result.artist} {album_clean}"
-        elif mb_result.title:
-            # Song-only search - fallback
-            title_clean = sanitize_for_torrent(mb_result.title)
-            query = f"{mb_result.artist} {title_clean}"
+        if rank == 1:
+            tags.append("best_quality")
 
-        return query
+        if torrent.format == "FLAC":
+            tags.append("lossless")
+
+            # Check for hi-res
+            if torrent.bitrate:
+                if "24" in torrent.bitrate or "DSD" in torrent.bitrate.upper():
+                    tags.append("hi-res")
+
+        if torrent.seeders >= 50:
+            tags.append("fast")
+            tags.append("popular")
+        elif torrent.seeders >= 10:
+            tags.append("fast")
+
+        if torrent.source:
+            if torrent.source.upper() in ["CD", "VINYL", "WEB"]:
+                tags.append(torrent.source.lower())
+
+        return tags

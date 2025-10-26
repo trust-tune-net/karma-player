@@ -1,214 +1,220 @@
-"""Configuration management for Karma Player."""
-
-import sqlite3
-import uuid
+"""
+Cross-platform configuration management for Karma Player
+Supports environment variables, .env files, and platform-aware defaults
+"""
+import os
+import platform
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 
-from pydantic import BaseModel, Field, field_validator
+
+# Load .env file if it exists
+env_file = Path(__file__).parent.parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
 
 
-class Config(BaseModel):
-    """User configuration for Karma Player."""
+def get_platform_music_directory() -> Path:
+    """
+    Get the default music directory based on the platform.
 
-    user_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    musicbrainz_api_key: Optional[str] = None
-    music_directory: Path = Field(default_factory=lambda: Path.home() / "Music")
-    jackett_url: Optional[str] = None
-    jackett_api_key: Optional[str] = None
+    Returns:
+        Path: Platform-appropriate music directory
+    """
+    system = platform.system()
 
-    @field_validator("music_directory", mode="before")
+    if system == "Windows":
+        # Windows: C:\Users\<username>\Music
+        return Path.home() / "Music"
+    elif system == "Darwin":
+        # macOS: ~/Music
+        return Path.home() / "Music"
+    elif system == "Linux":
+        # Linux: ~/Music (most common) or XDG Music directory
+        xdg_music = os.getenv("XDG_MUSIC_DIR")
+        if xdg_music:
+            return Path(xdg_music)
+        return Path.home() / "Music"
+    else:
+        # Fallback for unknown systems
+        return Path.home() / "Music"
+
+
+def get_platform_config_directory() -> Path:
+    """
+    Get the platform-appropriate configuration directory.
+
+    Returns:
+        Path: Configuration directory
+    """
+    system = platform.system()
+
+    if system == "Windows":
+        # Windows: %APPDATA%\TrustTune
+        appdata = os.getenv("APPDATA")
+        if appdata:
+            return Path(appdata) / "TrustTune"
+        return Path.home() / ".trusttune"
+    elif system == "Darwin":
+        # macOS: ~/Library/Application Support/TrustTune
+        return Path.home() / "Library" / "Application Support" / "TrustTune"
+    elif system == "Linux":
+        # Linux: ~/.config/trusttune
+        xdg_config = os.getenv("XDG_CONFIG_HOME")
+        if xdg_config:
+            return Path(xdg_config) / "trusttune"
+        return Path.home() / ".config" / "trusttune"
+    else:
+        # Fallback
+        return Path.home() / ".trusttune"
+
+
+class Config:
+    """
+    Centralized configuration for Karma Player.
+    Uses environment variables with sensible platform-aware defaults.
+    """
+
+    # === Application Info ===
+    APP_NAME = "TrustTune"
+    VERSION = "0.1.0"
+
+    # === Directories ===
+    @staticmethod
+    def get_music_directory() -> Path:
+        """Get music download directory (configurable via MUSIC_DIRECTORY env var)"""
+        env_path = os.getenv("MUSIC_DIRECTORY")
+        if env_path:
+            return Path(env_path)
+        return get_platform_music_directory()
+
+    @staticmethod
+    def get_config_directory() -> Path:
+        """Get configuration directory (configurable via CONFIG_DIRECTORY env var)"""
+        env_path = os.getenv("CONFIG_DIRECTORY")
+        if env_path:
+            return Path(env_path)
+        return get_platform_config_directory()
+
+    # === API Configuration ===
+
+    # Search API (can be remote)
+    SEARCH_API_HOST = os.getenv("SEARCH_API_HOST", "0.0.0.0")
+    SEARCH_API_PORT = int(os.getenv("SEARCH_API_PORT", "3000"))
+
+    # Download Daemon (always local)
+    DOWNLOAD_DAEMON_HOST = os.getenv("DOWNLOAD_DAEMON_HOST", "127.0.0.1")
+    DOWNLOAD_DAEMON_PORT = int(os.getenv("DOWNLOAD_DAEMON_PORT", "3001"))
+
+    # === Jackett Configuration ===
+    JACKETT_URL = os.getenv(
+        "JACKETT_REMOTE_URL",
+        os.getenv("JACKETT_URL", "https://trust-tune-trust-tune-jack.62ickh.easypanel.host")
+    )
+    JACKETT_API_KEY = os.getenv(
+        "JACKETT_REMOTE_API_KEY",
+        os.getenv("JACKETT_API_KEY", "ugokmbv2cfeghwcsm27mtnjva5ch7948")
+    )
+    JACKETT_INDEXER = os.getenv("JACKETT_INDEXER", "all")
+
+    # === AI Configuration ===
+    # Support multiple AI providers
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+    # Default AI provider (openai or anthropic)
+    AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
+
+    # === MusicBrainz ===
+    MUSICBRAINZ_API_KEY = os.getenv("MUSICBRAINZ_API_KEY")
+
+    # === Torrent Settings ===
+    MIN_SEEDERS = int(os.getenv("MIN_SEEDERS", "1"))
+    MAX_TORRENTS = int(os.getenv("MAX_TORRENTS", "50"))
+
+    # === Feature Flags ===
+    SKIP_MUSICBRAINZ = os.getenv("SKIP_MUSICBRAINZ", "false").lower() in ("true", "1", "yes")
+    USE_FULL_AI = os.getenv("USE_FULL_AI", "false").lower() in ("true", "1", "yes")
+    USE_PARTIAL_AI = os.getenv("USE_PARTIAL_AI", "true").lower() in ("true", "1", "yes")
+
+    # === Development ===
+    DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
     @classmethod
-    def validate_music_directory(cls, v):
-        """Convert string to Path and ensure it exists."""
-        if isinstance(v, str):
-            return Path(v)
-        return v
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
-
-
-class ConfigManager:
-    """Manages configuration storage and retrieval."""
-
-    def __init__(self, config_dir: Optional[Path] = None):
-        """Initialize configuration manager.
-
-        Args:
-            config_dir: Directory for config storage. Defaults to ~/.karma-player/
+    def validate(cls) -> list[str]:
         """
-        self.config_dir = config_dir or Path.home() / ".karma-player"
-        self.config_db = self.config_dir / "config.db"
-
-    def init_config_dir(self) -> None:
-        """Create configuration directory if it doesn't exist."""
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-
-    def init_database(self) -> None:
-        """Initialize SQLite database schema."""
-        self.init_config_dir()
-
-        with sqlite3.connect(self.config_db) as conn:
-            cursor = conn.cursor()
-
-            # Create config table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS config (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                )
-            """)
-
-            # Create downloads table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS downloads (
-                    id TEXT PRIMARY KEY,
-                    mbid TEXT NOT NULL,
-                    torrent_hash TEXT NOT NULL,
-                    filename TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_seeding BOOLEAN DEFAULT 0,
-                    seeders_count INTEGER DEFAULT 0
-                )
-            """)
-
-            # Create votes table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS votes (
-                    id TEXT PRIMARY KEY,
-                    mbid TEXT NOT NULL,
-                    torrent_hash TEXT NOT NULL,
-                    vote INTEGER NOT NULL CHECK (vote IN (-1, 1)),
-                    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    comment TEXT
-                )
-            """)
-
-            conn.commit()
-
-    def is_initialized(self) -> bool:
-        """Check if configuration has been initialized.
+        Validate configuration and return list of warnings/errors.
 
         Returns:
-            True if config directory and database exist
+            List of validation messages (empty if all good)
         """
-        return self.config_dir.exists() and self.config_db.exists()
+        warnings = []
 
-    def save_config(self, config: Config) -> None:
-        """Save configuration to database.
+        # Check music directory
+        music_dir = cls.get_music_directory()
+        if not music_dir.exists():
+            warnings.append(f"Music directory does not exist: {music_dir}")
+        elif not os.access(music_dir, os.W_OK):
+            warnings.append(f"Music directory is not writable: {music_dir}")
 
-        Args:
-            config: Configuration object to save
-        """
-        with sqlite3.connect(self.config_db) as conn:
-            cursor = conn.cursor()
+        # Check AI keys if AI features are enabled
+        if cls.USE_FULL_AI or cls.USE_PARTIAL_AI:
+            if cls.AI_PROVIDER == "openai" and not cls.OPENAI_API_KEY:
+                warnings.append("AI features enabled but OPENAI_API_KEY not set")
+            elif cls.AI_PROVIDER == "anthropic" and not cls.ANTHROPIC_API_KEY:
+                warnings.append("AI features enabled but ANTHROPIC_API_KEY not set")
 
-            # Save each config field
-            cursor.execute(
-                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                ("user_id", config.user_id),
-            )
-            cursor.execute(
-                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                ("musicbrainz_api_key", config.musicbrainz_api_key or ""),
-            )
-            cursor.execute(
-                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                ("music_directory", str(config.music_directory)),
-            )
-            cursor.execute(
-                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                ("jackett_url", config.jackett_url or ""),
-            )
-            cursor.execute(
-                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                ("jackett_api_key", config.jackett_api_key or ""),
-            )
+        # Check Jackett configuration
+        if not cls.JACKETT_URL:
+            warnings.append("JACKETT_URL not configured")
+        if not cls.JACKETT_API_KEY:
+            warnings.append("JACKETT_API_KEY not configured")
 
-            conn.commit()
+        return warnings
 
-    def load_config(self) -> Config:
-        """Load configuration from database.
+    @classmethod
+    def print_config(cls):
+        """Print current configuration (for debugging)"""
+        print(f"=== {cls.APP_NAME} Configuration ===")
+        print(f"Version: {cls.VERSION}")
+        print(f"Platform: {platform.system()}")
+        print(f"\nDirectories:")
+        print(f"  Music: {cls.get_music_directory()}")
+        print(f"  Config: {cls.get_config_directory()}")
+        print(f"\nAPIs:")
+        print(f"  Search API: {cls.SEARCH_API_HOST}:{cls.SEARCH_API_PORT}")
+        print(f"  Download Daemon: {cls.DOWNLOAD_DAEMON_HOST}:{cls.DOWNLOAD_DAEMON_PORT}")
+        print(f"\nJackett:")
+        print(f"  URL: {cls.JACKETT_URL}")
+        print(f"  API Key: {'*' * len(cls.JACKETT_API_KEY) if cls.JACKETT_API_KEY else 'Not set'}")
+        print(f"  Indexer: {cls.JACKETT_INDEXER}")
+        print(f"\nAI:")
+        print(f"  Provider: {cls.AI_PROVIDER}")
+        print(f"  OpenAI Key: {'Set' if cls.OPENAI_API_KEY else 'Not set'}")
+        print(f"  Anthropic Key: {'Set' if cls.ANTHROPIC_API_KEY else 'Not set'}")
+        print(f"  Full AI: {cls.USE_FULL_AI}")
+        print(f"  Partial AI: {cls.USE_PARTIAL_AI}")
+        print(f"\nFeatures:")
+        print(f"  Skip MusicBrainz: {cls.SKIP_MUSICBRAINZ}")
+        print(f"  Min Seeders: {cls.MIN_SEEDERS}")
+        print(f"  Max Torrents: {cls.MAX_TORRENTS}")
 
-        Returns:
-            Configuration object
+        # Show warnings
+        warnings = cls.validate()
+        if warnings:
+            print(f"\n⚠️  Warnings:")
+            for warning in warnings:
+                print(f"  - {warning}")
+        else:
+            print(f"\n✅ Configuration valid!")
 
-        Raises:
-            RuntimeError: If configuration is not initialized
-        """
-        if not self.is_initialized():
-            raise RuntimeError(
-                "Configuration not initialized. Run 'karma-player init' first."
-            )
 
-        with sqlite3.connect(self.config_db) as conn:
-            cursor = conn.cursor()
+# Singleton instance
+config = Config()
 
-            # Load all config values
-            cursor.execute("SELECT key, value FROM config")
-            config_data = dict(cursor.fetchall())
 
-            # Convert empty strings to None for optional fields
-            jackett_url = config_data.get("jackett_url")
-            jackett_url = jackett_url if jackett_url else None
-
-            jackett_api_key = config_data.get("jackett_api_key")
-            jackett_api_key = jackett_api_key if jackett_api_key else None
-
-            return Config(
-                user_id=config_data.get("user_id", str(uuid.uuid4())),
-                musicbrainz_api_key=config_data.get("musicbrainz_api_key") or None,
-                music_directory=Path(
-                    config_data.get("music_directory", str(Path.home() / "Music"))
-                ),
-                jackett_url=jackett_url,
-                jackett_api_key=jackett_api_key,
-            )
-
-    def get_value(self, key: str) -> Optional[str]:
-        """Get a single configuration value.
-
-        Args:
-            key: Configuration key
-
-        Returns:
-            Configuration value or None if not found
-        """
-        if not self.is_initialized():
-            return None
-
-        with sqlite3.connect(self.config_db) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM config WHERE key = ?", (key,))
-            result = cursor.fetchone()
-            return result[0] if result else None
-
-    def set_value(self, key: str, value: str) -> None:
-        """Set a single configuration value.
-
-        Args:
-            key: Configuration key
-            value: Configuration value
-        """
-        with sqlite3.connect(self.config_db) as conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, value))
-            conn.commit()
-
-    def validate_musicbrainz_key(self, api_key: str) -> bool:
-        """Validate MusicBrainz API key.
-
-        Args:
-            api_key: API key to validate
-
-        Returns:
-            True if key appears valid (basic check only)
-        """
-        # Basic validation: non-empty and reasonable length
-        # Real validation would require API call (implemented in Epic 2)
-        return bool(api_key and len(api_key) > 10)
+if __name__ == "__main__":
+    # For testing: print configuration
+    config.print_config()
