@@ -2,18 +2,17 @@
 
 <div align="center">
 
-**AI-powered music discovery that finds the best quality recordings automatically**
+<img src="https://img.shields.io/github/stars/trust-tune-net/karma-player?style=social" alt="GitHub stars"/>
+<img src="https://github.com/trust-tune-net/karma-player/actions/workflows/build-release.yml/badge.svg" alt="Build Status"/>
+<img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
+<img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python"/>
+<img src="https://img.shields.io/badge/flutter-3.9+-blue.svg" alt="Flutter"/>
 
-*Natural language or SQL-like queries • Built-in player • Protocol for fair artist payments*
+### AI-powered music discovery with quality you can trust
 
-*Search like talking to a friend, or like writing a database query — your choice*
+*Talk to it like a friend. Query it like a database. Own your music. Pay artists fairly.*
 
-[![Build Status](https://github.com/trust-tune-net/karma-player/actions/workflows/build-release.yml/badge.svg)](https://github.com/trust-tune-net/karma-player/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Flutter](https://img.shields.io/badge/flutter-3.9+-blue.svg)](https://flutter.dev/)
-
-[Features](#-features) • [Download](#-download) • [Quick Start](#-quick-start) • [Vision](docs/VISION.md) • [Architecture](docs/ARCHITECTURE.md)
+**[Download](#installation)** • **[Quick Start](#usage)** • **[Documentation](docs/VISION.md)** • **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)**
 
 ![Demo](demo_full.gif)
 
@@ -21,162 +20,131 @@
 
 ---
 
-## 🎯 The Problem
+## What and Why
 
-**Streaming services:** Artists earn $0.003/stream, compressed audio (256kbps), pay forever
-**Torrents:** High quality but complex, hard to find, no trust/verification
+> **Music discovery doesn't have a quality problem—it has a trust problem.**
 
-## 💡 The Solution
+You can stream anything on Spotify, but artists get **$0.003 per play**. You can find FLAC torrents, but which ones are real? Which are transcodes? Which uploaders are trusted?
 
-TrustTune is building a **new music ecosystem** where quality is guaranteed, artists are fairly paid, and discovery is effortless.
+**TrustTune solves this:**
 
-**Phase 0.5 (Available Now):**
-- 🗣️ **Natural language search** - "radiohead ok computer FLAC" or conversational queries
-- 💻 **SQL-like queries** - `SELECT album WHERE artist="Radiohead" AND format="FLAC" ORDER BY seeders DESC`
-- 🎼 **MusicBrainz metadata** - Canonical music database (35M+ recordings)
-- 🔍 **Smart AI ranking** - Selects best quality (FLAC 24-bit > 16-bit > 320kbps MP3)
-- 🎵 **Built-in player** - Listen while downloading
-- 📦 **Auto-organization** - Tags and organizes your library
-- 🚀 **Zero config** - Works out of the box (even your grandma can use it)
+- 🗣️ Search naturally ("radiohead ok computer flac") or precisely (`SELECT album WHERE artist="Radiohead" AND format="FLAC"`)
+- 🎯 AI ranks by actual quality (DSD > FLAC 24-bit > FLAC > MP3 320)
+- 🎵 Built-in player, auto-organized library, zero config
+- 🌐 **Protocol-first**: Like BitTorrent, anyone can run a node
+- 💰 **Endgame**: 95% revenue to artists (Phase 3+)
 
-**The Vision (Phases 1-3):**
-- 🌐 **Trust network** - Community validation of quality and authenticity
-- 🔗 **Federation** - Decentralized protocol (like email, anyone can run a server)
-- 💰 **Fair payments** - 95% revenue directly to artists
-- 📊 **Transparency** - Artists see exactly who listens and where
+This is **Phase 0.5** of a larger vision. Today: Beautiful app. Tomorrow: Decentralized trust network. Future: Fair creator economy.
 
 ---
 
-## ✨ Features
+## The Problem
 
-### Current (Phase 0.5 - Available Now)
+**Streaming services:**
+- Artists earn $0.003/stream (~300 plays = $1)
+- Compressed audio (256kbps AAC)
+- Pay $10/month forever, own nothing
 
-- ✅ **Desktop GUI** - Cross-platform app with built-in player (macOS/Windows/Linux)
-- ✅ **Dual Search Interface**
-  - 🗣️ Natural language - "radiohead ok computer flac"
-  - 💻 SQL-like queries - `SELECT album WHERE artist="Radiohead" AND format="FLAC"`
-- ✅ **AI-Powered** - Understands context, asks smart questions, explains choices
-- ✅ **Multi-Source** - 18+ torrent indexers via Jackett + DHT network
-- ✅ **Quality Scoring** - Automatic ranking (FLAC 24/192 > FLAC 16/44 > MP3 320)
-- ✅ **MusicBrainz Integration** - Accurate metadata for 35M+ recordings
-- ✅ **CLI Tool** - Also available for power users and scripting
+**Torrents:**
+- High quality available (FLAC, hi-res)
+- Complex (torrent clients, VPNs, ratios)
+- **No trust**: Fake files, transcodes, malware
+- Hard to find, hard to verify
 
-### Coming Soon (Phase 1-2)
+## The Solution
 
-- 🔄 **Community Validation** - Distributed trust network
-- 🎯 **Acoustic Fingerprinting** - Cryptographic quality proofs
-- 📱 **Mobile Apps** - iOS and Android
-- 🌐 **Federation** - Decentralized protocol
+> **TrustTune = AI-powered search + Quality verification + Fair compensation**
 
-### Future Vision (Phase 3+)
+We're building this in phases. Each phase works standalone, each builds toward the vision.
 
-- 💰 **Creator Payments** - 95% revenue to artists
-- 📊 **Transparent Analytics** - Artists see who listens and where
-- 🔗 **Blockchain Payments** - Fair compensation model
+### Phase 0.5 — Available Now
+
+**Desktop app with two interfaces:**
+- Talk: *"radiohead ok computer flac"*
+- Query: `SELECT album WHERE artist="Radiohead" AND format="FLAC"`
+
+Both get you the same results: AI-ranked, quality-scored, ready to play.
+
+**What it does:**
+- ✅ Searches 18+ sources in parallel (Jackett, 1337x, more via plugins)
+- ✅ AI ranks by real quality (not just file size)
+- ✅ MusicBrainz metadata (35M+ recordings)
+- ✅ Built-in player + auto-tagging
+- ✅ Works out of the box (your grandma could use it)
+
+### Phases 1-3 — The Vision
+
+**Phase 1:** Community trust network (like Wikipedia for music quality)
+**Phase 2:** Federation protocol (anyone can run a node)
+**Phase 3:** Creator payments (95% to artists, not Spotify's $0.003)
 
 ---
 
-## 📥 Download
+## Installation
 
-### Desktop GUI (Beta)
+### Desktop App (Recommended)
 
-<table>
-<tr>
-<td align="center" width="33%">
+**One-click install for macOS, Windows, Linux:**
 
-#### macOS
-[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/trust-tune-net/karma-player/releases)
+| Platform | Download | Notes |
+|----------|----------|-------|
+| **macOS** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS.zip) | Intel & Apple Silicon |
+| **Windows** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows.zip) | Windows 10/11 |
+| **Linux** | [Download TAR.GZ](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux.tar.gz) | Ubuntu/Debian/Fedora |
 
-[**Download ZIP**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS.zip)
-
-*Intel & Apple Silicon*
-
-</td>
-<td align="center" width="33%">
-
-#### Windows
-[![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/trust-tune-net/karma-player/releases)
-
-[**Download ZIP**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows.zip)
-
-*Windows 10/11*
-
-</td>
-<td align="center" width="33%">
-
-#### Linux
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/trust-tune-net/karma-player/releases)
-
-[**Download TAR.GZ**](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux.tar.gz)
-
-*Ubuntu/Debian/Fedora*
-
-</td>
-</tr>
-</table>
-
-> 📦 **Latest Release**: [View all releases](https://github.com/trust-tune-net/karma-player/releases)
-
-### CLI Tool
+### CLI (For Power Users)
 
 ```bash
 # Install via pip
 pip install karma-player
 
-# Or install from source
+# Or from source
 git clone https://github.com/trust-tune-net/karma-player.git
-cd karma-player
-pip install -e .
+cd karma-player && pip install -e .
 ```
 
 ---
 
-## 🚀 Quick Start
+## Usage
 
-### Desktop GUI
+### Desktop App — Two Ways to Search
 
-1. **Download** the app for your platform
-2. **Install** and launch TrustTune
-3. **Search** for music using natural language
-4. **Download** and play automatically
+**Natural Language** (talk like a human):
+```
+radiohead ok computer flac
+miles davis kind of blue 24-bit
+pink floyd dark side vinyl rip
+```
 
-### CLI Tool
+**SQL-Like** (query like a database):
+```sql
+SELECT album WHERE artist="Radiohead" AND format="FLAC"
+SELECT track WHERE title="Paranoid Android" ORDER BY seeders DESC
+SELECT album WHERE artist="Miles Davis" AND year BETWEEN 1955 AND 1965
+```
 
-**Natural Language Search:**
+Both interfaces → Same AI-ranked results → Built-in player → Done.
+
+### CLI — For Power Users & Scripts
+
 ```bash
-# Simple search
-karma-player search "pink floyd dark side of the moon"
+# Natural language
+karma-player search "radiohead ok computer flac"
 
-# With quality preference
-karma-player search "radiohead" --full-ai --min-seeders 5
+# SQL-like
+karma-player query 'SELECT album WHERE artist="Radiohead" AND format="FLAC"'
 
-# Skip MusicBrainz for faster results
-karma-player search "miles davis" --skip-musicbrainz
+# Advanced options
+karma-player search "miles davis" --full-ai --min-seeders 10 --skip-musicbrainz
 ```
 
-**SQL-Like Queries (Power Users):**
-```bash
-# Album search with format filter
-karma-player query 'SELECT album WHERE artist="Radiohead" AND year=1997 AND format="FLAC"'
-
-# Track search sorted by seeders
-karma-player query 'SELECT track WHERE title="Paranoid Android" AND format="FLAC" ORDER BY seeders DESC LIMIT 10'
-
-# Year range search
-karma-player query 'SELECT album WHERE artist="Miles Davis" AND year BETWEEN 1955 AND 1965'
-
-# Advanced filters (seeders, source)
-karma-player query 'SELECT album WHERE artist="Pink Floyd" AND source="CD" AND seeders>=10'
+**Example output:**
 ```
+🎵 Found 47 results, showing top 10:
 
-**Example Output:**
-```
-🎵 Found 3 high-quality matches:
-
-✅ Pink Floyd - The Dark Side of the Moon (1973)
-   💎 FLAC 24-bit/192kHz | 1.8 GB | 47 seeders
-   ✓ Verified uploader | Remastered from analog tapes
-
+✅ #1 Radiohead - OK Computer (1997)
+   💎 FLAC 24-bit/96kHz | 1.4 GB | 52 seeders
+   🏆 Best quality • Verified uploader
    magnet:?xt=urn:btih:...
 ```
 
@@ -338,26 +306,28 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🌟 Why TrustTune?
+## Why This Matters
 
-### Available NOW (Phase 0.5)
-**Desktop app that anyone can use** - Natural language + SQL-like search, AI-powered quality ranking, built-in player. Your grandma could use it.
+> **Music has a trust problem, not a technology problem.**
 
-### Building Trust (Phase 1-2)
-**Community validation network** - Like Wikipedia for music quality. Curators rate recordings, trust scores emerge, verification becomes distributed. **Protocol-first, not platform** - Anyone can run a TrustTune server (like email). Federation means no single point of failure or control.
+The tools exist. Spotify has great UX. Torrents have great quality. MusicBrainz has great metadata. But:
+- **Listeners** overpay for compressed audio and own nothing
+- **Artists** get $0.003 per stream (~$3,000 for 1M plays)
+- **Quality** is unverified (fake FLACs, transcodes everywhere)
 
-### Transforming Music (Phase 3+)
-**Fair creator economy** - 95% of revenue goes directly to artists (vs. $0.003/stream on Spotify). Blockchain-verified payments, transparent analytics. Artists see exactly who listens and where. **No middlemen taking 30-50% cuts.**
+**TrustTune fixes this step by step:**
 
-### Why This Matters
+**Phase 0.5 (Now):** Beautiful app that finds quality automatically
+**Phase 1-2 (Soon):** Community trust network + federation protocol
+**Phase 3+ (Vision):** Fair creator economy (95% to artists)
 
-**For listeners:** Own your music, support artists fairly, find authentic quality
-**For artists:** Get paid what you deserve, know your audience, keep your rights
-**For everyone:** Decentralized, open protocol, ethical by design
+### Not Building a Company
 
-**Not building a company. Building a protocol.**
-
-Like BitTorrent transformed file sharing, TrustTune transforms music discovery and artist compensation.
+We're building a **protocol**, like BitTorrent or email:
+- Anyone can implement it
+- Anyone can run a node
+- No single point of control
+- Open source, transparent
 
 **Start simple. Scale responsibly. Stay ethical.**
 
@@ -365,7 +335,7 @@ Like BitTorrent transformed file sharing, TrustTune transforms music discovery a
 
 <div align="center">
 
-**[Download Now](#-download)** • **[Read the Vision](docs/VISION.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
+**[Download Now](#installation)** • **[Read the Vision](docs/VISION.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
 
 *Made with ❤️ for music lovers and creators*
 
