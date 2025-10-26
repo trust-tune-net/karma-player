@@ -102,8 +102,10 @@ echo -e "${GREEN}${TAG} Selected version: ${WHITE}${BOLD}${NEW_VERSION}${RESET}"
 
 # Get release notes
 echo ""
-echo -e "${YELLOW}${BOLD}Enter release description (press Ctrl+D when done):${RESET}"
-RELEASE_NOTES=$(cat)
+read -p "$(echo -e ${YELLOW}${BOLD}Release description:${RESET} )" RELEASE_NOTES
+if [ -z "$RELEASE_NOTES" ]; then
+    RELEASE_NOTES="Release $NEW_VERSION"
+fi
 
 # Summary
 echo ""
