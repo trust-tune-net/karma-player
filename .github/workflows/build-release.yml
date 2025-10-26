@@ -207,7 +207,7 @@ jobs:
             artifacts/TrustTune-Windows/*
             artifacts/TrustTune-Linux/*
           draft: false
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           body: |
             ## 🎵 TrustTune Beta Release
