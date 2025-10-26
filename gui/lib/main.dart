@@ -2068,6 +2068,77 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     }
   }
 
+  void _showTransmissionHelp() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Transmission Not Running'),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TrustTune needs Transmission to download torrents.',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Quick Setup (macOS):',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text('1. Install Transmission:'),
+              SizedBox(height: 4),
+              SelectableText(
+                '   brew install transmission',
+                style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+              ),
+              SizedBox(height: 12),
+              Text('2. Start Transmission daemon:'),
+              SizedBox(height: 4),
+              SelectableText(
+                '   transmission-daemon',
+                style: TextStyle(fontFamily: 'Courier', backgroundColor: Color(0xFFF5F5F5)),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Or download from:',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              SelectableText(
+                'https://transmissionbt.com/download',
+                style: TextStyle(fontSize: 13, color: Colors.blue),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Try to open settings tab
+              setState(() {
+                _currentView = 'settings';
+              });
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _startDownload(Map<String, dynamic> torrent) async {
     final magnetLink = torrent['magnet_link'];
     final title = torrent['title'];
@@ -2097,12 +2168,25 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       );
       print('Torrent ID: $torrentId');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error starting download: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Check if it's a connection error (Transmission not running)
+      final errorStr = e.toString();
+      final isConnectionError = errorStr.contains('Connection refused') ||
+                                 errorStr.contains('Failed to connect') ||
+                                 errorStr.contains('SocketException');
+
+      if (isConnectionError) {
+        // Transmission daemon is not running
+        _showTransmissionHelp();
+      } else {
+        // Other error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting download: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
       print('Download error: $e');
     }
   }
