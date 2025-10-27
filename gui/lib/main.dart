@@ -371,6 +371,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   bool _handleKeyEvent(KeyEvent event) {
     // Only handle Space key press when a song is loaded
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.space) {
+      // Don't intercept Space key if user is typing in a text field
+      final focusNode = FocusManager.instance.primaryFocus;
+      if (focusNode != null && focusNode.context != null) {
+        final widget = focusNode.context!.widget;
+        // Check if the focused widget is a text input (TextField, TextFormField, etc.)
+        if (widget is EditableText || widget.runtimeType.toString().contains('TextField')) {
+          return false; // Let the text field handle the space key
+        }
+      }
+
+      // Handle play/pause only if a song is loaded and no text field has focus
       if (_playbackService.currentSong != null) {
         _playbackService.togglePlayPause();
         return true; // Consume the event
