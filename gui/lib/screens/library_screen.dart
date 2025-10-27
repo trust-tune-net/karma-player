@@ -697,29 +697,33 @@ class _AlbumCardWidgetState extends State<_AlbumCardWidget> {
 
                         // Download progress indicator overlay
                         if (widget.showProgress)
-                          Container(
-                            color: Colors.black.withOpacity(0.5),
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
+                          Positioned.fill(
+                            child: Container(
+                              color: Colors.black.withOpacity(0.5),
+                              child: Stack(
                                 children: [
-                                  SizedBox(
-                                    width: 64,
-                                    height: 64,
-                                    child: CircularProgressIndicator(
-                                      value: widget.progress,
-                                      strokeWidth: 6,
-                                      backgroundColor: Colors.white.withOpacity(0.3),
-                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                                  // Circular progress indicator - perfectly centered
+                                  Center(
+                                    child: SizedBox(
+                                      width: 64,
+                                      height: 64,
+                                      child: CircularProgressIndicator(
+                                        value: widget.progress,
+                                        strokeWidth: 6,
+                                        backgroundColor: Colors.white.withOpacity(0.3),
+                                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    '${(widget.progress * 100).toInt()}%',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                  // Percentage text positioned in the center of the circle
+                                  Center(
+                                    child: Text(
+                                      '${(widget.progress * 100).toInt()}%',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ],
