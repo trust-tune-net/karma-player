@@ -71,173 +71,177 @@ class NowPlayingScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
 
-                            // Album artwork
+                            // Album artwork with enhanced styling
                             Container(
-                              width: 280,
-                              height: 280,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2A2E),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: song.artworkPath != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(song.artworkPath!),
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    Icons.album,
-                                    size: 160,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary
-                                        .withOpacity(0.3),
-                                  );
-                                },
-                              ),
-                            )
-                          : Icon(
-                              Icons.album,
-                              size: 160,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withOpacity(0.3),
-                            ),
-                    ),
-                    const SizedBox(height: 40),
-
-                    // Song info
-                    Text(
-                      song.title,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFFFFFFF),
-                        height: 1.2,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      song.artist,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Color(0xFFA855F7),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (song.album?.isNotEmpty ?? false) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        song.album!,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Color(0xFF888888),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                    const SizedBox(height: 50),
-
-                    // Progress bar and time
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                      child: Column(
-                        children: [
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackHeight: 4.0,
-                              activeTrackColor: const Color(0xFFA855F7),
-                              inactiveTrackColor: const Color(0xFF3A3A3E),
-                              thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 7.0,
-                              ),
-                              overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 14.0,
-                              ),
-                              thumbColor: const Color(0xFFA855F7),
-                              overlayColor: const Color(0xFFA855F7).withOpacity(0.2),
-                            ),
-                            child: Slider(
-                              value: duration.inMilliseconds > 0
-                                  ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
-                                  : 0.0,
-                              onChanged: (value) {
-                                final newPosition = Duration(
-                                  milliseconds: (value * duration.inMilliseconds).round(),
-                                );
-                                playbackService.seek(newPosition);
-                              },
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _formatDuration(position),
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF888888),
-                                    fontWeight: FontWeight.w400,
+                              width: 320,
+                              height: 320,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFA855F7).withOpacity(0.3),
+                                    blurRadius: 40,
+                                    spreadRadius: 5,
+                                    offset: const Offset(0, 10),
                                   ),
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.5),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: song.artworkPath != null
+                                    ? Image.file(
+                                        File(song.artworkPath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            color: const Color(0xFF2A2A2E),
+                                            child: Icon(
+                                              Icons.album,
+                                              size: 160,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withOpacity(0.3),
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    : Container(
+                                        color: const Color(0xFF2A2A2E),
+                                        child: Icon(
+                                          Icons.album,
+                                          size: 160,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withOpacity(0.3),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 48),
+
+                            // Song info
+                            Text(
+                              song.title,
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFFFFFF),
+                                height: 1.2,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              song.artist,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                color: Color(0xFFA855F7),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            if (song.album?.isNotEmpty ?? false) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                song.album!,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Color(0xFF999999),
                                 ),
-                                Text(
-                                  _formatDuration(duration),
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF888888),
-                                    fontWeight: FontWeight.w400,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                            const SizedBox(height: 56),
+
+                            // Progress bar and time
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              child: Column(
+                                children: [
+                                  SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      trackHeight: 5.0,
+                                      activeTrackColor: const Color(0xFFA855F7),
+                                      inactiveTrackColor: const Color(0xFF3A3A3E),
+                                      thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 8.0,
+                                      ),
+                                      overlayShape: const RoundSliderOverlayShape(
+                                        overlayRadius: 16.0,
+                                      ),
+                                      thumbColor: Colors.white,
+                                      overlayColor: const Color(0xFFA855F7).withOpacity(0.2),
+                                    ),
+                                    child: Slider(
+                                      value: duration.inMilliseconds > 0
+                                          ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+                                          : 0.0,
+                                      onChanged: (value) {
+                                        final newPosition = Duration(
+                                          milliseconds: (value * duration.inMilliseconds).round(),
+                                        );
+                                        playbackService.seek(newPosition);
+                                      },
+                                    ),
                                   ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          _formatDuration(position),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: Color(0xFF888888),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          _formatDuration(duration),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: Color(0xFF888888),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 48),
+
+                            // Player controls with hover effects
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _HoverableControlButton(
+                                  icon: Icons.skip_previous_rounded,
+                                  onPressed: playbackService.playPrevious,
+                                ),
+                                const SizedBox(width: 32),
+                                _PlayPauseButton(
+                                  isPlaying: isPlaying,
+                                  onPressed: playbackService.togglePlayPause,
+                                ),
+                                const SizedBox(width: 32),
+                                _HoverableControlButton(
+                                  icon: Icons.skip_next_rounded,
+                                  onPressed: playbackService.playNext,
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-
-                    // Player controls
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.skip_previous_rounded),
-                          iconSize: 40,
-                          color: const Color(0xFFCCCCCC),
-                          onPressed: playbackService.playPrevious,
-                        ),
-                        Container(
-                          width: 72,
-                          height: 72,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFFA855F7),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            ),
-                            iconSize: 40,
-                            color: Colors.white,
-                            onPressed: playbackService.togglePlayPause,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.skip_next_rounded),
-                          iconSize: 40,
-                          color: const Color(0xFFCCCCCC),
-                          onPressed: playbackService.playNext,
-                        ),
-                      ],
-                    ),
                           ],
                         ),
                       ),
@@ -263,5 +267,109 @@ class NowPlayingScreen extends StatelessWidget {
     } else {
       return '$minutes:${twoDigits(seconds)}';
     }
+  }
+}
+
+// Hoverable control button widget for previous/next
+class _HoverableControlButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _HoverableControlButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  State<_HoverableControlButton> createState() => _HoverableControlButtonState();
+}
+
+class _HoverableControlButtonState extends State<_HoverableControlButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _isHovered
+                ? const Color(0xFF3A3A3E)
+                : Colors.transparent,
+          ),
+          child: Icon(
+            widget.icon,
+            size: 40,
+            color: _isHovered
+                ? const Color(0xFFA855F7)
+                : const Color(0xFFAAAAAA),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Enhanced play/pause button with hover effect
+class _PlayPauseButton extends StatefulWidget {
+  final bool isPlaying;
+  final VoidCallback onPressed;
+
+  const _PlayPauseButton({
+    required this.isPlaying,
+    required this.onPressed,
+  });
+
+  @override
+  State<_PlayPauseButton> createState() => _PlayPauseButtonState();
+}
+
+class _PlayPauseButtonState extends State<_PlayPauseButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFA855F7),
+            boxShadow: _isHovered ? [
+              BoxShadow(
+                color: const Color(0xFFA855F7).withOpacity(0.6),
+                blurRadius: 24,
+                spreadRadius: 2,
+              ),
+            ] : [
+              BoxShadow(
+                color: const Color(0xFFA855F7).withOpacity(0.3),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: Icon(
+            widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            size: 44,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
   }
 }
