@@ -16,6 +16,8 @@ class NowPlayingScreen extends StatefulWidget {
 }
 
 class _NowPlayingScreenState extends State<NowPlayingScreen> {
+  bool _showDetailedInfo = false;
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -181,11 +183,35 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                 ),
                                 const SizedBox(height: 16),
 
-                                // #1 Audio Quality Badge
-                                if (song.format != null)
-                                  _AudioQualityBadge(song: song),
-                                if (song.format != null)
+                                // #1 Audio Quality Badge with expandable details
+                                if (song.format != null) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      _AudioQualityBadge(song: song),
+                                      const SizedBox(width: 8),
+                                      // Info button to toggle detailed view
+                                      IconButton(
+                                        icon: Icon(
+                                          _showDetailedInfo ? Icons.info : Icons.info_outline,
+                                          size: 20,
+                                          color: const Color(0xFFA855F7),
+                                        ),
+                                        onPressed: () => setState(() => _showDetailedInfo = !_showDetailedInfo),
+                                        tooltip: 'Show detailed file info',
+                                      ),
+                                    ],
+                                  ),
+                                  // Expandable detailed info panel
+                                  if (_showDetailedInfo)
+                                    Center(
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 600),
+                                        child: _DetailedFileInfo(song: song),
+                                      ),
+                                    ),
                                   const SizedBox(height: 16),
+                                ],
 
                                 // Song info
                                 Text(
@@ -494,6 +520,164 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> {
             widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
             size: 44,
             color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Detailed file information widget
+class _DetailedFileInfo extends StatelessWidget {
+  final dynamic song;
+
+  const _DetailedFileInfo({required this.song});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFA855F7).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Technical Details',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFA855F7),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildInfoRow('Format', song.format ?? 'Unknown'),
+          if (song.bitDepth != null && song.sampleRate != null)
+            _buildInfoRow('Quality', '${song.bitDepth}-bit / ${song.sampleRate! ~/ 1000} kHz'),
+          if (song.bitrate != null)
+            _buildInfoRow('Bitrate', '${song.bitrate} kbps'),
+          if (song.fileSize != null)
+            _buildInfoRow('File Size', song.fileSizeDisplay ?? 'Unknown'),
+          _buildInfoRow('Type', song.isLossless ? 'Lossless' : 'Lossy'),
+          const SizedBox(height: 8),
+          _buildClickablePathRow('Path', song.filePath),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool mono = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF888888),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white,
+                fontFamily: mono ? 'monospace' : null,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _truncatePath(String path) {
+    if (path.length <= 50) return path;
+    return '...${path.substring(path.length - 47)}';
+  }
+
+  Widget _buildClickablePathRow(String label, String fullPath) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () async {
+          // Open file manager and select the file (platform-specific)
+          try {
+            if (Platform.isMacOS) {
+              await Process.run('open', ['-R', fullPath]);
+            } else if (Platform.isWindows) {
+              await Process.run('explorer', ['/select,', fullPath]);
+            } else if (Platform.isLinux) {
+              // Try nautilus first (GNOME), fallback to xdg-open with directory
+              final dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+              try {
+                await Process.run('nautilus', ['--select', fullPath]);
+              } catch (_) {
+                await Process.run('xdg-open', [dir]);
+              }
+            }
+          } catch (e) {
+            print('Error opening file location: $e');
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 80,
+                child: Text(
+                  'Path',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF888888),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _truncatePath(fullPath),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFA855F7),
+                          fontFamily: 'monospace',
+                          decoration: TextDecoration.underline,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.folder_open,
+                      size: 14,
+                      color: Color(0xFFA855F7),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
