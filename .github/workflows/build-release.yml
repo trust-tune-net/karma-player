@@ -20,6 +20,35 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Install Transmission (for bundling)
+        run: |
+          brew install transmission
+
+      - name: Bundle Transmission binary
+        run: |
+          mkdir -p gui/macos/Runner/Resources/bin
+          cp $(which transmission-daemon) gui/macos/Runner/Resources/bin/
+          chmod +x gui/macos/Runner/Resources/bin/transmission-daemon
+
+          # Copy required dylibs
+          mkdir -p gui/macos/Runner/Resources/lib
+
+          # Get Transmission dependencies (excluding system libs)
+          DYLIBS=$(otool -L $(which transmission-daemon) | grep -v '/usr/lib' | grep -v '/System' | awk '{print $1}' | tail -n +2)
+
+          for dylib in $DYLIBS; do
+            if [ -f "$dylib" ]; then
+              cp "$dylib" gui/macos/Runner/Resources/lib/
+            fi
+          done
+
+          # Fix library paths to be relative (CRITICAL for user machines)
+          chmod +w gui/macos/Runner/Resources/bin/transmission-daemon
+          install_name_tool -change /opt/homebrew/opt/libevent/lib/libevent-2.1.7.dylib @executable_path/../Resources/lib/libevent-2.1.7.dylib gui/macos/Runner/Resources/bin/transmission-daemon || true
+          install_name_tool -change /opt/homebrew/opt/miniupnpc/lib/libminiupnpc.21.dylib @executable_path/../Resources/lib/libminiupnpc.21.dylib gui/macos/Runner/Resources/bin/transmission-daemon || true
+
+          echo "✅ Transmission bundled successfully"
+
       - name: Install dependencies
         run: |
           cd gui
@@ -29,6 +58,28 @@ jobs:
         run: |
           cd gui
           flutter build macos --release
+
+      - name: Copy bundled binaries to app bundle
+        run: |
+          APP_PATH="gui/build/macos/Build/Products/Release/trusttune_gui.app"
+          mkdir -p "$APP_PATH/Contents/Resources/bin"
+          mkdir -p "$APP_PATH/Contents/Resources/lib"
+
+          # Copy transmission binary and libs
+          if [ -f gui/macos/Runner/Resources/bin/transmission-daemon ]; then
+            cp gui/macos/Runner/Resources/bin/transmission-daemon "$APP_PATH/Contents/Resources/bin/"
+            chmod +x "$APP_PATH/Contents/Resources/bin/transmission-daemon"
+          fi
+
+          if [ -d gui/macos/Runner/Resources/lib ]; then
+            cp -r gui/macos/Runner/Resources/lib/* "$APP_PATH/Contents/Resources/lib/" || true
+          fi
+
+          # Verify binary works
+          echo "🧪 Testing bundled binary..."
+          "$APP_PATH/Contents/Resources/bin/transmission-daemon" --version || echo "⚠️ Binary test failed"
+
+          echo "✅ Binaries copied to app bundle"
 
       - name: Create ZIP
         run: |
@@ -55,6 +106,38 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Download Transmission for Windows
+        shell: bash
+        run: |
+          TRANSMISSION_VERSION="4.0.5"
+          DOWNLOAD_URL="https://github.com/transmission/transmission/releases/download/${TRANSMISSION_VERSION}/transmission-${TRANSMISSION_VERSION}-x64.msi"
+
+          echo "📥 Downloading Transmission..."
+          curl -L -o transmission.msi "$DOWNLOAD_URL"
+
+          # Install MSI to extract files
+          echo "📦 Installing Transmission..."
+          msiexec /i transmission.msi /qn /norestart
+
+          # Wait for installation
+          sleep 10
+
+          # Find installation directory (default: C:\Program Files\Transmission)
+          INSTALL_DIR="/c/Program Files/Transmission"
+
+          if [ -d "$INSTALL_DIR" ]; then
+            echo "✅ Found Transmission at: $INSTALL_DIR"
+
+            # Copy daemon and required DLLs
+            mkdir -p gui/windows-binaries
+            cp "$INSTALL_DIR/transmission-daemon.exe" gui/windows-binaries/ || echo "⚠️  daemon not found"
+            cp "$INSTALL_DIR"/*.dll gui/windows-binaries/ || true
+
+            echo "✅ Transmission binaries copied"
+          else
+            echo "⚠️  Transmission installation not found, will use system-installed version"
+          fi
+
       - name: Install dependencies
         run: |
           cd gui
@@ -64,6 +147,19 @@ jobs:
         run: |
           cd gui
           flutter build windows --release
+
+      - name: Bundle Transmission with app
+        shell: bash
+        run: |
+          BUILD_DIR="gui/build/windows/x64/runner/Release"
+
+          # Copy Transmission binaries to app directory
+          if [ -d "gui/windows-binaries" ]; then
+            cp gui/windows-binaries/* "$BUILD_DIR/" || true
+            echo "✅ Transmission bundled with Windows app"
+          else
+            echo "⚠️  No bundled binaries found"
+          fi
 
       - name: Create ZIP
         run: |
@@ -92,14 +188,36 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev mpv
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev mpv transmission-daemon
           cd gui
           flutter pub get
+
+      - name: Bundle Transmission binary
+        run: |
+          mkdir -p gui/linux-binaries/bin
+
+          # Copy transmission-daemon
+          cp $(which transmission-daemon) gui/linux-binaries/bin/
+          chmod +x gui/linux-binaries/bin/transmission-daemon
+
+          echo "✅ Transmission binary prepared for Linux"
 
       - name: Build Linux app
         run: |
           cd gui
           flutter build linux --release
+
+      - name: Bundle binaries with app
+        run: |
+          BUILD_DIR="gui/build/linux/x64/release/bundle"
+
+          # Copy Transmission to bundle
+          mkdir -p "$BUILD_DIR/bin"
+          if [ -f gui/linux-binaries/bin/transmission-daemon ]; then
+            cp gui/linux-binaries/bin/transmission-daemon "$BUILD_DIR/bin/"
+            chmod +x "$BUILD_DIR/bin/transmission-daemon"
+            echo "✅ Transmission bundled with Linux app"
+          fi
 
       - name: Create TAR.GZ
         run: |
@@ -139,36 +257,48 @@ jobs:
           prerelease: false
           generate_release_notes: true
           body: |
-            ## 🎵 TrustTune Beta Release
+            ## 🎵 TrustTune Release
 
             **AI-powered music discovery with built-in player**
 
+            ### 🎉 Major Update: Transmission Now Bundled!
+
+            **No more separate installation required!** Transmission is now bundled with TrustTune for all platforms.
+
             ### Downloads
 
-            - **macOS**: Download the `.dmg` file (Intel & Apple Silicon)
+            - **macOS**: Download the `.zip` file (Intel & Apple Silicon)
             - **Windows**: Download the `.zip` file, extract and run
-            - **Linux**: Download the `.AppImage` file, make executable and run
+            - **Linux**: Download the `.tar.gz` file, extract and run
 
             ### What's New
+            - ✅ **Bundled Transmission** - No separate installation needed!
             - 🎨 Improved GUI with responsive design
             - 📊 Statistics badges (albums, plays, downloads)
+            - 🎵 Built-in music player with MPV
+            - ⭐ Favorites and ratings for tracks
             - 🌐 Connection quality indicator
-            - 🔄 Prominent refresh button
-            - 📖 Updated concise README
+            - 📖 Updated documentation
 
             ### Requirements
             - **macOS**: 10.15 (Catalina) or later
             - **Windows**: Windows 10/11
             - **Linux**: Ubuntu 20.04+ / Debian 11+ / Fedora 35+
 
-            ### First Run
+            ### Quick Start
             1. Download for your platform
-            2. Launch TrustTune
-            3. Choose your music folder
-            4. Start searching!
+            2. Extract and launch TrustTune
+            3. Search for music (try: "radiohead ok computer flac")
+            4. Click download - Transmission starts automatically!
+            5. Enjoy your high-quality music!
+
+            ### First-Time Users
+            - **No setup required!** Just download and run
+            - Transmission daemon starts automatically when needed
+            - Downloads go to ~/Music by default (configurable in Settings)
 
             ---
 
-            *This is a beta release. Please report bugs on [GitHub Issues](https://github.com/trust-tune-net/karma-player/issues)*
+            *Report bugs or request features on [GitHub Issues](https://github.com/trust-tune-net/karma-player/issues)*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

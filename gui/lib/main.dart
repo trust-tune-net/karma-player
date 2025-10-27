@@ -78,18 +78,34 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
+  print('═══════════════════════════════════════════════');
+  print('🎵 TrustTune Starting Up');
+  print('═══════════════════════════════════════════════');
+
   // Load settings
+  print('[STARTUP] Loading settings...');
   await appSettings.load();
+  print('[STARTUP] Settings loaded');
 
   // Start transmission daemon on app launch
-  print('Starting transmission daemon...');
-  final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-  if (started) {
-    print('Transmission daemon started successfully');
-  } else {
-    print('Warning: Failed to start transmission daemon');
+  print('[STARTUP] ═══════════════════════════════════════════════');
+  print('[STARTUP] Starting transmission daemon...');
+  print('[STARTUP] ═══════════════════════════════════════════════');
+
+  try {
+    final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+    if (started) {
+      print('[STARTUP] ✅ Transmission daemon started successfully');
+    } else {
+      print('[STARTUP] ❌ Failed to start transmission daemon');
+    }
+  } catch (e, stackTrace) {
+    print('[STARTUP] ❌ ERROR starting daemon: $e');
+    print('[STARTUP] Stack trace: $stackTrace');
   }
 
+  print('[STARTUP] ═══════════════════════════════════════════════');
+  print('[STARTUP] Launching app UI...');
   runApp(const KarmaPlayerApp());
 }
 

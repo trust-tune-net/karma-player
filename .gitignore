@@ -52,5 +52,8 @@ Thumbs.db
 *.db
 *.db-journal
 
+# Transmission bundling temp directory
+transmission-binaries/
+
 *.cast
 docs/temp_*.md

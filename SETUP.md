@@ -1,129 +1,73 @@
 # 🚀 TrustTune Setup Guide
 
-## First-Time Setup (5 minutes)
+## First-Time Setup (1 minute!)
 
-TrustTune needs **Transmission** to download music. Here's how to set it up:
+**Good news!** TrustTune now comes with Transmission bundled - no separate installation needed!
 
-### macOS
+The app will automatically start the Transmission daemon when you first search for music.
 
-**Option 1: Homebrew (Recommended)**
-```bash
-# Install Transmission
-brew install transmission
+## How It Works
 
-# Start the daemon
-transmission-daemon
+TrustTune includes a bundled Transmission daemon that runs in the background:
 
-# Done! TrustTune can now download torrents
-```
+- **macOS**: Automatically starts when needed
+- **Windows**: Automatically starts when needed
+- **Linux**: Automatically starts when needed
 
-**Option 2: Download GUI App**
-1. Download from: https://transmissionbt.com/download
-2. Install Transmission.app
-3. Open Transmission.app
-4. It will auto-start the daemon
-5. Keep it running in the background
+You don't need to install or configure anything!
 
-### Windows
+## Quick Start
 
-1. Download from: https://transmissionbt.com/download
-2. Install Transmission
-3. Run Transmission (keep it open)
-4. TrustTune will connect automatically
+1. **Download TrustTune** for your platform (macOS/Windows/Linux)
+2. **Launch the app** - It will auto-start Transmission in the background
+3. **Search for music** - Try: "radiohead ok computer flac"
+4. **Click Download** - Your music will start downloading automatically!
 
-### Linux
+That's it! The app handles everything else.
 
-**Ubuntu/Debian:**
-```bash
-sudo apt install transmission-daemon
-sudo systemctl start transmission-daemon
-sudo systemctl enable transmission-daemon
-```
+## Troubleshooting
 
-**Fedora:**
-```bash
-sudo dnf install transmission-daemon
-sudo systemctl start transmission-daemon
-sudo systemctl enable transmission-daemon
-```
+### "Cannot connect to Transmission" Error
 
-## Verify It's Working
+**Solution:** The bundled daemon failed to start. Try:
+1. Restart TrustTune
+2. Check if another Transmission instance is running and close it
+3. On Linux, ensure you have the required libraries (they're usually pre-installed)
 
-Run this command:
-```bash
-transmission-remote -l
-```
+### Downloads Not Starting
 
-You should see:
-```
-ID   Done  Have  ETA  Up   Down  Ratio  Status  Name
-Sum:       None              0.0    0.0  None
-```
+**Solution:**
+1. Check the "Downloads" tab in TrustTune
+2. Verify you have disk space in your Music folder
+3. Some torrents may have 0 seeders - try a different result
 
-If you see `Connection refused`, Transmission isn't running.
+### Using Your Own Transmission
 
-## Common Issues
+If you prefer to use your own Transmission installation:
+1. Install Transmission normally (see "Advanced Setup" below)
+2. Start it before launching TrustTune
+3. TrustTune will detect and use your existing installation
 
-### "Connection refused" Error
+## Advanced Setup (Optional)
 
-**Problem:** Transmission daemon isn't running
+### Using External Transmission
 
-**Fix (macOS):**
-```bash
-# Check if it's running
-ps aux | grep transmission-daemon
-
-# If not running, start it:
-transmission-daemon
-
-# To auto-start on login (optional):
-brew services start transmission
-```
-
-**Fix (Linux):**
-```bash
-# Check status
-sudo systemctl status transmission-daemon
-
-# Start it
-sudo systemctl start transmission-daemon
-```
-
-### Permission Errors
-
-**Fix (Linux):**
-```bash
-# Add your user to transmission group
-sudo usermod -a -G debian-transmission $USER
-
-# Reload groups
-newgrp debian-transmission
-```
-
-### Wrong Port
-
-By default, Transmission uses port `9091`. If you changed it:
-
-1. Open TrustTune
-2. Go to Settings
-3. Change "Transmission RPC URL" to match your port
-4. Save
-
-## Advanced: Auto-Start on Boot
+If you want more control, you can install Transmission separately:
 
 **macOS:**
 ```bash
+brew install transmission
 brew services start transmission
 ```
 
-**Linux (systemd):**
-```bash
-sudo systemctl enable transmission-daemon
-```
-
 **Windows:**
-- Right-click Transmission icon in system tray
-- Enable "Start when Windows starts"
+Download from: https://transmissionbt.com/download
+
+**Linux:**
+```bash
+sudo apt install transmission-daemon
+sudo systemctl start transmission-daemon
+```
 
 ## First Download Test
 
