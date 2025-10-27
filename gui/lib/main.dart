@@ -49,9 +49,29 @@ class AppColors {
   static const white = Color(0xFFFFFFFF);
 }
 
+// Simple service for managing favorites and ratings
+class FavoritesService extends ChangeNotifier {
+  final Map<String, bool> _favorites = {};
+  final Map<String, int> _ratings = {};
+
+  bool isFavorite(String songPath) => _favorites[songPath] ?? false;
+  int getRating(String songPath) => _ratings[songPath] ?? 0;
+
+  void toggleFavorite(String songPath) {
+    _favorites[songPath] = !(_favorites[songPath] ?? false);
+    notifyListeners();
+  }
+
+  void setRating(String songPath, int rating) {
+    _ratings[songPath] = rating;
+    notifyListeners();
+  }
+}
+
 // Global instances
 final appSettings = AppSettings();
 final daemonManager = DaemonManager();
+final favoritesService = FavoritesService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -6,7 +6,7 @@ import 'package:path/path.dart' as path;
 import '../models/song.dart';
 import '../models/album.dart';
 import '../services/transmission_client.dart';
-import '../main.dart';
+import '../main.dart'; // Already imports favoritesService
 
 class LibraryScreen extends StatefulWidget {
   final Function(Song song, {List<Song>? queue, bool? isShuffled}) onSongTap;
@@ -914,6 +914,44 @@ class _TrackListItemState extends State<_TrackListItem> with SingleTickerProvide
     );
   }
 
+  Widget _buildRatingDisplay() {
+    final songPath = widget.song.filePath;
+    final isFavorite = favoritesService.isFavorite(songPath);
+    final rating = favoritesService.getRating(songPath);
+
+    // Only show if song has been favorited or rated
+    if (!isFavorite && rating == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Heart icon (only if favorited)
+        if (isFavorite) ...[
+          Icon(
+            Icons.favorite,
+            color: Colors.red.withOpacity(0.8),
+            size: 14,
+          ),
+          const SizedBox(width: 4),
+        ],
+        // Stars (only if rated)
+        if (rating > 0)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(rating, (index) {
+              return Icon(
+                Icons.star,
+                color: const Color(0xFFFFC107),
+                size: 12,
+              );
+            }),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -978,6 +1016,10 @@ class _TrackListItemState extends State<_TrackListItem> with SingleTickerProvide
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Heart & Stars
+              _buildRatingDisplay(),
+              if (widget.song.duration != null || widget.isPlaying)
+                const SizedBox(width: 12),
               if (widget.song.duration != null) ...[
                 Text(
                   _formatDuration(widget.song.duration!),
