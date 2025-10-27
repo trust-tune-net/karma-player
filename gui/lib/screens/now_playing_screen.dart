@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../services/playback_service.dart';
 import '../main.dart';
 
@@ -17,79 +16,12 @@ class NowPlayingScreen extends StatefulWidget {
 }
 
 class _NowPlayingScreenState extends State<NowPlayingScreen> {
-  bool _showKeyboardShortcuts = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Set up keyboard listener
-    ServicesBinding.instance.keyboard.addHandler(_handleKeyEvent);
-  }
-
-  @override
-  void dispose() {
-    ServicesBinding.instance.keyboard.removeHandler(_handleKeyEvent);
-    super.dispose();
-  }
-
-  bool _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent) {
-      // Toggle shortcuts overlay with "?"
-      if (event.logicalKey == LogicalKeyboardKey.slash &&
-          HardwareKeyboard.instance.isShiftPressed) {
-        setState(() => _showKeyboardShortcuts = !_showKeyboardShortcuts);
-        return true;
-      }
-
-      // Space = play/pause
-      if (event.logicalKey == LogicalKeyboardKey.space) {
-        widget.playbackService.togglePlayPause();
-        return true;
-      }
-
-      // Left arrow = previous
-      if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-        widget.playbackService.playPrevious();
-        return true;
-      }
-
-      // Right arrow = next
-      if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-        widget.playbackService.playNext();
-        return true;
-      }
-
-      // S = shuffle
-      if (event.logicalKey == LogicalKeyboardKey.keyS) {
-        widget.playbackService.toggleShuffle();
-        return true;
-      }
-
-      // R = repeat
-      if (event.logicalKey == LogicalKeyboardKey.keyR) {
-        widget.playbackService.toggleRepeatMode();
-        return true;
-      }
-
-      // F = favorite (toggle for current song)
-      if (event.logicalKey == LogicalKeyboardKey.keyF) {
-        final song = widget.playbackService.currentSong;
-        if (song != null) {
-          favoritesService.toggleFavorite(song.filePath);
-          setState(() {}); // Rebuild to show updated favorite state
-        }
-        return true;
-      }
-    }
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.playbackService,
-      builder: (context, _) {
-        final song = widget.playbackService.currentSong;
+        listenable: widget.playbackService,
+        builder: (context, _) {
+          final song = widget.playbackService.currentSong;
         final isPlaying = widget.playbackService.isPlaying;
         final position = widget.playbackService.position;
         final duration = widget.playbackService.duration;
@@ -126,69 +58,60 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           );
         }
 
-        return Stack(
-          children: [
-            Scaffold(
-              appBar: AppBar(
-                title: Row(
-                  children: [
-                    const Text('Now Playing'),
-                    const Spacer(),
-                    // #7 Favorite & Rating - Top Bar (aligned)
-                    Builder(
-                      builder: (context) {
-                        final songKey = song.filePath;
-                        final isFavorite = favoritesService.isFavorite(songKey);
-                        final rating = favoritesService.getRating(songKey);
+        return Scaffold(
+          appBar: AppBar(
+            title: Row(
+              children: [
+                const Text('Now Playing'),
+                const Spacer(),
+                // #7 Favorite & Rating - Top Bar (aligned)
+                Builder(
+                  builder: (context) {
+                    final songKey = song.filePath;
+                    final isFavorite = favoritesService.isFavorite(songKey);
+                    final rating = favoritesService.getRating(songKey);
 
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Favorite heart button
-                            IconButton(
-                              icon: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : const Color(0xFF888888),
-                              ),
-                              iconSize: 22,
-                              onPressed: () {
-                                favoritesService.toggleFavorite(songKey);
-                                setState(() {}); // Rebuild
-                              },
-                              tooltip: 'Favorite (F)',
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Favorite heart button
+                        IconButton(
+                          icon: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                            color: isFavorite ? Colors.red : const Color(0xFF888888),
+                          ),
+                          iconSize: 22,
+                          onPressed: () {
+                            favoritesService.toggleFavorite(songKey);
+                            setState(() {}); // Rebuild
+                          },
+                          tooltip: 'Favorite',
+                        ),
+                        // Star rating (0-5)
+                        ...List.generate(5, (index) {
+                          return IconButton(
+                            icon: Icon(
+                              index < rating ? Icons.star : Icons.star_border,
+                              color: index < rating ? const Color(0xFFFFC107) : const Color(0xFF888888),
                             ),
-                            // Star rating (0-5)
-                            ...List.generate(5, (index) {
-                              return IconButton(
-                                icon: Icon(
-                                  index < rating ? Icons.star : Icons.star_border,
-                                  color: index < rating ? const Color(0xFFFFC107) : const Color(0xFF888888),
-                                ),
-                                iconSize: 18,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                onPressed: () {
-                                  favoritesService.setRating(songKey, index + 1);
-                                  setState(() {}); // Rebuild
-                                },
-                              );
-                            }),
-                            const SizedBox(width: 8),
-                            // Keyboard shortcuts help button
-                            IconButton(
-                              icon: const Icon(Icons.keyboard_outlined),
-                              tooltip: 'Keyboard Shortcuts (?)',
-                              onPressed: () => setState(() => _showKeyboardShortcuts = !_showKeyboardShortcuts),
-                            ),
-                          ],
-                        );
-                      }
-                    ),
-                  ],
+                            iconSize: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            onPressed: () {
+                              favoritesService.setRating(songKey, index + 1);
+                              setState(() {}); // Rebuild
+                            },
+                          );
+                        }),
+                      ],
+                    );
+                  }
                 ),
-                automaticallyImplyLeading: false,
-              ),
-              body: SafeArea(
+              ],
+            ),
+            automaticallyImplyLeading: false,
+          ),
+          body: SafeArea(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     return SingleChildScrollView(
@@ -389,16 +312,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   },
                 ),
               ),
-            ),
-
-            // #8 Keyboard Shortcuts Overlay
-            if (_showKeyboardShortcuts)
-              _KeyboardShortcutsOverlay(
-                onClose: () => setState(() => _showKeyboardShortcuts = false),
-              ),
-          ],
-        );
-      },
+          );
+        },
     );
   }
 
@@ -476,122 +391,6 @@ class _AudioQualityBadge extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-// #8 Keyboard Shortcuts Overlay
-class _KeyboardShortcutsOverlay extends StatelessWidget {
-  final VoidCallback onClose;
-
-  const _KeyboardShortcutsOverlay({required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onClose,
-      child: Container(
-        color: Colors.black.withOpacity(0.85),
-        child: Center(
-          child: Container(
-            width: 420,
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFA855F7).withOpacity(0.5),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.keyboard,
-                      color: Color(0xFFA855F7),
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Keyboard Shortcuts',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: onClose,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                _shortcutRow('Space', 'Play / Pause'),
-                _shortcutRow('←', 'Previous Track'),
-                _shortcutRow('→', 'Next Track'),
-                _shortcutRow('S', 'Toggle Shuffle'),
-                _shortcutRow('R', 'Cycle Repeat Mode'),
-                _shortcutRow('F', 'Toggle Favorite'),
-                _shortcutRow('?', 'Show/Hide This Menu'),
-                const SizedBox(height: 16),
-                const Text(
-                  'Click anywhere to close',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF888888),
-                    fontStyle: FontStyle.italic,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _shortcutRow(String key, String action) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A2A2E),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: const Color(0xFF444444),
-                width: 1,
-              ),
-            ),
-            child: Text(
-              key,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFA855F7),
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const SizedBox(width: 20),
-          Text(
-            action,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.white,
-            ),
-          ),
         ],
       ),
     );

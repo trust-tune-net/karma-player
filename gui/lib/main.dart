@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -346,12 +347,29 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         _soundwaveController.stop();
       }
     });
+
+    // Global keyboard handler for Space key
+    ServicesBinding.instance.keyboard.addHandler(_handleKeyEvent);
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    // Only handle Space key press when a song is loaded
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.space) {
+      if (_playbackService.currentSong != null) {
+        _playbackService.togglePlayPause();
+        return true; // Consume the event
+      }
+    }
+    return false; // Let other events through
   }
 
   @override
   void dispose() {
     // Unregister lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
+
+    // Remove keyboard handler
+    ServicesBinding.instance.keyboard.removeHandler(_handleKeyEvent);
 
     _soundwaveController.dispose();
     _playbackService.dispose();
