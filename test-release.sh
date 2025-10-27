@@ -1,54 +1,111 @@
 #!/bin/bash
-# Visual demo of the release script
+# Test release build locally - simulates what end users will get
+set -e
 
-# Colors
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-WHITE='\033[1;37m'
-RESET='\033[0m'
-
-echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║  ${WHITE}Testing Release Script - Full Demo${CYAN}                      ║${RESET}"
-echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
+echo "🧪 Testing Release Build (simulates user experience)"
 echo ""
 
-echo -e "${YELLOW}Running: ./release.sh${RESET}"
-echo ""
-echo -e "${GREEN}The script will:${RESET}"
-echo "  ✓ Check you're on main branch"
-echo "  ✓ Check working directory is clean"
-echo "  ✓ Show current version (v0.1.1-beta)"
-echo "  ✓ Offer version choices:"
-echo "      1) v0.1.2-beta (patch)"
-echo "      2) v0.2.0-beta (minor)"
-echo "      3) v1.0.0-beta (major)"
-echo "      4) Custom version"
-echo "  ✓ Ask for release notes"
-echo "  ✓ Show beautiful summary with colors & emojis"
-echo "  ✓ Confirm before pushing"
-echo "  ✓ Create and push tag"
-echo "  ✓ GitHub Actions auto-builds macOS/Windows/Linux"
-echo ""
+# Step 1: Clean previous builds
+echo "1️⃣ Cleaning previous builds..."
+cd gui
+flutter clean
+cd ..
 
-# Simulate the script with clean repo
-echo -e "${CYAN}════════════════════════════════════════════════════════════${RESET}"
-echo -e "${WHITE}Simulating with inputs:${RESET}"
-echo -e "  Version choice: ${GREEN}1${RESET} (v0.1.2-beta)"
-echo -e "  Release notes: ${YELLOW}Library refresh now updates top bar stats${RESET}"
-echo -e "  Confirm: ${GREEN}n${RESET} (dry run - don't actually release)"
-echo -e "${CYAN}════════════════════════════════════════════════════════════${RESET}"
+# Step 2: Bundle Transmission (like CI does)
 echo ""
-
-# Test if script exists and is executable
-if [ ! -x "./release.sh" ]; then
-    echo -e "${YELLOW}⚠️  release.sh not executable. Run: chmod +x release.sh${RESET}"
+echo "2️⃣ Bundling Transmission..."
+if ! command -v transmission-daemon &> /dev/null; then
+    echo "❌ transmission-daemon not found"
+    echo "Install with: brew install transmission"
     exit 1
 fi
 
-echo -e "${GREEN}✅ Script is ready to use!${RESET}"
+mkdir -p gui/macos/Runner/Resources/bin
+mkdir -p gui/macos/Runner/Resources/lib
+
+# Copy binary
+cp $(which transmission-daemon) gui/macos/Runner/Resources/bin/
+chmod +x gui/macos/Runner/Resources/bin/transmission-daemon
+
+# Copy libraries
+DYLIBS=$(otool -L $(which transmission-daemon) | grep -v '/usr/lib' | grep -v '/System' | awk '{print $1}' | tail -n +2)
+for dylib in $DYLIBS; do
+    if [ -f "$dylib" ]; then
+        cp "$dylib" gui/macos/Runner/Resources/lib/
+    fi
+done
+
+# Fix library paths (CRITICAL!) - use @loader_path (relative to binary location)
+chmod +w gui/macos/Runner/Resources/bin/transmission-daemon
+install_name_tool -change /opt/homebrew/opt/libevent/lib/libevent-2.1.7.dylib @loader_path/../lib/libevent-2.1.7.dylib gui/macos/Runner/Resources/bin/transmission-daemon 2>/dev/null || true
+install_name_tool -change /opt/homebrew/opt/miniupnpc/lib/libminiupnpc.21.dylib @loader_path/../lib/libminiupnpc.21.dylib gui/macos/Runner/Resources/bin/transmission-daemon 2>/dev/null || true
+
+# Re-sign binary after modifying it
+codesign --force --sign - gui/macos/Runner/Resources/bin/transmission-daemon
+
+echo "✅ Transmission bundled"
+
+# Step 3: Build release
 echo ""
-echo -e "${CYAN}To actually create a release, run:${RESET}"
-echo -e "${WHITE}  ./release.sh${RESET}"
+echo "3️⃣ Building Flutter release..."
+cd gui
+flutter pub get
+flutter build macos --release
+cd ..
+
+# Step 4: Copy binaries to built app (like CI does)
 echo ""
-echo -e "${CYAN}The script will interactively guide you through the process.${RESET}"
+echo "4️⃣ Copying binaries to app bundle..."
+APP_PATH="gui/build/macos/Build/Products/Release/trusttune_gui.app"
+
+mkdir -p "$APP_PATH/Contents/Resources/bin"
+mkdir -p "$APP_PATH/Contents/Resources/lib"
+
+cp gui/macos/Runner/Resources/bin/transmission-daemon "$APP_PATH/Contents/Resources/bin/"
+chmod +x "$APP_PATH/Contents/Resources/bin/transmission-daemon"
+
+cp -r gui/macos/Runner/Resources/lib/* "$APP_PATH/Contents/Resources/lib/"
+
+echo "✅ Binaries copied"
+
+# Step 5: Verify binary works
+echo ""
+echo "5️⃣ Testing bundled binary..."
+if "$APP_PATH/Contents/Resources/bin/transmission-daemon" --version &> /dev/null; then
+    echo "✅ Binary works!"
+else
+    echo "❌ Binary test failed!"
+    echo ""
+    echo "Debug info:"
+    otool -L "$APP_PATH/Contents/Resources/bin/transmission-daemon"
+    exit 1
+fi
+
+# Step 6: Kill any running transmission
+echo ""
+echo "6️⃣ Cleaning up old transmission processes..."
+pkill -9 transmission-daemon 2>/dev/null || true
+sleep 1
+
+# Success!
+echo ""
+echo "═══════════════════════════════════════════════"
+echo "✅ Release build ready for testing!"
+echo "═══════════════════════════════════════════════"
+echo ""
+echo "📍 App location:"
+echo "   $APP_PATH"
+echo ""
+echo "🧪 Test it now:"
+echo "   open '$APP_PATH'"
+echo ""
+echo "✅ What to test:"
+echo "   1. App opens without errors"
+echo "   2. Search for 'radiohead'"
+echo "   3. Click download"
+echo "   4. Check Downloads tab for progress"
+echo "   5. Verify transmission-daemon is running:"
+echo "      ps aux | grep transmission-daemon"
+echo ""
+echo "If everything works, this is what users will get! 🎉"
+echo ""
