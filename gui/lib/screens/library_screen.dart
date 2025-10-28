@@ -122,7 +122,8 @@ class LibraryScreenState extends State<LibraryScreen> {
     });
 
     try {
-      final homeDir = Platform.environment['HOME'];
+      // Get home directory (cross-platform: HOME on Unix, USERPROFILE on Windows)
+      final homeDir = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
       if (homeDir == null) {
         setState(() {
           _statusMessage = 'Could not find home directory';
@@ -132,7 +133,8 @@ class LibraryScreenState extends State<LibraryScreen> {
         return;
       }
 
-      final musicDir = Directory('$homeDir/Music');
+      // Use path.join for cross-platform path construction
+      final musicDir = Directory(path.join(homeDir, 'Music'));
       if (!await musicDir.exists()) {
         setState(() {
           _statusMessage = 'Music folder not found';
