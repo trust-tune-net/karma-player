@@ -57,25 +57,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _restartDaemon() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Restarting daemon...')),
-    );
+  Future<void> _toggleDaemon(bool enable) async {
+    if (enable) {
+      // Start daemon
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Starting daemon...')),
+      );
 
+      final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(started ? 'Daemon started successfully' : 'Failed to start daemon'),
+            backgroundColor: started ? Colors.green : Colors.red,
+          ),
+        );
+        _checkDaemonStatus();
+      }
+    } else {
+      // Stop daemon
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stopping daemon...')),
+      );
+
+      await daemonManager.stopDaemon();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Daemon stopped'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        _checkDaemonStatus();
+      }
+    }
+  }
+
+  Future<void> _restartDaemon() async {
     await daemonManager.stopDaemon();
     await Future.delayed(const Duration(seconds: 1));
-    final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(started ? 'Daemon restarted successfully' : 'Failed to restart daemon'),
-          backgroundColor: started ? Colors.green : Colors.red,
-        ),
-      );
-      _checkDaemonStatus();
-      _loadSettings(); // Reload to show updated directory
-    }
+    await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+    _checkDaemonStatus();
   }
 
   Future<void> _editSearchApiUrl() async {
@@ -227,28 +251,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _daemonRunning ? Icons.check_circle : Icons.error,
               color: _daemonRunning ? Colors.green : Colors.red,
             ),
-            title: const Text('Daemon Status'),
+            title: const Text('Daemon Control'),
             subtitle: Text(
               _isCheckingDaemon
                   ? 'Checking...'
                   : _daemonRunning
-                      ? 'Running'
-                      : 'Not running',
+                      ? 'Running on port 9091'
+                      : 'Stopped',
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _checkDaemonStatus,
-                  tooltip: 'Check status',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.restart_alt),
-                  onPressed: _restartDaemon,
-                  tooltip: 'Restart daemon',
-                ),
-              ],
+            trailing: Switch(
+              value: _daemonRunning,
+              onChanged: _isCheckingDaemon ? null : _toggleDaemon,
             ),
           ),
           ListTile(

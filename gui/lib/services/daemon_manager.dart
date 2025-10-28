@@ -275,12 +275,34 @@ class DaemonManager {
 
   /// Stop the transmission daemon
   Future<void> stopDaemon() async {
+    print('[Daemon] Stopping all transmission-daemon processes...');
+
+    // First, kill our managed process if it exists
     if (_daemonProcess != null) {
-      print('Stopping daemon (PID: ${_daemonProcess!.pid})');
+      print('[Daemon] Killing managed process (PID: ${_daemonProcess!.pid})');
       _daemonProcess!.kill();
       _daemonProcess = null;
       _isRunning = false;
     }
+
+    // Then kill any other transmission-daemon processes system-wide
+    // This handles cases where daemon was started externally or by previous app instance
+    try {
+      if (Platform.isWindows) {
+        // Windows: taskkill /F /IM transmission-daemon.exe
+        await Process.run('taskkill', ['/F', '/IM', 'transmission-daemon.exe']);
+        print('[Daemon] Killed all transmission-daemon.exe processes (Windows)');
+      } else {
+        // Unix/Linux/macOS: pkill -9 transmission-daemon
+        await Process.run('pkill', ['-9', 'transmission-daemon']);
+        print('[Daemon] Killed all transmission-daemon processes (Unix)');
+      }
+    } catch (e) {
+      print('[Daemon] Note: Error killing system-wide processes (may not exist): $e');
+    }
+
+    _isRunning = false;
+    print('[Daemon] ✅ Daemon stopped');
   }
 
   /// Ensure daemon is running
