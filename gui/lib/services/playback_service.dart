@@ -5,8 +5,10 @@ import '../models/song.dart';
 enum RepeatMode { off, all, one }
 
 class PlaybackService extends ChangeNotifier {
-  // MediaKit player instance
-  final Player _player = Player();
+  // MediaKit player instance (nullable for graceful degradation on unsupported systems)
+  Player? _player;
+  bool _playerInitialized = false;
+  String? _playerError;
 
   // Playback state
   Song? _currentSong;
@@ -25,7 +27,9 @@ class PlaybackService extends ChangeNotifier {
   bool _isShuffle = false;
 
   // Getters
-  Player get player => _player;
+  Player? get player => _player;
+  bool get isPlayerInitialized => _playerInitialized;
+  String? get playerError => _playerError;
   Song? get currentSong => _currentSong;
   bool get isPlaying => _isPlaying;
   Duration get position => _position;
@@ -41,35 +45,50 @@ class PlaybackService extends ChangeNotifier {
   }
 
   void _initializePlayer() {
-    // Listen to playback state changes
-    _player.stream.playing.listen((playing) {
-      _isPlaying = playing;
-      notifyListeners();
-    });
+    try {
+      print('[PLAYBACK] Initializing MediaKit Player...');
+      _player = Player();
 
-    _player.stream.position.listen((position) {
-      _position = position;
-      notifyListeners();
-    });
+      // Listen to playback state changes
+      _player!.stream.playing.listen((playing) {
+        _isPlaying = playing;
+        notifyListeners();
+      });
 
-    _player.stream.duration.listen((duration) {
-      _duration = duration;
-      notifyListeners();
-    });
+      _player!.stream.position.listen((position) {
+        _position = position;
+        notifyListeners();
+      });
 
-    _player.stream.completed.listen((completed) {
-      if (completed) {
-        _onSongCompleted();
-      }
-    });
+      _player!.stream.duration.listen((duration) {
+        _duration = duration;
+        notifyListeners();
+      });
 
-    _player.setVolume(_volume * 100);
+      _player!.stream.completed.listen((completed) {
+        if (completed) {
+          _onSongCompleted();
+        }
+      });
+
+      _player!.setVolume(_volume * 100);
+      _playerInitialized = true;
+      print('[PLAYBACK] ✅ Player initialized successfully');
+    } catch (e, stackTrace) {
+      _playerError = 'Failed to initialize audio player: $e';
+      _playerInitialized = false;
+      print('[PLAYBACK] ❌ Player initialization failed: $e');
+      print('[PLAYBACK] Stack trace: $stackTrace');
+      print('[PLAYBACK] App will continue without audio playback');
+    }
   }
 
   void _onSongCompleted() {
+    if (!_playerInitialized || _player == null) return;
+
     if (_repeatMode == RepeatMode.one && _currentSong != null) {
-      _player.seek(Duration.zero);
-      _player.play();
+      _player!.seek(Duration.zero);
+      _player!.play();
       return;
     }
 
@@ -127,22 +146,35 @@ class PlaybackService extends ChangeNotifier {
       }
     }
 
-    _player.open(Media(song.filePath));
-    _player.play();
+    if (_playerInitialized && _player != null) {
+      _player!.open(Media(song.filePath));
+      _player!.play();
+    } else {
+      print('[PLAYBACK] Cannot play song: Player not initialized');
+    }
     notifyListeners();
   }
 
   void togglePlayPause() {
+    if (!_playerInitialized || _player == null) {
+      print('[PLAYBACK] Cannot toggle play/pause: Player not initialized');
+      return;
+    }
+
     if (_isPlaying) {
-      _player.pause();
+      _player!.pause();
     } else {
-      _player.play();
+      _player!.play();
     }
     notifyListeners();
   }
 
   void playNext() {
     if (_queue.isEmpty) return;
+    if (!_playerInitialized || _player == null) {
+      print('[PLAYBACK] Cannot play next: Player not initialized');
+      return;
+    }
 
     // If at end of queue
     if (_currentIndex >= _queue.length - 1) {
@@ -153,8 +185,8 @@ class PlaybackService extends ChangeNotifier {
         _queue = shuffled;
         _currentIndex = 0;
         _currentSong = _queue[0];
-        _player.open(Media(_queue[0].filePath));
-        _player.play();
+        _player!.open(Media(_queue[0].filePath));
+        _player!.play();
         notifyListeners();
         print('[PLAYBACK] Re-shuffled at end of queue');
         return;
@@ -176,9 +208,14 @@ class PlaybackService extends ChangeNotifier {
   }
 
   void playPrevious() {
+    if (!_playerInitialized || _player == null) {
+      print('[PLAYBACK] Cannot play previous: Player not initialized');
+      return;
+    }
+
     // If more than 3 seconds into song, restart it
     if (_position.inSeconds > 3) {
-      _player.seek(Duration.zero);
+      _player!.seek(Duration.zero);
       return;
     }
 
@@ -190,22 +227,32 @@ class PlaybackService extends ChangeNotifier {
 
   void playAtIndex(int index) {
     if (index < 0 || index >= _queue.length) return;
+    if (!_playerInitialized || _player == null) {
+      print('[PLAYBACK] Cannot play at index: Player not initialized');
+      return;
+    }
 
     _currentIndex = index;
     _currentSong = _queue[index];
-    _player.open(Media(_queue[index].filePath));
-    _player.play();
+    _player!.open(Media(_queue[index].filePath));
+    _player!.play();
     notifyListeners();
   }
 
   void seek(Duration position) {
-    _player.seek(position);
+    if (!_playerInitialized || _player == null) {
+      print('[PLAYBACK] Cannot seek: Player not initialized');
+      return;
+    }
+    _player!.seek(position);
     notifyListeners();
   }
 
   void setVolume(double volume) {
     _volume = volume.clamp(0.0, 1.0);
-    _player.setVolume(_volume * 100);
+    if (_playerInitialized && _player != null) {
+      _player!.setVolume(_volume * 100);
+    }
     notifyListeners();
   }
 
@@ -272,7 +319,7 @@ class PlaybackService extends ChangeNotifier {
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 }

@@ -63,8 +63,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
   void initState() {
     super.initState();
     _transmissionClient = TransmissionClient(baseUrl: appSettings.transmissionRpcUrl);
-    _loadDownloads();
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
+
+    // Delay first load to give daemon time to start (avoid race condition)
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _loadDownloads();
+        // Start polling after first successful attempt
+        _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
+      }
+    });
   }
 
   @override

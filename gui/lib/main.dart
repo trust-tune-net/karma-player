@@ -76,7 +76,16 @@ final favoritesService = FavoritesService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
+
+  // Initialize MediaKit with error handling (may fail on some Windows systems)
+  try {
+    MediaKit.ensureInitialized();
+    print('[STARTUP] ✅ MediaKit initialized');
+  } catch (e, stackTrace) {
+    print('[STARTUP] ⚠️  MediaKit initialization failed: $e');
+    print('[STARTUP] Audio playback may not work');
+    print('[STARTUP] Stack trace: $stackTrace');
+  }
 
   print('═══════════════════════════════════════════════');
   print('🎵 TrustTune Starting Up');
@@ -416,7 +425,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     // Stop player when app is being terminated or going to background
     // This ensures MPV shuts down cleanly before the app process is killed
     if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
-      _playbackService.player.pause();
+      _playbackService.player?.pause();
     }
   }
 

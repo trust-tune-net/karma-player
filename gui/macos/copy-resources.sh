@@ -11,6 +11,11 @@ RESOURCES_DEST="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources"
 
 if [ -d "$RESOURCES_SRC/bin" ]; then
     echo "  Copying bin/..."
+    # Remove existing bin directory if it exists (to avoid permission issues)
+    if [ -d "$RESOURCES_DEST/bin" ]; then
+        chmod -R u+w "$RESOURCES_DEST/bin" 2>/dev/null || true
+        rm -rf "$RESOURCES_DEST/bin"
+    fi
     mkdir -p "$RESOURCES_DEST/bin"
     cp -r "$RESOURCES_SRC/bin/"* "$RESOURCES_DEST/bin/"
     chmod +x "$RESOURCES_DEST/bin/"*
@@ -31,6 +36,11 @@ fi
 
 if [ -d "$RESOURCES_SRC/lib" ]; then
     echo "  Copying lib/..."
+    # Remove existing lib directory if it exists (to avoid permission issues)
+    if [ -d "$RESOURCES_DEST/lib" ]; then
+        chmod -R u+w "$RESOURCES_DEST/lib" 2>/dev/null || true
+        rm -rf "$RESOURCES_DEST/lib"
+    fi
     mkdir -p "$RESOURCES_DEST/lib"
     cp -r "$RESOURCES_SRC/lib/"* "$RESOURCES_DEST/lib/"
 
