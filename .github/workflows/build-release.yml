@@ -69,10 +69,24 @@ jobs:
           if [ -f gui/macos/Runner/Resources/bin/transmission-daemon ]; then
             cp gui/macos/Runner/Resources/bin/transmission-daemon "$APP_PATH/Contents/Resources/bin/"
             chmod +x "$APP_PATH/Contents/Resources/bin/transmission-daemon"
+
+            # Fix library paths to use @loader_path (relative to binary, not main app)
+            echo "🔧 Fixing library paths..."
+            install_name_tool -change @executable_path/../Resources/lib/libevent-2.1.7.dylib @loader_path/../lib/libevent-2.1.7.dylib "$APP_PATH/Contents/Resources/bin/transmission-daemon" 2>/dev/null || true
+            install_name_tool -change @executable_path/../Resources/lib/libminiupnpc.21.dylib @loader_path/../lib/libminiupnpc.21.dylib "$APP_PATH/Contents/Resources/bin/transmission-daemon" 2>/dev/null || true
+
+            # Re-sign after modifying
+            echo "🔏 Signing binary..."
+            codesign --force --sign - "$APP_PATH/Contents/Resources/bin/transmission-daemon"
           fi
 
           if [ -d gui/macos/Runner/Resources/lib ]; then
             cp -r gui/macos/Runner/Resources/lib/* "$APP_PATH/Contents/Resources/lib/" || true
+
+            # Sign dylibs
+            for dylib in "$APP_PATH/Contents/Resources/lib/"*.dylib; do
+              [ -f "$dylib" ] && codesign --force --sign - "$dylib" 2>/dev/null || true
+            done
           fi
 
           # Verify binary works
