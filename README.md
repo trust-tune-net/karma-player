@@ -20,9 +20,8 @@
 
 ### 🎬 See It In Action
 
-<!-- TODO: Add GUI demo GIF here -->
 <p align="center">
-  <i>Coming soon: Animated demo of TrustTune GUI</i>
+  <img src="demo-gui.gif" alt="TrustTune Demo" width="800">
 </p>
 
 </div>
