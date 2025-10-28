@@ -88,8 +88,15 @@ class DaemonManager {
   /// Check if daemon is already running
   Future<bool> isDaemonRunning() async {
     try {
-      final result = await Process.run('pgrep', ['-x', 'transmission-daemon']);
-      return result.exitCode == 0;
+      if (Platform.isWindows) {
+        // Windows: use tasklist to check for running process
+        final result = await Process.run('tasklist', ['/FI', 'IMAGENAME eq transmission-daemon.exe', '/NH']);
+        return result.exitCode == 0 && result.stdout.toString().contains('transmission-daemon.exe');
+      } else {
+        // Unix/Linux/macOS: use pgrep
+        final result = await Process.run('pgrep', ['-x', 'transmission-daemon']);
+        return result.exitCode == 0;
+      }
     } catch (e) {
       return false;
     }

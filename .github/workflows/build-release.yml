@@ -129,46 +129,68 @@ jobs:
           echo "📥 Downloading Transmission..."
           curl -L -o transmission.msi "$DOWNLOAD_URL"
 
-          # Install MSI to extract files
-          echo "📦 Installing Transmission..."
-          # Start msiexec in background and wait for it with timeout
-          msiexec /i transmission.msi /qn /norestart /l*v install.log &
-          MSIEXEC_PID=$!
+          if [ ! -f transmission.msi ]; then
+            echo "❌ Failed to download transmission.msi"
+            exit 1
+          fi
 
-          # Wait up to 5 minutes (300 seconds) for installation
-          TIMEOUT=300
-          ELAPSED=0
-          while kill -0 $MSIEXEC_PID 2>/dev/null; do
-            if [ $ELAPSED -ge $TIMEOUT ]; then
-              echo "⚠️  Installation timeout after ${TIMEOUT}s, killing process..."
-              kill -9 $MSIEXEC_PID || true
+          echo "✅ Downloaded $(ls -lh transmission.msi)"
+
+          # Install MSI to extract files
+          echo "📦 Installing Transmission MSI..."
+          # Run msiexec synchronously with proper wait
+          msiexec.exe //i transmission.msi //qn //norestart //l*v install.log
+
+          echo "⏳ Waiting for installation to complete..."
+          sleep 10
+
+          # Check multiple possible installation directories
+          INSTALL_DIRS=(
+            "/c/Program Files/Transmission"
+            "/c/Program Files (x86)/Transmission"
+            "$PROGRAMFILES/Transmission"
+          )
+
+          INSTALL_DIR=""
+          for dir in "${INSTALL_DIRS[@]}"; do
+            if [ -d "$dir" ]; then
+              INSTALL_DIR="$dir"
+              echo "✅ Found Transmission at: $INSTALL_DIR"
               break
             fi
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-            echo "⏳ Installation in progress... ${ELAPSED}s"
           done
 
-          # Extra wait for filesystem sync
-          sleep 5
-
-          # Find installation directory (default: C:\Program Files\Transmission)
-          INSTALL_DIR="/c/Program Files/Transmission"
-
-          if [ -d "$INSTALL_DIR" ]; then
-            echo "✅ Found Transmission at: $INSTALL_DIR"
-
-            # Copy daemon and required DLLs
-            mkdir -p gui/windows-binaries
-            cp "$INSTALL_DIR/transmission-daemon.exe" gui/windows-binaries/ || echo "⚠️  daemon not found"
-            cp "$INSTALL_DIR"/*.dll gui/windows-binaries/ || true
-
-            echo "✅ Transmission binaries copied"
-          else
-            echo "⚠️  Transmission installation not found at $INSTALL_DIR"
+          if [ -z "$INSTALL_DIR" ]; then
+            echo "❌ Transmission installation not found"
+            echo "📋 Checked directories:"
+            for dir in "${INSTALL_DIRS[@]}"; do
+              echo "   - $dir ($([ -d "$dir" ] && echo "exists" || echo "not found"))"
+            done
             echo "📋 Install log:"
-            cat install.log || true
+            cat install.log 2>/dev/null || echo "No install log found"
+            exit 1
           fi
+
+          # List what's in the install directory
+          echo "📂 Contents of $INSTALL_DIR:"
+          ls -la "$INSTALL_DIR"
+
+          # Copy daemon and required DLLs
+          mkdir -p gui/windows-binaries
+
+          if [ -f "$INSTALL_DIR/transmission-daemon.exe" ]; then
+            cp "$INSTALL_DIR/transmission-daemon.exe" gui/windows-binaries/
+            echo "✅ Copied transmission-daemon.exe"
+          else
+            echo "❌ transmission-daemon.exe not found in $INSTALL_DIR"
+            exit 1
+          fi
+
+          # Copy all DLLs
+          cp "$INSTALL_DIR"/*.dll gui/windows-binaries/ 2>/dev/null || echo "⚠️  No DLLs found"
+
+          echo "📦 Bundled files:"
+          ls -la gui/windows-binaries/
 
       - name: Install dependencies
         run: |
@@ -185,12 +207,26 @@ jobs:
         run: |
           BUILD_DIR="gui/build/windows/x64/runner/Release"
 
+          echo "📂 Build directory: $BUILD_DIR"
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "❌ Build directory not found!"
+            exit 1
+          fi
+
+          echo "📦 Pre-bundle contents:"
+          ls -la "$BUILD_DIR"
+
           # Copy Transmission binaries to app directory
           if [ -d "gui/windows-binaries" ]; then
-            cp gui/windows-binaries/* "$BUILD_DIR/" || true
+            echo "📥 Copying transmission binaries..."
+            cp -v gui/windows-binaries/* "$BUILD_DIR/"
             echo "✅ Transmission bundled with Windows app"
+
+            echo "📦 Post-bundle contents:"
+            ls -la "$BUILD_DIR" | grep transmission
           else
-            echo "⚠️  No bundled binaries found"
+            echo "❌ No bundled binaries found at gui/windows-binaries"
+            exit 1
           fi
 
       - name: Create ZIP
