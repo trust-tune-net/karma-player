@@ -195,8 +195,9 @@ jobs:
 
       - name: Create ZIP
         run: |
-          cd gui
-          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath TrustTune-Windows.zip
+          cd gui/build/windows/x64/runner
+          Compress-Archive -Path Release -DestinationPath TrustTune-Windows.zip
+          Move-Item TrustTune-Windows.zip ../../../../TrustTune-Windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

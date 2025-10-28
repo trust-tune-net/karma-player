@@ -118,6 +118,7 @@ class KarmaPlayerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Karma Player',
+      restorationScopeId: 'app',
       theme: ThemeData(
         colorScheme: ColorScheme.dark(
           primary: const Color(0xFFA855F7), // Vibrant purple
