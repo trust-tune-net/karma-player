@@ -151,17 +151,17 @@ jobs:
           find "$EXTRACT_DIR" -type f \( -name "*.exe" -o -name "*.dll" \) | head -20
 
           # Find the binaries in extracted directory
-          # MSI typically extracts to PFiles/Transmission or similar structure
-          DAEMON_PATH=$(find "$EXTRACT_DIR" -name "transmission-daemon.exe" -type f | head -1)
+          # Windows MSI uses underscore (transmission_daemon.exe), but we need hyphen for consistency
+          DAEMON_PATH=$(find "$EXTRACT_DIR" -name "transmission_daemon.exe" -type f | head -1)
 
           if [ -z "$DAEMON_PATH" ]; then
-            echo "❌ transmission-daemon.exe not found in extracted files"
-            echo "📋 Extract log:"
-            cat extract.log 2>/dev/null || echo "No extract log found"
+            echo "❌ transmission_daemon.exe not found in extracted files"
+            echo "📋 Searching for all executables:"
+            find "$EXTRACT_DIR" -name "*.exe" -type f
             exit 1
           fi
 
-          echo "✅ Found transmission-daemon.exe at: $DAEMON_PATH"
+          echo "✅ Found transmission_daemon.exe at: $DAEMON_PATH"
           DAEMON_DIR=$(dirname "$DAEMON_PATH")
 
           # List what's in the directory
@@ -171,7 +171,10 @@ jobs:
           # Copy daemon and required DLLs
           mkdir -p gui/windows-binaries
           cp "$DAEMON_PATH" gui/windows-binaries/
-          echo "✅ Copied transmission-daemon.exe"
+
+          # Rename from underscore to hyphen (transmission_daemon.exe -> transmission-daemon.exe)
+          mv gui/windows-binaries/transmission_daemon.exe gui/windows-binaries/transmission-daemon.exe
+          echo "✅ Copied and renamed to transmission-daemon.exe"
 
           # Copy all DLLs from same directory
           cp "$DAEMON_DIR"/*.dll gui/windows-binaries/ 2>/dev/null || echo "⚠️  No DLLs in daemon directory"
