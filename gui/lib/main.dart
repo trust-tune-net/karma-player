@@ -373,11 +373,14 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.space) {
       // Don't intercept Space key if user is typing in a text field
       final focusNode = FocusManager.instance.primaryFocus;
+
       if (focusNode != null && focusNode.context != null) {
-        final widget = focusNode.context!.widget;
-        // Check if the focused widget is a text input (TextField, TextFormField, etc.)
-        if (widget is EditableText || widget.runtimeType.toString().contains('TextField')) {
-          return false; // Let the text field handle the space key
+        // Check if there's an EditableText widget in the focus tree
+        final editableText = focusNode.context!.findAncestorWidgetOfExactType<EditableText>();
+
+        if (editableText != null) {
+          // We're in a text field - let it handle the space
+          return false;
         }
       }
 
