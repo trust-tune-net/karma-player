@@ -43,6 +43,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _daemonRunning = isRunning;
       _isCheckingDaemon = false;
     });
+
+    // If daemon is not running on first check, retry after a delay
+    // This handles the race condition where the app is starting and daemon is still initializing
+    if (!isRunning && mounted) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted) {
+        final isRunningRetry = await daemonManager.isDaemonRunning();
+        setState(() {
+          _daemonRunning = isRunningRetry;
+        });
+      }
+    }
   }
 
   Future<void> _restartDaemon() async {
