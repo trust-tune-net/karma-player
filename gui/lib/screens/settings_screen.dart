@@ -262,6 +262,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: Switch(
               value: _daemonRunning,
               onChanged: _isCheckingDaemon ? null : _toggleDaemon,
+              activeColor: Colors.green,
+              inactiveThumbColor: Colors.grey[400],
+              inactiveTrackColor: Colors.grey[800],
+              trackOutlineColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                return null; // No outline
+              }),
             ),
           ),
           ListTile(
