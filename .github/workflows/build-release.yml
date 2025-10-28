@@ -139,7 +139,7 @@ jobs:
           # Install MSI to extract files
           echo "📦 Installing Transmission MSI..."
           # Run msiexec synchronously with proper wait
-          msiexec.exe //i transmission.msi //qn //norestart //l*v install.log
+          msiexec.exe /i transmission.msi /qn /norestart /l*v install.log
 
           echo "⏳ Waiting for installation to complete..."
           sleep 10
