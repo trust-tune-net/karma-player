@@ -144,20 +144,27 @@ class DaemonManager {
 
       // Start transmission-daemon
       print('[Daemon] Starting process...');
-      _daemonProcess = await Process.start(
-        daemonPath,
-        [
-          '--config-dir',
-          config,
-          '--download-dir',
-          download,
-          '--port',
-          '9091',
-          '--log-level',
-          'info',
-          '--no-auth', // Disable authentication for localhost
-        ],
-      );
+
+      // Build arguments list
+      final args = [
+        '--config-dir',
+        config,
+        '--download-dir',
+        download,
+        '--port',
+        '9091',
+        '--log-level',
+        'info',
+        '--no-auth', // Disable authentication for localhost
+      ];
+
+      // On Windows, add --foreground flag to prevent daemonization (which fails on Windows)
+      if (Platform.isWindows) {
+        args.add('--foreground');
+        print('[Daemon] Running in foreground mode (Windows)');
+      }
+
+      _daemonProcess = await Process.start(daemonPath, args);
 
       print('[Daemon] Process started with PID: ${_daemonProcess!.pid}');
 
@@ -180,11 +187,18 @@ class DaemonManager {
 
         // Listen for process exit
         _daemonProcess!.exitCode.then((code) {
-          // Exit code 0 is normal - daemon forks to background
           if (code == 0) {
-            print('[Daemon] ℹ️ Process forked to background (exit code 0)');
+            // On Unix, exit code 0 means daemon forked to background successfully
+            // On Windows with --foreground, this shouldn't happen (daemon stays running)
+            if (Platform.isWindows) {
+              print('[Daemon] ⚠️ Daemon exited unexpectedly with code 0');
+              _isRunning = false;
+              _daemonProcess = null;
+            } else {
+              print('[Daemon] ℹ️ Process forked to background (exit code 0)');
+            }
           } else {
-            print('[Daemon] ⚠️ Process exited with code: $code');
+            print('[Daemon] ❌ Process exited with error code: $code');
             _isRunning = false;
             _daemonProcess = null;
           }
