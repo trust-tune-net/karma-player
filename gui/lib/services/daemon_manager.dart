@@ -7,6 +7,8 @@ import 'package:path/path.dart' as path;
 class DaemonManager {
   Process? _daemonProcess;
   bool _isRunning = false;
+  bool _isRetrying = false;
+  DateTime? _lastStartAttempt;
 
   /// Get the path to the bundled transmission-daemon binary
   String get daemonPath {
@@ -116,6 +118,9 @@ class DaemonManager {
       return true;
     }
 
+    // Track start time for auto-retry logic on Windows
+    _lastStartAttempt = DateTime.now();
+
     try {
       // Ensure directories exist
       final config = configDir;
@@ -186,7 +191,7 @@ class DaemonManager {
         print('[Daemon] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
         // Listen for process exit
-        _daemonProcess!.exitCode.then((code) {
+        _daemonProcess!.exitCode.then((code) async {
           if (code == 0) {
             // On Unix, exit code 0 means daemon forked to background successfully
             // On Windows with --foreground, this shouldn't happen (daemon stays running)
@@ -194,6 +199,18 @@ class DaemonManager {
               print('[Daemon] ⚠️ Daemon exited unexpectedly with code 0');
               _isRunning = false;
               _daemonProcess = null;
+
+              // Auto-retry once if this was the first attempt (handles UAC prompt scenario)
+              if (!_isRetrying && _lastStartAttempt != null) {
+                final timeSinceStart = DateTime.now().difference(_lastStartAttempt!);
+                if (timeSinceStart.inSeconds < 10) {
+                  print('[Daemon] 🔄 Auto-retrying startup (UAC prompt may have interrupted)...');
+                  _isRetrying = true;
+                  await Future.delayed(const Duration(seconds: 2));
+                  await startDaemon();
+                  _isRetrying = false;
+                }
+              }
             } else {
               print('[Daemon] ℹ️ Process forked to background (exit code 0)');
             }
@@ -201,6 +218,18 @@ class DaemonManager {
             print('[Daemon] ❌ Process exited with error code: $code');
             _isRunning = false;
             _daemonProcess = null;
+
+            // Auto-retry once on Windows if early exit (handles UAC prompt scenario)
+            if (Platform.isWindows && !_isRetrying && _lastStartAttempt != null) {
+              final timeSinceStart = DateTime.now().difference(_lastStartAttempt!);
+              if (timeSinceStart.inSeconds < 10) {
+                print('[Daemon] 🔄 Auto-retrying startup (UAC prompt may have interrupted)...');
+                _isRetrying = true;
+                await Future.delayed(const Duration(seconds: 2));
+                await startDaemon();
+                _isRetrying = false;
+              }
+            }
           }
         });
 
