@@ -131,10 +131,26 @@ jobs:
 
           # Install MSI to extract files
           echo "📦 Installing Transmission..."
-          msiexec /i transmission.msi /qn /norestart
+          # Start msiexec in background and wait for it with timeout
+          msiexec /i transmission.msi /qn /norestart /l*v install.log &
+          MSIEXEC_PID=$!
 
-          # Wait for installation
-          sleep 10
+          # Wait up to 5 minutes (300 seconds) for installation
+          TIMEOUT=300
+          ELAPSED=0
+          while kill -0 $MSIEXEC_PID 2>/dev/null; do
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "⚠️  Installation timeout after ${TIMEOUT}s, killing process..."
+              kill -9 $MSIEXEC_PID || true
+              break
+            fi
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+            echo "⏳ Installation in progress... ${ELAPSED}s"
+          done
+
+          # Extra wait for filesystem sync
+          sleep 5
 
           # Find installation directory (default: C:\Program Files\Transmission)
           INSTALL_DIR="/c/Program Files/Transmission"
@@ -149,7 +165,9 @@ jobs:
 
             echo "✅ Transmission binaries copied"
           else
-            echo "⚠️  Transmission installation not found, will use system-installed version"
+            echo "⚠️  Transmission installation not found at $INSTALL_DIR"
+            echo "📋 Install log:"
+            cat install.log || true
           fi
 
       - name: Install dependencies
