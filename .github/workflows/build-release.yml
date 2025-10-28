@@ -136,58 +136,49 @@ jobs:
 
           echo "✅ Downloaded $(ls -lh transmission.msi)"
 
-          # Install MSI to extract files
-          echo "📦 Installing Transmission MSI..."
-          # Run msiexec synchronously with proper wait
-          msiexec.exe /i transmission.msi /qn /norestart /l*v install.log
+          # Extract MSI files using administrative install (doesn't actually install)
+          echo "📦 Extracting Transmission MSI..."
+          EXTRACT_DIR="$(pwd)/transmission-extracted"
+          mkdir -p "$EXTRACT_DIR"
 
-          echo "⏳ Waiting for installation to complete..."
-          sleep 10
+          # Use /a for administrative install (extracts without installing)
+          msiexec.exe /a transmission.msi /qn TARGETDIR="$EXTRACT_DIR" /l*v extract.log
 
-          # Check multiple possible installation directories
-          INSTALL_DIRS=(
-            "/c/Program Files/Transmission"
-            "/c/Program Files (x86)/Transmission"
-            "$PROGRAMFILES/Transmission"
-          )
+          echo "✅ MSI extraction complete"
 
-          INSTALL_DIR=""
-          for dir in "${INSTALL_DIRS[@]}"; do
-            if [ -d "$dir" ]; then
-              INSTALL_DIR="$dir"
-              echo "✅ Found Transmission at: $INSTALL_DIR"
-              break
-            fi
-          done
+          # Show what was extracted
+          echo "📂 Extracted contents:"
+          find "$EXTRACT_DIR" -type f -name "*.exe" -o -name "*.dll" | head -20
 
-          if [ -z "$INSTALL_DIR" ]; then
-            echo "❌ Transmission installation not found"
-            echo "📋 Checked directories:"
-            for dir in "${INSTALL_DIRS[@]}"; do
-              echo "   - $dir ($([ -d "$dir" ] && echo "exists" || echo "not found"))"
-            done
-            echo "📋 Install log:"
-            cat install.log 2>/dev/null || echo "No install log found"
+          # Find the binaries in extracted directory
+          # MSI typically extracts to PFiles/Transmission or similar structure
+          DAEMON_PATH=$(find "$EXTRACT_DIR" -name "transmission-daemon.exe" -type f | head -1)
+
+          if [ -z "$DAEMON_PATH" ]; then
+            echo "❌ transmission-daemon.exe not found in extracted files"
+            echo "📋 Extract log:"
+            cat extract.log 2>/dev/null || echo "No extract log found"
             exit 1
           fi
 
-          # List what's in the install directory
-          echo "📂 Contents of $INSTALL_DIR:"
-          ls -la "$INSTALL_DIR"
+          echo "✅ Found transmission-daemon.exe at: $DAEMON_PATH"
+          DAEMON_DIR=$(dirname "$DAEMON_PATH")
+
+          # List what's in the directory
+          echo "📂 Contents of daemon directory:"
+          ls -la "$DAEMON_DIR"
 
           # Copy daemon and required DLLs
           mkdir -p gui/windows-binaries
+          cp "$DAEMON_PATH" gui/windows-binaries/
+          echo "✅ Copied transmission-daemon.exe"
 
-          if [ -f "$INSTALL_DIR/transmission-daemon.exe" ]; then
-            cp "$INSTALL_DIR/transmission-daemon.exe" gui/windows-binaries/
-            echo "✅ Copied transmission-daemon.exe"
-          else
-            echo "❌ transmission-daemon.exe not found in $INSTALL_DIR"
-            exit 1
-          fi
+          # Copy all DLLs from same directory
+          cp "$DAEMON_DIR"/*.dll gui/windows-binaries/ 2>/dev/null || echo "⚠️  No DLLs in daemon directory"
 
-          # Copy all DLLs
-          cp "$INSTALL_DIR"/*.dll gui/windows-binaries/ 2>/dev/null || echo "⚠️  No DLLs found"
+          # Also check for DLLs in parent directories
+          PARENT_DIR=$(dirname "$DAEMON_DIR")
+          cp "$PARENT_DIR"/*.dll gui/windows-binaries/ 2>/dev/null || true
 
           echo "📦 Bundled files:"
           ls -la gui/windows-binaries/
