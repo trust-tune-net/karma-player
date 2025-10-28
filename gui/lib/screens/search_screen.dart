@@ -236,13 +236,31 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       // Add torrent to transmission
       final torrentId = await transmissionClient.addTorrent(magnetLink: magnetLink);
 
+      // Check torrent status
+      final torrent = await transmissionClient.getTorrent(torrentId);
+      final percentDone = torrent?.percentDone ?? 0.0;
+
+      String message;
+      Color backgroundColor;
+
+      if (percentDone >= 1.0) {
+        message = 'Already downloaded: $title';
+        backgroundColor = Colors.blue;
+      } else if (percentDone > 0) {
+        message = 'Download in progress (${(percentDone * 100).toStringAsFixed(0)}%): $title';
+        backgroundColor = Colors.orange;
+      } else {
+        message = 'Download started: $title';
+        backgroundColor = Colors.green;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Download started: $title'),
-          backgroundColor: Colors.green,
+          content: Text(message),
+          backgroundColor: backgroundColor,
         ),
       );
-      print('Torrent ID: $torrentId');
+      print('Torrent ID: $torrentId - ${(percentDone * 100).toStringAsFixed(1)}% complete');
     } catch (e) {
       // Check if it's a connection error (Transmission not running)
       final errorStr = e.toString();

@@ -80,15 +80,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
       print('[Downloads] Got ${torrents.length} torrents from transmission');
 
       for (var t in torrents) {
-        print('[Downloads]   - [${t.id}] ${t.name} (${(t.percentDone * 100).toStringAsFixed(1)}%)');
+        print('[Downloads]   - [${t.id}] ${t.name} (${(t.percentDone * 100).toStringAsFixed(1)}%) status=${t.status}');
       }
 
       if (mounted) {
         setState(() {
-          // Filter: only show active downloads (not completed/stopped)
-          final activeTorrents = torrents.where((t) =>
-            t.percentDone < 1.0 || t.status != 'stopped'
-          ).toList();
+          // Filter: only show incomplete downloads (< 100%)
+          final activeTorrents = torrents.where((t) {
+            final isActive = t.percentDone < 1.0;
+            print('[Downloads] Torrent ${t.id}: percentDone=${t.percentDone}, status=${t.status}, isActive=$isActive');
+            return isActive;
+          }).toList();
 
           // Convert torrents to the same format expected by UI
           _downloads = activeTorrents.map((t) => {
