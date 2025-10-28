@@ -184,8 +184,27 @@ class DaemonManager {
       // Wait a bit for daemon to start
       await Future.delayed(const Duration(seconds: 2));
 
-      // Check if process is still running
-      if (_daemonProcess != null) {
+      // Verify daemon is actually responding on port 9091
+      bool daemonHealthy = false;
+      print('[Daemon] Verifying daemon is responsive on port 9091...');
+
+      for (int attempt = 1; attempt <= 3; attempt++) {
+        try {
+          final socket = await Socket.connect('127.0.0.1', 9091, timeout: const Duration(seconds: 2));
+          await socket.close();
+          daemonHealthy = true;
+          print('[Daemon] ✅ Daemon is responding on port 9091 (attempt $attempt/3)');
+          break;
+        } catch (e) {
+          print('[Daemon] ⚠️  Daemon not responding yet (attempt $attempt/3): $e');
+          if (attempt < 3) {
+            await Future.delayed(const Duration(seconds: 1));
+          }
+        }
+      }
+
+      // Check if process is still running AND responding
+      if (_daemonProcess != null && daemonHealthy) {
         _isRunning = true;
         print('[Daemon] ✅ Started successfully (PID: ${_daemonProcess!.pid})');
         print('[Daemon] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -234,6 +253,14 @@ class DaemonManager {
         });
 
         return true;
+      } else if (_daemonProcess != null && !daemonHealthy) {
+        // Process exists but not responding - kill it and report failure
+        print('[Daemon] ❌ Process started but not responding on port 9091');
+        print('[Daemon] Killing unresponsive process...');
+        _daemonProcess!.kill();
+        _daemonProcess = null;
+        _isRunning = false;
+        return false;
       }
     } catch (e, stackTrace) {
       print('[Daemon] ❌ ERROR starting daemon: $e');
