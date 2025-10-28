@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "karma-player"
-version = "0.3.17"
+version = "0.3.18"
 description = "AI-powered music search tool with community verification"
 authors = ["Karma Player Team"]
 readme = "README.md"

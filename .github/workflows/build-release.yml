@@ -136,19 +136,19 @@ jobs:
 
           echo "✅ Downloaded $(ls -lh transmission.msi)"
 
-          # Extract MSI files using administrative install (doesn't actually install)
-          echo "📦 Extracting Transmission MSI..."
-          EXTRACT_DIR="$(pwd)/transmission-extracted"
+          # Extract MSI using 7-zip (pre-installed on GitHub Actions Windows)
+          echo "📦 Extracting MSI with 7-zip..."
+          EXTRACT_DIR="transmission-extracted"
           mkdir -p "$EXTRACT_DIR"
 
-          # Use /a for administrative install (extracts without installing)
-          msiexec.exe /a transmission.msi /qn TARGETDIR="$EXTRACT_DIR" /l*v extract.log
+          # Extract MSI archive with 7-zip
+          7z x transmission.msi -o"$EXTRACT_DIR" -y
 
           echo "✅ MSI extraction complete"
 
           # Show what was extracted
           echo "📂 Extracted contents:"
-          find "$EXTRACT_DIR" -type f -name "*.exe" -o -name "*.dll" | head -20
+          find "$EXTRACT_DIR" -type f \( -name "*.exe" -o -name "*.dll" \) | head -20
 
           # Find the binaries in extracted directory
           # MSI typically extracts to PFiles/Transmission or similar structure
