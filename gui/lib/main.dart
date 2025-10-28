@@ -87,26 +87,28 @@ void main() async {
   await appSettings.load();
   print('[STARTUP] Settings loaded');
 
-  // Start transmission daemon on app launch
-  print('[STARTUP] ═══════════════════════════════════════════════');
-  print('[STARTUP] Starting transmission daemon...');
-  print('[STARTUP] ═══════════════════════════════════════════════');
-
-  try {
-    final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-    if (started) {
-      print('[STARTUP] ✅ Transmission daemon started successfully');
-    } else {
-      print('[STARTUP] ❌ Failed to start transmission daemon');
-    }
-  } catch (e, stackTrace) {
-    print('[STARTUP] ❌ ERROR starting daemon: $e');
-    print('[STARTUP] Stack trace: $stackTrace');
-  }
-
   print('[STARTUP] ═══════════════════════════════════════════════');
   print('[STARTUP] Launching app UI...');
   runApp(const KarmaPlayerApp());
+
+  // Start transmission daemon in background (non-blocking)
+  print('[STARTUP] ═══════════════════════════════════════════════');
+  print('[STARTUP] Starting transmission daemon in background...');
+  print('[STARTUP] ═══════════════════════════════════════════════');
+
+  Future.microtask(() async {
+    try {
+      final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+      if (started) {
+        print('[STARTUP] ✅ Transmission daemon started successfully');
+      } else {
+        print('[STARTUP] ❌ Failed to start transmission daemon');
+      }
+    } catch (e, stackTrace) {
+      print('[STARTUP] ❌ ERROR starting daemon: $e');
+      print('[STARTUP] Stack trace: $stackTrace');
+    }
+  });
 }
 
 class KarmaPlayerApp extends StatelessWidget {
