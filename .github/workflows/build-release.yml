@@ -183,6 +183,18 @@ jobs:
           PARENT_DIR=$(dirname "$DAEMON_DIR")
           cp "$PARENT_DIR"/*.dll gui/windows-binaries/ 2>/dev/null || true
 
+          # Rename all DLLs with underscores to hyphens (Windows Transmission MSI uses underscores)
+          echo "🔄 Renaming DLLs from underscore to hyphen format..."
+          cd gui/windows-binaries
+          for file in *_*.dll; do
+            if [ -f "$file" ]; then
+              newname=$(echo "$file" | tr '_' '-')
+              mv "$file" "$newname"
+              echo "  Renamed: $file -> $newname"
+            fi
+          done
+          cd ../..
+
           echo "📦 Bundled files:"
           ls -la gui/windows-binaries/
 
