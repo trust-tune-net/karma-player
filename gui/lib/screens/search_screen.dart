@@ -2,37 +2,91 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/torrent.dart' as torrent_model;
+import '../models/song.dart';
 import '../services/transmission_client.dart';
+import '../services/playback_service.dart';
 import '../main.dart';
 
-class SearchScreen extends StatefulWidget {
+enum SourceFilter { all, torrents, streaming }
+
+class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClientMixin {
+class _SearchScreenState extends ConsumerState<SearchScreen> with AutomaticKeepAliveClientMixin {
   final TextEditingController _searchController = TextEditingController();
   WebSocketChannel? _channel;
 
   String _statusMessage = 'Enter a search query';
   int _progress = 0;
   List<Map<String, dynamic>> _results = [];
+  List<Map<String, dynamic>> _filteredResults = [];
   bool _isSearching = false;
+  SourceFilter _sourceFilter = SourceFilter.all;
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFilterPreference();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     _channel?.sink.close();
     super.dispose();
+  }
+
+  Future<void> _loadFilterPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final filterValue = prefs.getString('source_filter') ?? 'all';
+    setState(() {
+      _sourceFilter = SourceFilter.values.firstWhere(
+        (e) => e.name == filterValue,
+        orElse: () => SourceFilter.all,
+      );
+    });
+  }
+
+  Future<void> _saveFilterPreference(SourceFilter filter) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('source_filter', filter.name);
+  }
+
+  void _applyFilter() {
+    setState(() {
+      switch (_sourceFilter) {
+        case SourceFilter.all:
+          _filteredResults = _results;
+          break;
+        case SourceFilter.torrents:
+          _filteredResults = _results.where((result) {
+            final source = result['source'] ?? result['torrent'];
+            final sourceType = source['source_type'] ?? 'torrent';
+            return sourceType == 'torrent';
+          }).toList();
+          break;
+        case SourceFilter.streaming:
+          _filteredResults = _results.where((result) {
+            final source = result['source'] ?? result['torrent'];
+            final sourceType = source['source_type'] ?? 'torrent';
+            return sourceType == 'youtube' || sourceType == 'piped';
+          }).toList();
+          break;
+      }
+    });
   }
 
   void _search() async {
@@ -62,7 +116,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         final data = json.decode(response.body);
         setState(() {
           _results = List<Map<String, dynamic>>.from(data['results'] ?? []);
-          _statusMessage = 'Found ${_results.length} results';
+          _applyFilter();
+          _statusMessage = 'Found ${_filteredResults.length} of ${_results.length} results';
           _isSearching = false;
         });
       } else {
@@ -200,8 +255,11 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void _playStream(Map<String, dynamic> source) async {
     final url = source['url'];
     final title = source['title'];
+    final codec = source['codec'];
+    final bitrate = source['bitrate'];
 
     if (url == null || url.toString().trim().isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No streaming URL available'),
@@ -212,15 +270,45 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       return;
     }
 
-    // TODO: Implement streaming playback
-    // For now, show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Streaming playback coming soon!\n$title'),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-    print('Play stream: $url');
+    try {
+      // Get playback service from provider
+      final playbackService = ref.read(playbackServiceProvider);
+
+      // Create a Song object for streaming
+      final streamingSong = Song(
+        id: url.hashCode.toString(),
+        title: title,
+        artist: 'YouTube Music',
+        filePath: url, // media_kit supports HTTP URLs
+        format: codec?.toUpperCase() ?? 'OPUS',
+        bitrate: bitrate != null ? int.tryParse(bitrate.replaceAll(RegExp(r'[^\d]'), '')) : null,
+      );
+
+      // Play the streaming source
+      playbackService.playSong(streamingSong);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Now streaming: $title'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      print('[STREAMING] Playing: $title');
+      print('[STREAMING] URL: ${url.substring(0, 60)}...');
+    } catch (e) {
+      print('[STREAMING] Error playing stream: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error playing stream: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   void _startDownload(Map<String, dynamic> torrent) async {
@@ -362,7 +450,50 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                   : const Icon(Icons.search),
               label: const Text('Search'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Source Filter Toggle
+            if (_results.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                children: [
+                  FilterChip(
+                    label: const Text('All'),
+                    selected: _sourceFilter == SourceFilter.all,
+                    onSelected: (_) {
+                      setState(() {
+                        _sourceFilter = SourceFilter.all;
+                        _applyFilter();
+                        _saveFilterPreference(_sourceFilter);
+                      });
+                    },
+                  ),
+                  FilterChip(
+                    label: const Text('Torrents'),
+                    selected: _sourceFilter == SourceFilter.torrents,
+                    onSelected: (_) {
+                      setState(() {
+                        _sourceFilter = SourceFilter.torrents;
+                        _applyFilter();
+                        _saveFilterPreference(_sourceFilter);
+                      });
+                    },
+                  ),
+                  FilterChip(
+                    label: const Text('Streaming'),
+                    selected: _sourceFilter == SourceFilter.streaming,
+                    onSelected: (_) {
+                      setState(() {
+                        _sourceFilter = SourceFilter.streaming;
+                        _applyFilter();
+                        _saveFilterPreference(_sourceFilter);
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // Status and Progress
             if (_isSearching) ...[
@@ -377,18 +508,18 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             const SizedBox(height: 16),
 
             // Results List
-            if (_results.isNotEmpty) ...[
+            if (_filteredResults.isNotEmpty) ...[
               Text(
-                'Found ${_results.length} results:',
+                'Showing ${_filteredResults.length} results:',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
             ],
             Expanded(
               child: ListView.builder(
-                itemCount: _results.length,
+                itemCount: _filteredResults.length,
                 itemBuilder: (context, index) {
-                  final result = _results[index];
+                  final result = _filteredResults[index];
                   // Support both old 'torrent' and new 'source' keys for backward compatibility
                   final source = result['source'] ?? result['torrent'];
                   final sourceType = source['source_type'] ?? 'torrent';
