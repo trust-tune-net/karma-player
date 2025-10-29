@@ -8,6 +8,7 @@ import 'models/song.dart';
 import 'services/daemon_manager.dart';
 import 'services/app_settings.dart';
 import 'services/playback_service.dart';
+import 'services/error_handler.dart';
 import 'screens/now_playing_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/downloads_screen.dart';
@@ -60,49 +61,57 @@ class FavoritesService extends ChangeNotifier {
 final appSettings = AppSettings();
 final daemonManager = DaemonManager();
 final favoritesService = FavoritesService();
+final errorHandler = ErrorHandler();
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Wrap entire app in runZonedGuarded to catch ALL uncaught exceptions
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize MediaKit with error handling (may fail on some Windows systems)
-  try {
-    MediaKit.ensureInitialized();
-    print('[STARTUP] ✅ MediaKit initialized');
-  } catch (e, stackTrace) {
-    print('[STARTUP] ⚠️  MediaKit initialization failed: $e');
-    print('[STARTUP] Audio playback may not work');
-    print('[STARTUP] Stack trace: $stackTrace');
-  }
+    // FIRST: Initialize error handler (sets up logging and global error catching)
+    await errorHandler.initialize();
 
-  print('═══════════════════════════════════════════════');
-  print('🎵 TrustTune Starting Up');
-  print('═══════════════════════════════════════════════');
-
-  // Load settings
-  print('[STARTUP] Loading settings...');
-  await appSettings.load();
-  print('[STARTUP] Settings loaded');
-  print('[STARTUP] ═══════════════════════════════════════════════');
-  print('[STARTUP] Launching app UI...');
-  runApp(const KarmaPlayerApp());
-
-  // Start transmission daemon in background (non-blocking)
-  print('[STARTUP] ═══════════════════════════════════════════════');
-  print('[STARTUP] Starting transmission daemon in background...');
-  print('[STARTUP] ═══════════════════════════════════════════════');
-
-  Future.microtask(() async {
+    // Initialize MediaKit with error handling (may fail on some Windows systems)
     try {
-      final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-      if (started) {
-        print('[STARTUP] ✅ Transmission daemon started successfully');
-      } else {
-        print('[STARTUP] ❌ Failed to start transmission daemon');
-      }
+      MediaKit.ensureInitialized();
+      await errorHandler.logStartup('✅ MediaKit initialized');
     } catch (e, stackTrace) {
-      print('[STARTUP] ❌ ERROR starting daemon: $e');
-      print('[STARTUP] Stack trace: $stackTrace');
+      await errorHandler.logStartupError('⚠️  MediaKit initialization failed (audio playback may not work)', e, stackTrace);
     }
+
+    await errorHandler.logStartup('═══════════════════════════════════════════════');
+    await errorHandler.logStartup('🎵 TrustTune Starting Up');
+    await errorHandler.logStartup('═══════════════════════════════════════════════');
+
+    // Load settings
+    await errorHandler.logStartup('Loading settings...');
+    await appSettings.load();
+    await errorHandler.logStartup('Settings loaded');
+    await errorHandler.logStartup('═══════════════════════════════════════════════');
+    await errorHandler.logStartup('Launching app UI...');
+    runApp(const KarmaPlayerApp());
+
+    // Start transmission daemon in background (non-blocking)
+    await errorHandler.logStartup('═══════════════════════════════════════════════');
+    await errorHandler.logStartup('Starting transmission daemon in background...');
+    await errorHandler.logStartup('═══════════════════════════════════════════════');
+
+    Future.microtask(() async {
+      try {
+        final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+        if (started) {
+          await errorHandler.logStartup('✅ Transmission daemon started successfully');
+        } else {
+          await errorHandler.logStartupError('❌ Failed to start transmission daemon', null);
+        }
+      } catch (e, stackTrace) {
+        await errorHandler.logStartupError('❌ ERROR starting daemon', e, stackTrace);
+      }
+    });
+  }, (error, stack) {
+    // Catch ANY uncaught error in the app
+    print('[UNCAUGHT ERROR] $error');
+    print('[UNCAUGHT ERROR] Stack: $stack');
   });
 }
 
