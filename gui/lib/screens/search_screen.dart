@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,14 +14,16 @@ import '../main.dart';
 
 enum SourceFilter { all, torrents, streaming }
 
-class SearchScreen extends ConsumerStatefulWidget {
+class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  ConsumerState<SearchScreen> createState() => _SearchScreenState();
+  State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends ConsumerState<SearchScreen> with AutomaticKeepAliveClientMixin {
+class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClientMixin {
+  // Create PlaybackService instance
+  final PlaybackService _playbackService = PlaybackService();
   final TextEditingController _searchController = TextEditingController();
   WebSocketChannel? _channel;
 
@@ -271,9 +272,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> with AutomaticKeepA
     }
 
     try {
-      // Get playback service from provider
-      final playbackService = ref.read(playbackServiceProvider);
-
       // Create a Song object for streaming
       final streamingSong = Song(
         id: url.hashCode.toString(),
@@ -285,7 +283,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> with AutomaticKeepA
       );
 
       // Play the streaming source
-      playbackService.playSong(streamingSong);
+      _playbackService.playSong(streamingSong);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
