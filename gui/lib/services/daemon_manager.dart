@@ -68,10 +68,11 @@ class DaemonManager {
     if (homeDir == null) throw Exception('Could not find home directory');
 
     if (Platform.isMacOS || Platform.isLinux) {
-      return path.join(homeDir, 'Music', '.transmission');
+      // Use Documents instead of Music to avoid macOS permission issues
+      return path.join(homeDir, 'Documents', 'TrustTune', '.transmission');
     } else {
       // Windows
-      return path.join(homeDir, 'Music', '.transmission');
+      return path.join(homeDir, 'Documents', 'TrustTune', '.transmission');
     }
   }
 
@@ -82,7 +83,8 @@ class DaemonManager {
     }
     final homeDir = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
     if (homeDir == null) throw Exception('Could not find home directory');
-    return path.join(homeDir, 'Music');
+    // Use Documents/TrustTune instead of Music to avoid macOS permission issues
+    return path.join(homeDir, 'Documents', 'TrustTune', 'Downloads');
   }
 
   String get downloadDir => getDownloadDir(null);
