@@ -1,10 +1,11 @@
 """
-YouTube Music streaming adapter using ytmusicapi
+YouTube Music streaming adapter using ytmusicapi + yt-dlp for URL resolution
 """
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from ytmusicapi import YTMusic
+import yt_dlp
 
 from karma_player.models.source import MusicSource, SourceType
 
@@ -28,6 +29,59 @@ class AdapterYouTubeMusic(SourceAdapter):
     @property
     def source_type(self) -> SourceType:
         return SourceType.YOUTUBE
+
+    async def _resolve_stream_url(self, video_id: str) -> Optional[str]:
+        """
+        Resolve YouTube Music video ID to actual audio stream URL using yt-dlp
+
+        Args:
+            video_id: YouTube video ID
+
+        Returns:
+            Direct audio stream URL or None if resolution fails
+        """
+        try:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'skip_download': True,
+            }
+
+            # Run yt-dlp in thread pool since it's synchronous
+            def extract_url():
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(
+                        f"https://music.youtube.com/watch?v={video_id}",
+                        download=False
+                    )
+
+                    # Get the best audio format
+                    if info and 'formats' in info:
+                        # Filter for audio-only formats
+                        audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
+
+                        if audio_formats:
+                            # Sort by audio bitrate, get highest
+                            best_audio = max(audio_formats, key=lambda f: f.get('abr', 0))
+                            return best_audio.get('url')
+
+                    # Fallback: use the first available URL
+                    return info.get('url') if info else None
+
+            url = await asyncio.to_thread(extract_url)
+
+            if url:
+                logger.debug(f"✅ Resolved stream URL for {video_id}")
+                return url
+            else:
+                logger.warning(f"⚠️  No stream URL found for {video_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ Failed to resolve stream URL for {video_id}: {e}")
+            return None
 
     async def search(self, query: str) -> List[MusicSource]:
         """
@@ -87,14 +141,19 @@ class AdapterYouTubeMusic(SourceAdapter):
                     thumbnails = item.get("thumbnails", [])
                     thumbnail_url = thumbnails[-1]["url"] if thumbnails else None
 
-                    # Build YouTube URL
-                    url = f"https://music.youtube.com/watch?v={video_id}"
+                    # Resolve actual stream URL using yt-dlp
+                    stream_url = await self._resolve_stream_url(video_id)
 
-                    # Create MusicSource
+                    # Skip if URL resolution failed
+                    if not stream_url:
+                        logger.debug(f"Skipping {video_id} - URL resolution failed")
+                        continue
+
+                    # Create MusicSource with resolved stream URL
                     source = MusicSource(
                         id=video_id,
                         title=full_title,
-                        url=url,
+                        url=stream_url,  # Direct audio stream URL from yt-dlp
                         source_type=SourceType.YOUTUBE,
                         indexer="youtube_music",
                         # Streaming-specific fields
@@ -110,6 +169,8 @@ class AdapterYouTubeMusic(SourceAdapter):
                     source.quality_score = source.calculate_quality_score()
 
                     sources.append(source)
+
+                    logger.debug(f"   ✅ Added: {full_title[:50]}...")
 
                 except Exception as e:
                     logger.warning(f"Failed to parse YouTube Music result: {e}")
