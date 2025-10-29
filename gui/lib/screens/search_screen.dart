@@ -197,8 +197,34 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     );
   }
 
+  void _playStream(Map<String, dynamic> source) async {
+    final url = source['url'];
+    final title = source['title'];
+
+    if (url == null || url.toString().trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No streaming URL available'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // TODO: Implement streaming playback
+    // For now, show a message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Streaming playback coming soon!\n$title'),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    print('Play stream: $url');
+  }
+
   void _startDownload(Map<String, dynamic> torrent) async {
-    final magnetLink = torrent['magnet_link'];
+    final magnetLink = torrent['magnet_link'] ?? torrent['url'];
     final title = torrent['title'];
 
     // Validate magnet link exists and is properly formatted
@@ -363,7 +389,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                 itemCount: _results.length,
                 itemBuilder: (context, index) {
                   final result = _results[index];
-                  final torrent = result['torrent'];
+                  // Support both old 'torrent' and new 'source' keys for backward compatibility
+                  final source = result['source'] ?? result['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  final isStreaming = sourceType == 'youtube' || sourceType == 'piped';
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -385,7 +414,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                         ),
                       ),
                       title: Text(
-                        torrent['title'],
+                        source['title'],
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -399,30 +428,62 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                             spacing: 4,
                             runSpacing: 4,
                             children: [
-                              if (torrent['format'] != null)
+                              // Source type badge
+                              Chip(
+                                avatar: Icon(
+                                  isStreaming ? Icons.stream : Icons.storage,
+                                  size: 16,
+                                ),
+                                label: Text(isStreaming ? 'Streaming' : 'Torrent'),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                backgroundColor: isStreaming
+                                    ? Colors.blue.withOpacity(0.2)
+                                    : Colors.green.withOpacity(0.2),
+                              ),
+                              if (source['format'] != null)
                                 Chip(
-                                  label: Text(torrent['format']),
+                                  label: Text(source['format']),
                                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   padding: const EdgeInsets.symmetric(horizontal: 8),
                                 ),
-                              Chip(
-                                label: Text('${torrent['seeders']} seeders'),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                              ),
-                              Chip(
-                                label: Text(torrent['size_formatted']),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                              ),
+                              // Show seeders for torrents, codec for streaming
+                              if (!isStreaming && source['seeders'] != null)
+                                Chip(
+                                  label: Text('${source['seeders']} seeders'),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                              if (isStreaming && source['codec'] != null)
+                                Chip(
+                                  label: Text(source['codec']),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                              // Show bitrate for both
+                              if (source['bitrate'] != null)
+                                Chip(
+                                  label: Text(source['bitrate']),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                              // Show size for torrents only
+                              if (!isStreaming && source['size_formatted'] != null)
+                                Chip(
+                                  label: Text(source['size_formatted']),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
                             ],
                           ),
                         ],
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.download),
-                        onPressed: () => _startDownload(torrent),
-                        tooltip: 'Download',
+                        icon: Icon(isStreaming ? Icons.play_arrow : Icons.download),
+                        onPressed: isStreaming
+                            ? () => _playStream(source)
+                            : () => _startDownload(source),
+                        tooltip: isStreaming ? 'Play Stream' : 'Download',
                       ),
                       isThreeLine: true,
                     ),
