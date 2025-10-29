@@ -3,6 +3,7 @@ YouTube Music streaming adapter using ytmusicapi + yt-dlp for URL resolution
 """
 import asyncio
 import logging
+import random
 from typing import List, Optional, Dict, Any
 from ytmusicapi import YTMusic
 import yt_dlp
@@ -12,6 +13,19 @@ from karma_player.models.source import MusicSource, SourceType
 from .source_adapter import SourceAdapter
 
 logger = logging.getLogger(__name__)
+
+# User agents from different clients (inspired by Spotube)
+# Rotating user agents helps avoid bot detection
+USER_AGENTS = [
+    # iOS
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/114.0.5735.99 Mobile/15E148 Safari/604.1",
+    # Android
+    "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.196 Mobile Safari/537.36",
+    # Safari (macOS)
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+    # Mobile Web
+    "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+]
 
 
 class AdapterYouTubeMusic(SourceAdapter):
@@ -34,6 +48,10 @@ class AdapterYouTubeMusic(SourceAdapter):
         """
         Resolve YouTube Music video ID to actual audio stream URL using yt-dlp
 
+        Uses Spotube-inspired configuration to avoid bot detection:
+        - Random user-agent rotation (iOS/Android/Safari)
+        - Geo-bypass and no certificate check flags
+
         Args:
             video_id: YouTube video ID
 
@@ -41,12 +59,23 @@ class AdapterYouTubeMusic(SourceAdapter):
             Direct audio stream URL or None if resolution fails
         """
         try:
+            # Pick a random user agent to avoid bot detection
+            user_agent = random.choice(USER_AGENTS)
+            logger.debug(f"Using user-agent: {user_agent[:50]}...")
+
+            # Spotube-inspired yt-dlp configuration
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
                 'skip_download': True,
+                # Spotube flags to avoid bot detection
+                'geo_bypass': True,  # Bypass geographic restrictions
+                'nocheckcertificate': True,  # Skip SSL certificate verification
+                'http_headers': {
+                    'User-Agent': user_agent,  # Random user agent rotation
+                }
             }
 
             # Run yt-dlp in thread pool since it's synchronous
