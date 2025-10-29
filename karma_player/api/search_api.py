@@ -258,6 +258,81 @@ async def search(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ResolveRequest(BaseModel):
+    """Request model for URL resolution"""
+    video_id: str
+
+
+class ResolveResponse(BaseModel):
+    """Response model for URL resolution"""
+    video_id: str
+    stream_url: Optional[str]
+    success: bool
+    error: Optional[str] = None
+
+
+@app.post("/api/resolve", response_model=ResolveResponse)
+async def resolve_youtube_url(request: ResolveRequest):
+    """
+    Resolve YouTube Music video ID to playable stream URL
+
+    This endpoint is called on-demand when user clicks "Stream",
+    not during search (to avoid slow searches and bot detection)
+
+    Args:
+        request: ResolveRequest with video_id
+
+    Returns:
+        ResolveResponse with stream URL or error
+    """
+    logger.info(f"Resolving URL for video_id: {request.video_id}")
+
+    try:
+        # Get YouTube Music adapter from search engine
+        youtube_adapter = None
+        if search_service and search_service.search_engine:
+            for adapter in search_service.search_engine.adapters:
+                if isinstance(adapter, AdapterYouTubeMusic):
+                    youtube_adapter = adapter
+                    break
+
+        if not youtube_adapter:
+            return ResolveResponse(
+                video_id=request.video_id,
+                stream_url=None,
+                success=False,
+                error="YouTube Music adapter not available"
+            )
+
+        # Resolve URL using yt-dlp
+        stream_url = await youtube_adapter._resolve_stream_url(request.video_id)
+
+        if stream_url:
+            logger.info(f"✅ Resolved {request.video_id} successfully")
+            return ResolveResponse(
+                video_id=request.video_id,
+                stream_url=stream_url,
+                success=True
+            )
+        else:
+            logger.warning(f"⚠️  Failed to resolve {request.video_id}")
+            return ResolveResponse(
+                video_id=request.video_id,
+                stream_url=None,
+                success=False,
+                error="Failed to resolve stream URL"
+            )
+
+    except Exception as e:
+        logger.error(f"❌ Error resolving {request.video_id}: {e}")
+        return ResolveResponse(
+            video_id=request.video_id,
+            stream_url=None,
+            success=False,
+            error=str(e)
+        )
+
+
 @app.websocket("/ws/search")
 async def websocket_search(websocket: WebSocket):
     """

@@ -141,19 +141,15 @@ class AdapterYouTubeMusic(SourceAdapter):
                     thumbnails = item.get("thumbnails", [])
                     thumbnail_url = thumbnails[-1]["url"] if thumbnails else None
 
-                    # Resolve actual stream URL using yt-dlp
-                    stream_url = await self._resolve_stream_url(video_id)
+                    # Store video_id for lazy URL resolution
+                    # URL will be resolved on-demand when user clicks "Stream"
+                    youtube_url = f"https://music.youtube.com/watch?v={video_id}"
 
-                    # Skip if URL resolution failed
-                    if not stream_url:
-                        logger.debug(f"Skipping {video_id} - URL resolution failed")
-                        continue
-
-                    # Create MusicSource with resolved stream URL
+                    # Create MusicSource with video_id (URL resolution happens on-demand)
                     source = MusicSource(
                         id=video_id,
                         title=full_title,
-                        url=stream_url,  # Direct audio stream URL from yt-dlp
+                        url=youtube_url,  # YouTube URL - will be resolved on-demand
                         source_type=SourceType.YOUTUBE,
                         indexer="youtube_music",
                         # Streaming-specific fields
