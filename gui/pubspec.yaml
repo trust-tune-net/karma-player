@@ -39,6 +39,9 @@ dependencies:
   web_socket_channel: ^3.0.1
   http: ^1.2.1
 
+  # YouTube resolution (client-side, like Spotube)
+  youtube_explode_dart: ^2.5.1
+
   # State Management
   flutter_riverpod: ^2.6.1
 

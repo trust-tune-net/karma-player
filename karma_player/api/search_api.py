@@ -53,15 +53,19 @@ async def lifespan(app: FastAPI):
     )
 
     # YouTube Music streaming adapter
+    # Search works fine from server (no bot detection)
+    # URL resolution will be handled client-side (uses residential IP)
     youtube_music = AdapterYouTubeMusic()
 
     # Search engine with both torrent and streaming sources
+    # Torrent: Jackett (remote)
+    # YouTube: Search only (remote), URL resolution (client-side)
     search_engine = SearchEngine(adapters=[jackett, youtube_music])
 
     # Simple search service
     search_service = SimpleSearch(search_engine)
 
-    logger.info("✅ Search infrastructure ready (torrent + streaming)!")
+    logger.info("✅ Search infrastructure ready (Jackett + YouTube search, URL resolution client-side)!")
 
     yield
 

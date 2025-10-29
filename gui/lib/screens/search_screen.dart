@@ -10,6 +10,7 @@ import '../models/torrent.dart' as torrent_model;
 import '../models/song.dart';
 import '../services/transmission_client.dart';
 import '../services/playback_service.dart';
+import '../services/youtube_resolver.dart';
 import '../main.dart';
 
 enum SourceFilter { all, torrents, streaming }
@@ -25,6 +26,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   // Create PlaybackService instance
   final PlaybackService _playbackService = PlaybackService();
   final TextEditingController _searchController = TextEditingController();
+  final YouTubeResolver _youtubeResolver = YouTubeResolver();  // Client-side YouTube resolution
   WebSocketChannel? _channel;
 
   String _statusMessage = 'Enter a search query';
@@ -47,6 +49,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void dispose() {
     _searchController.dispose();
     _channel?.sink.close();
+    _youtubeResolver.dispose();  // Clean up YouTube resolver
     super.dispose();
   }
 
@@ -258,6 +261,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     final title = source['title'];
     final codec = source['codec'];
     final bitrate = source['bitrate'];
+    final sourceId = source['id'];
 
     if (url == null || url.toString().trim().isEmpty) {
       if (!mounted) return;
@@ -272,12 +276,54 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     }
 
     try {
-      // Create a Song object for streaming
+      String playbackUrl = url;
+
+      // Check if this is a YouTube Music URL that needs resolution
+      if (url.toString().contains('music.youtube.com') && sourceId != null) {
+        print('[STREAMING] YouTube Music URL detected, resolving...');
+
+        // Show resolving toast
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Resolving stream URL...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Resolve stream URL client-side (using user's residential IP)
+        // NO server involved - inspired by Spotube's architecture
+        try {
+          final resolvedUrl = await _youtubeResolver.resolveStreamUrl(sourceId);
+
+          if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+            playbackUrl = resolvedUrl;
+            print('[STREAMING] ✅ Client-side resolution successful');
+            print('[STREAMING]    URL: ${playbackUrl.length > 60 ? playbackUrl.substring(0, 60) : playbackUrl}...');
+          } else {
+            throw Exception('Client-side URL resolution returned no stream');
+          }
+        } catch (e) {
+          print('[STREAMING] ❌ Client-side URL resolution error: $e');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to resolve stream URL: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          return;
+        }
+      }
+
+      // Create a Song object for streaming with resolved URL
       final streamingSong = Song(
-        id: url.hashCode.toString(),
+        id: sourceId?.toString() ?? url.hashCode.toString(),
         title: title,
         artist: 'YouTube Music',
-        filePath: url, // media_kit supports HTTP URLs
+        filePath: playbackUrl, // Use resolved URL
         format: codec?.toUpperCase() ?? 'OPUS',
         bitrate: bitrate != null ? int.tryParse(bitrate.replaceAll(RegExp(r'[^\d]'), '')) : null,
       );
@@ -295,7 +341,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       );
 
       print('[STREAMING] Playing: $title');
-      print('[STREAMING] URL: ${url.length > 60 ? url.substring(0, 60) : url}${url.length > 60 ? '...' : ''}');
+      print('[STREAMING] URL: ${playbackUrl.length > 60 ? playbackUrl.substring(0, 60) : playbackUrl}${playbackUrl.length > 60 ? '...' : ''}');
     } catch (e) {
       print('[STREAMING] Error playing stream: $e');
       if (!mounted) return;
