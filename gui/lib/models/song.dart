@@ -17,6 +17,9 @@ class Song {
   final int? fileSize; // in bytes
   final String? format; // FLAC, MP3, ALAC, etc.
 
+  // HTTP headers for streaming URLs (e.g., YouTube requires User-Agent)
+  final Map<String, String>? httpHeaders;
+
   Song({
     required this.id,
     required this.title,
@@ -31,6 +34,7 @@ class Song {
     this.bitDepth,
     this.fileSize,
     this.format,
+    this.httpHeaders,
   });
 
   factory Song.fromFile(String path, {String? albumName, String? artistName, String? artworkPath}) {

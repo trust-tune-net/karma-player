@@ -10,23 +10,24 @@ import '../models/torrent.dart' as torrent_model;
 import '../models/song.dart';
 import '../services/transmission_client.dart';
 import '../services/playback_service.dart';
-import '../services/youtube_resolver.dart';
+import '../services/youtube_download_service.dart';
 import '../main.dart';
 
 enum SourceFilter { all, torrents, streaming }
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final void Function(Song song, {List<Song>? queue, bool? isShuffled})? onSongTap;
+
+  const SearchScreen({super.key, this.onSongTap});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClientMixin {
-  // Create PlaybackService instance
-  final PlaybackService _playbackService = PlaybackService();
+  // YouTube download service for streaming
+  final YouTubeDownloadService _youtubeDownloadService = YouTubeDownloadService();
   final TextEditingController _searchController = TextEditingController();
-  final YouTubeResolver _youtubeResolver = YouTubeResolver();  // Client-side YouTube resolution
   WebSocketChannel? _channel;
 
   String _statusMessage = 'Enter a search query';
@@ -49,7 +50,6 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void dispose() {
     _searchController.dispose();
     _channel?.sink.close();
-    _youtubeResolver.dispose();  // Clean up YouTube resolver
     super.dispose();
   }
 
@@ -276,78 +276,66 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     }
 
     try {
-      String playbackUrl = url;
-
-      // Check if this is a YouTube Music URL that needs resolution
+      // Check if this is a YouTube Music URL that needs downloading
       if (url.toString().contains('music.youtube.com') && sourceId != null) {
-        print('[STREAMING] YouTube Music URL detected, resolving...');
+        print('[YouTube Download] Detected YouTube Music URL');
+        print('[YouTube Download]    Video ID: $sourceId');
+        print('[YouTube Download]    Title: $title');
 
-        // Show resolving toast
+        // Show downloading toast
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Resolving stream URL...'),
+          SnackBar(
+            content: Text('Downloading: $title'),
             backgroundColor: Colors.blue,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
           ),
         );
 
-        // Resolve stream URL client-side (using user's residential IP)
-        // NO server involved - inspired by Spotube's architecture
-        try {
-          final resolvedUrl = await _youtubeResolver.resolveStreamUrl(sourceId);
+        // Download audio using yt-dlp
+        final filePath = await _youtubeDownloadService.downloadAudio(sourceId);
 
-          if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
-            playbackUrl = resolvedUrl;
-            print('[STREAMING] ✅ Client-side resolution successful');
-            print('[STREAMING]    URL: ${playbackUrl.length > 60 ? playbackUrl.substring(0, 60) : playbackUrl}...');
-          } else {
-            throw Exception('Client-side URL resolution returned no stream');
-          }
-        } catch (e) {
-          print('[STREAMING] ❌ Client-side URL resolution error: $e');
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to resolve stream URL: ${e.toString()}'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-          return;
+        if (filePath == null || filePath.isEmpty) {
+          throw Exception('Failed to download YouTube audio');
         }
+
+        print('[YouTube Download] ✅ Ready for playback');
+        print('[YouTube Download]    File: $filePath');
+
+        // Create a Song object with local file path
+        final downloadedSong = Song(
+          id: sourceId,
+          title: title,
+          artist: 'YouTube Music',
+          filePath: filePath,  // Local file path
+          format: 'WEBM',
+          bitrate: null,
+        );
+
+        // Play using shared playback service
+        widget.onSongTap?.call(downloadedSong);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Now playing: $title'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        print('[YouTube Download] ▶️  Playing: $title');
+      } else {
+        // Non-YouTube streaming (shouldn't happen, but handle gracefully)
+        print('[STREAMING] Non-YouTube URL: $url');
+        throw Exception('Only YouTube Music streaming is supported');
       }
-
-      // Create a Song object for streaming with resolved URL
-      final streamingSong = Song(
-        id: sourceId?.toString() ?? url.hashCode.toString(),
-        title: title,
-        artist: 'YouTube Music',
-        filePath: playbackUrl, // Use resolved URL
-        format: codec?.toUpperCase() ?? 'OPUS',
-        bitrate: bitrate != null ? int.tryParse(bitrate.replaceAll(RegExp(r'[^\d]'), '')) : null,
-      );
-
-      // Play the streaming source
-      _playbackService.playSong(streamingSong);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Now streaming: $title'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      print('[STREAMING] Playing: $title');
-      print('[STREAMING] URL: ${playbackUrl.length > 60 ? playbackUrl.substring(0, 60) : playbackUrl}${playbackUrl.length > 60 ? '...' : ''}');
     } catch (e) {
-      print('[STREAMING] Error playing stream: $e');
+      print('[YouTube Download] ❌ Error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error playing stream: ${e.toString()}'),
+          content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 5),
         ),

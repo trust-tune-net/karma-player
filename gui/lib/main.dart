@@ -1,24 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:path/path.dart' as path;
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'models/song.dart';
-import 'models/album.dart';
-import 'models/torrent.dart' as torrent_model;
-import 'services/transmission_client.dart';
 import 'services/daemon_manager.dart';
 import 'services/app_settings.dart';
-import 'widgets/status_bar.dart';
-import 'widgets/diagnostics_dialog.dart';
-import 'package:flutter/foundation.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'services/playback_service.dart';
 import 'screens/now_playing_screen.dart';
 import 'screens/search_screen.dart';
@@ -94,7 +82,6 @@ void main() async {
   print('[STARTUP] Loading settings...');
   await appSettings.load();
   print('[STARTUP] Settings loaded');
-
   print('[STARTUP] ═══════════════════════════════════════════════');
   print('[STARTUP] Launching app UI...');
   runApp(const KarmaPlayerApp());
@@ -597,7 +584,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         index: _selectedIndex,
                         children: [
                           LibraryScreen(key: _libraryKey, onSongTap: _playSong, currentSong: _playbackService.currentSong),
-                          const SearchScreen(),
+                          SearchScreen(onSongTap: _playSong),
                           const DownloadsScreen(),
                           NowPlayingScreen(playbackService: _playbackService),
                           const SettingsScreen(),

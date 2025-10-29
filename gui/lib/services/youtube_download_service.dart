@@ -1,0 +1,216 @@
+// YouTube Download Service - yt-dlp Approach
+//
+// Downloads YouTube Music audio to temp files for playback.
+// Uses yt-dlp to handle all YouTube complexity (signatures, auth, etc.)
+//
+// Flow:
+// 1. User clicks play on YouTube result
+// 2. Service downloads audio to /tmp using yt-dlp
+// 3. Returns local file path
+// 4. media_kit plays the local file (100% reliable)
+
+import 'dart:io';
+import 'dart:async';
+
+class YouTubeDownloadService {
+  // Cache directory for YouTube downloads
+  final String _cacheDir = '/tmp';
+
+  // Track active downloads to avoid duplicates
+  final Map<String, Future<String?>> _activeDownloads = {};
+
+  /// Download YouTube audio to temp file
+  ///
+  /// Returns the local file path when ready for playback.
+  /// Downloads are cached by video ID to avoid duplicate downloads.
+  Future<String?> downloadAudio(String videoId) async {
+    // Check if already downloading this video
+    if (_activeDownloads.containsKey(videoId)) {
+      print('[YouTube Download] Already downloading $videoId, waiting...');
+      return await _activeDownloads[videoId];
+    }
+
+    // Check if already downloaded (file exists)
+    final cachedFile = await _getCachedFile(videoId);
+    if (cachedFile != null) {
+      print('[YouTube Download] ✅ Using cached file: $cachedFile');
+      return cachedFile;
+    }
+
+    // Start new download
+    final downloadFuture = _downloadAudioInternal(videoId);
+    _activeDownloads[videoId] = downloadFuture;
+
+    try {
+      final result = await downloadFuture;
+      return result;
+    } finally {
+      _activeDownloads.remove(videoId);
+    }
+  }
+
+  /// Internal download logic
+  Future<String?> _downloadAudioInternal(String videoId) async {
+    try {
+      final url = 'https://music.youtube.com/watch?v=$videoId';
+      final outputTemplate = '$_cacheDir/youtube_%(id)s.%(ext)s';
+
+      print('[YouTube Download] Starting download: $videoId');
+      print('[YouTube Download]    URL: $url');
+
+      // Run yt-dlp to download audio
+      // -f bestaudio: Get best audio quality
+      // --no-playlist: Don't download playlists
+      // --newline: Progress on separate lines (easier to parse)
+      // --no-warnings: Reduce output noise
+      final process = await Process.start(
+        'yt-dlp',
+        [
+          '-f', 'bestaudio',
+          '--no-playlist',
+          '--newline',
+          '--no-warnings',
+          '-o', outputTemplate,
+          url,
+        ],
+      );
+
+      // Monitor download progress
+      final stdout = <String>[];
+      final stderr = <String>[];
+
+      process.stdout.listen((data) {
+        final line = String.fromCharCodes(data).trim();
+        stdout.add(line);
+
+        // Log progress
+        if (line.contains('[download]')) {
+          // Extract percentage if available
+          final match = RegExp(r'\[download\]\s+(\d+\.\d+)%').firstMatch(line);
+          if (match != null) {
+            final percent = match.group(1);
+            print('[YouTube Download] Progress: $percent%');
+          }
+        }
+      });
+
+      process.stderr.listen((data) {
+        final line = String.fromCharCodes(data).trim();
+        stderr.add(line);
+        if (line.isNotEmpty) {
+          print('[YouTube Download] stderr: $line');
+        }
+      });
+
+      // Wait for download to complete
+      final exitCode = await process.exitCode;
+
+      if (exitCode == 0) {
+        // Download successful, find the file
+        final filePath = await _findDownloadedFile(videoId);
+        if (filePath != null) {
+          final fileSize = await File(filePath).length();
+          print('[YouTube Download] ✅ Download complete');
+          print('[YouTube Download]    File: $filePath');
+          print('[YouTube Download]    Size: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
+          return filePath;
+        } else {
+          print('[YouTube Download] ❌ Downloaded but file not found');
+          return null;
+        }
+      } else {
+        print('[YouTube Download] ❌ yt-dlp failed with exit code: $exitCode');
+        print('[YouTube Download]    stdout: ${stdout.join("\n")}');
+        print('[YouTube Download]    stderr: ${stderr.join("\n")}');
+        return null;
+      }
+    } catch (e, stackTrace) {
+      print('[YouTube Download] ❌ Error: $e');
+      print('[YouTube Download]    Stack: $stackTrace');
+      return null;
+    }
+  }
+
+  /// Check if file is already cached
+  Future<String?> _getCachedFile(String videoId) async {
+    // Check for common extensions
+    final extensions = ['webm', 'opus', 'm4a', 'mp3', 'ogg'];
+
+    for (final ext in extensions) {
+      final filePath = '$_cacheDir/youtube_$videoId.$ext';
+      final file = File(filePath);
+      if (await file.exists()) {
+        final size = await file.length();
+        if (size > 0) {  // Make sure file is not empty
+          return filePath;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Find the downloaded file (yt-dlp may use different extensions)
+  Future<String?> _findDownloadedFile(String videoId) async {
+    final dir = Directory(_cacheDir);
+    final files = await dir.list().toList();
+
+    for (final file in files) {
+      if (file is File) {
+        final name = file.path.split('/').last;
+        // Match: youtube_VIDEO_ID.EXT
+        if (name.startsWith('youtube_$videoId.')) {
+          return file.path;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Clean up old cached files
+  Future<void> cleanOldFiles({Duration maxAge = const Duration(hours: 24)}) async {
+    try {
+      final dir = Directory(_cacheDir);
+      final now = DateTime.now();
+
+      final files = await dir.list().toList();
+      int deletedCount = 0;
+
+      for (final file in files) {
+        if (file is File) {
+          final name = file.path.split('/').last;
+          if (name.startsWith('youtube_')) {
+            final stat = await file.stat();
+            final age = now.difference(stat.modified);
+
+            if (age > maxAge) {
+              await file.delete();
+              deletedCount++;
+              print('[YouTube Download] Deleted old cache file: $name');
+            }
+          }
+        }
+      }
+
+      if (deletedCount > 0) {
+        print('[YouTube Download] Cleaned up $deletedCount old file(s)');
+      }
+    } catch (e) {
+      print('[YouTube Download] Error cleaning cache: $e');
+    }
+  }
+
+  /// Delete a specific cached file
+  Future<void> deleteFile(String videoId) async {
+    try {
+      final filePath = await _getCachedFile(videoId);
+      if (filePath != null) {
+        await File(filePath).delete();
+        print('[YouTube Download] Deleted cached file: $filePath');
+      }
+    } catch (e) {
+      print('[YouTube Download] Error deleting file: $e');
+    }
+  }
+}

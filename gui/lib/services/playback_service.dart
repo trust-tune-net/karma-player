@@ -149,7 +149,8 @@ class PlaybackService extends ChangeNotifier {
     if (_playerInitialized && _player != null) {
       print('[PLAYBACK] Opening media: ${song.filePath}');
       print('[PLAYBACK] Song title: ${song.title}');
-      _player!.open(Media(song.filePath));
+      // Pass HTTP headers if available (needed for YouTube streams)
+      _player!.open(Media(song.filePath, httpHeaders: song.httpHeaders ?? {}));
       _player!.play();
       print('[PLAYBACK] Called play()');
     } else {
@@ -188,7 +189,8 @@ class PlaybackService extends ChangeNotifier {
         _queue = shuffled;
         _currentIndex = 0;
         _currentSong = _queue[0];
-        _player!.open(Media(_queue[0].filePath));
+        // Pass HTTP headers if available (needed for YouTube streams)
+        _player!.open(Media(_queue[0].filePath, httpHeaders: _queue[0].httpHeaders ?? {}));
         _player!.play();
         notifyListeners();
         print('[PLAYBACK] Re-shuffled at end of queue');
@@ -237,7 +239,8 @@ class PlaybackService extends ChangeNotifier {
 
     _currentIndex = index;
     _currentSong = _queue[index];
-    _player!.open(Media(_queue[index].filePath));
+    // Pass HTTP headers if available (needed for YouTube streams)
+    _player!.open(Media(_queue[index].filePath, httpHeaders: _queue[index].httpHeaders ?? {}));
     _player!.play();
     notifyListeners();
   }
