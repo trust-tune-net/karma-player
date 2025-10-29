@@ -295,7 +295,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       );
 
       print('[STREAMING] Playing: $title');
-      print('[STREAMING] URL: ${url.substring(0, 60)}...');
+      print('[STREAMING] URL: ${url.length > 60 ? url.substring(0, 60) : url}${url.length > 60 ? '...' : ''}');
     } catch (e) {
       print('[STREAMING] Error playing stream: $e');
       if (!mounted) return;

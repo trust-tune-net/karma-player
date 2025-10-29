@@ -147,8 +147,11 @@ class PlaybackService extends ChangeNotifier {
     }
 
     if (_playerInitialized && _player != null) {
+      print('[PLAYBACK] Opening media: ${song.filePath}');
+      print('[PLAYBACK] Song title: ${song.title}');
       _player!.open(Media(song.filePath));
       _player!.play();
+      print('[PLAYBACK] Called play()');
     } else {
       print('[PLAYBACK] Cannot play song: Player not initialized');
     }
