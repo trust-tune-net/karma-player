@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'models/song.dart';
 import 'services/daemon_manager.dart';
 import 'services/app_settings.dart';
@@ -81,6 +82,15 @@ void main() async {
 
     await errorHandler.logStartup('═══════════════════════════════════════════════');
     await errorHandler.logStartup('🎵 TrustTune Starting Up');
+    await errorHandler.logStartup('═══════════════════════════════════════════════');
+
+    // Get and log version dynamically
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      await errorHandler.logStartup('📦 Version: ${packageInfo.version} (build ${packageInfo.buildNumber})');
+    } catch (e) {
+      await errorHandler.logStartup('⚠️  Could not read version info');
+    }
     await errorHandler.logStartup('═══════════════════════════════════════════════');
 
     // Load settings
