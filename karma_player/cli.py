@@ -127,20 +127,28 @@ async def _search(
             # Emit result event
             results_data = []
             for ranked in result.results:
-                t = ranked.torrent
+                s = ranked.source  # MusicSource object
                 results_data.append({
                     "rank": ranked.rank,
-                    "title": t.title,
-                    "magnet_link": t.magnet_link,
-                    "size_bytes": t.size_bytes,
-                    "size_formatted": t.size_formatted,
-                    "seeders": t.seeders,
-                    "leechers": t.leechers,
-                    "format": t.format,
-                    "bitrate": t.bitrate,
-                    "source": t.source,
-                    "quality_score": t.quality_score,
-                    "indexer": t.indexer,
+                    "id": s.id,
+                    "title": s.title,
+                    "url": s.url,
+                    "source_type": s.source_type.value,
+                    "format": s.format,
+                    "quality_score": s.quality_score,
+                    "indexer": s.indexer,
+                    # Torrent-specific (backward compatibility)
+                    "magnet_link": s.magnet_link,
+                    "size_bytes": s.size_bytes,
+                    "size_formatted": s.size_formatted if s.size_bytes else None,
+                    "seeders": s.seeders,
+                    "leechers": s.leechers,
+                    # Streaming-specific
+                    "codec": s.codec,
+                    "bitrate": s.bitrate,
+                    "thumbnail_url": s.thumbnail_url,
+                    "duration_seconds": s.duration_seconds,
+                    # Ranking info
                     "explanation": ranked.explanation,
                     "tags": ranked.tags
                 })
@@ -168,8 +176,8 @@ async def _search(
                 print("Top results:")
                 print()
                 for ranked in result.results[:10]:
-                    t = ranked.torrent
-                    print(f"{ranked.rank}. {t.title[:75]}")
+                    s = ranked.source
+                    print(f"{ranked.rank}. {s.title[:75]}")
                     print(f"   {ranked.explanation}")
                     if ranked.tags:
                         print(f"   Tags: {', '.join(ranked.tags)}")

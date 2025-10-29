@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 from karma_player.models.search import ParsedQuery
-from karma_player.models.torrent import TorrentResult, RankedResult
+from karma_player.models.source import MusicSource, RankedSource
 from karma_player.models.query import QueryIntent, MusicQuery
 from karma_player.services.musicbrainz_service import MusicBrainzService
 from karma_player.services.search.engine import SearchEngine
@@ -27,7 +27,7 @@ class SearchResult:
     query: str
     parsed_query: Optional[ParsedQuery]
     musicbrainz_match: Optional[str]  # MBID or description
-    results: List[RankedResult]
+    results: List[RankedSource]
     total_found: int
     search_time_ms: int
 
@@ -37,7 +37,7 @@ class SearchOrchestrator:
     Orchestrates the complete search flow:
     1. Parse natural language query (AI)
     2. Look up canonical metadata (MusicBrainz)
-    3. Search torrents (multi-source)
+    3. Search music sources (torrents, streams, etc.)
     4. Rank and explain results (AI + scoring)
     """
 
@@ -76,7 +76,7 @@ class SearchOrchestrator:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            SearchResult with ranked torrents
+            SearchResult with ranked music sources
         """
         import time
         start_time = time.time()
@@ -111,7 +111,7 @@ class SearchOrchestrator:
             if mb_results:
                 mb_match = self.musicbrainz.format_release_info(mb_results[0])
 
-        # Stage 3: Search torrents
+        # Stage 3: Search music sources
         report_progress("searching", f"Searching for {parsed_query.artist or query}...", 50)
 
         # Build search query
@@ -126,7 +126,7 @@ class SearchOrchestrator:
         search_query = " ".join(search_terms) if search_terms else query
 
         # Execute search
-        torrent_results = await self.search_engine.search(
+        source_results = await self.search_engine.search(
             query=search_query,
             min_seeders=1
         )
@@ -136,13 +136,13 @@ class SearchOrchestrator:
 
         # Create ranked results with simple explanations
         ranked_results = []
-        for i, torrent in enumerate(torrent_results[:50], 1):  # Limit to top 50
-            explanation = self._generate_explanation(torrent, i)
-            tags = self._generate_tags(torrent, i)
+        for i, source in enumerate(source_results[:50], 1):  # Limit to top 50
+            explanation = self._generate_explanation(source, i)
+            tags = self._generate_tags(source, i)
 
             ranked_results.append(
-                RankedResult(
-                    torrent=torrent,
+                RankedSource(
+                    source=source,
                     rank=i,
                     explanation=explanation,
                     tags=tags
@@ -159,7 +159,7 @@ class SearchOrchestrator:
             parsed_query=parsed_query,
             musicbrainz_match=mb_match,
             results=ranked_results,
-            total_found=len(torrent_results),
+            total_found=len(source_results),
             search_time_ms=search_time_ms
         )
 
@@ -239,8 +239,8 @@ class SearchOrchestrator:
             confidence=0.6
         )
 
-    def _generate_explanation(self, torrent: TorrentResult, rank: int) -> str:
-        """Generate explanation for torrent ranking"""
+    def _generate_explanation(self, source: MusicSource, rank: int) -> str:
+        """Generate explanation for music source ranking"""
         parts = []
 
         if rank == 1:
@@ -248,57 +248,64 @@ class SearchOrchestrator:
         elif rank <= 3:
             parts.append(f"#{rank} Top result")
 
-        if torrent.format:
-            if torrent.format == "FLAC":
+        if source.format:
+            if source.format == "FLAC":
                 parts.append("Lossless quality")
             else:
-                parts.append(f"{torrent.format}")
+                parts.append(f"{source.format}")
 
-        if torrent.bitrate:
-            parts.append(f"{torrent.bitrate}")
+        if source.bitrate:
+            parts.append(f"{source.bitrate}")
 
-        if torrent.seeders >= 50:
-            parts.append(f"{torrent.seeders} seeders (very fast)")
-        elif torrent.seeders >= 10:
-            parts.append(f"{torrent.seeders} seeders (fast)")
-        elif torrent.seeders > 0:
-            parts.append(f"{torrent.seeders} seeders")
+        # Torrent-specific info
+        if source.seeders is not None:
+            if source.seeders >= 50:
+                parts.append(f"{source.seeders} seeders (very fast)")
+            elif source.seeders >= 10:
+                parts.append(f"{source.seeders} seeders (fast)")
+            elif source.seeders > 0:
+                parts.append(f"{source.seeders} seeders")
 
-        size_gb = torrent.size_bytes / (1024 * 1024 * 1024)
-        if size_gb >= 1:
-            parts.append(f"{size_gb:.1f} GB")
-        else:
-            size_mb = torrent.size_bytes / (1024 * 1024)
-            parts.append(f"{size_mb:.0f} MB")
+        # Size info (for torrents)
+        if source.size_bytes:
+            size_gb = source.size_bytes / (1024 * 1024 * 1024)
+            if size_gb >= 1:
+                parts.append(f"{size_gb:.1f} GB")
+            else:
+                size_mb = source.size_bytes / (1024 * 1024)
+                parts.append(f"{size_mb:.0f} MB")
 
-        if torrent.source:
-            parts.append(f"Source: {torrent.source}")
+        # Source type indicator
+        if source.source_type.value != "torrent":
+            parts.append(f"Source: {source.source_type.value}")
 
         return " • ".join(parts)
 
-    def _generate_tags(self, torrent: TorrentResult, rank: int) -> List[str]:
-        """Generate tags for torrent"""
+    def _generate_tags(self, source: MusicSource, rank: int) -> List[str]:
+        """Generate tags for music source"""
         tags = []
 
         if rank == 1:
             tags.append("best_quality")
 
-        if torrent.format == "FLAC":
+        if source.format == "FLAC":
             tags.append("lossless")
 
             # Check for hi-res
-            if torrent.bitrate:
-                if "24" in torrent.bitrate or "DSD" in torrent.bitrate.upper():
+            if source.bitrate:
+                if "24" in source.bitrate or "DSD" in source.bitrate.upper():
                     tags.append("hi-res")
 
-        if torrent.seeders >= 50:
-            tags.append("fast")
-            tags.append("popular")
-        elif torrent.seeders >= 10:
-            tags.append("fast")
+        # Torrent-specific tags
+        if source.seeders is not None:
+            if source.seeders >= 50:
+                tags.append("fast")
+                tags.append("popular")
+            elif source.seeders >= 10:
+                tags.append("fast")
 
-        if torrent.source:
-            if torrent.source.upper() in ["CD", "VINYL", "WEB"]:
-                tags.append(torrent.source.lower())
+        # Source type tag
+        if source.source_type.value != "torrent":
+            tags.append(source.source_type.value)
 
         return tags

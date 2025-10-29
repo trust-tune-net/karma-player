@@ -9,12 +9,12 @@ from urllib.parse import quote_plus
 import aiohttp
 from bs4 import BeautifulSoup
 
-from karma_player.services.search.adapter_base import IndexerAdapter
-from karma_player.models.torrent import TorrentResult
+from karma_player.services.search.source_adapter import SourceAdapter
+from karma_player.models.source import MusicSource, SourceType
 from karma_player.services.search.metadata import MetadataExtractor
 
 
-class Adapter1337x(IndexerAdapter):
+class Adapter1337x(SourceAdapter):
     """Adapter for 1337x.to torrent indexer."""
 
     BASE_URL = "https://1337x.to"
@@ -26,14 +26,19 @@ class Adapter1337x(IndexerAdapter):
         """Return indexer name."""
         return "1337x"
 
-    async def search(self, query: str) -> List[TorrentResult]:
+    @property
+    def source_type(self) -> SourceType:
+        """Return source type."""
+        return SourceType.TORRENT
+
+    async def search(self, query: str) -> List[MusicSource]:
         """Search 1337x for torrents.
 
         Args:
             query: Search query
 
         Returns:
-            List of TorrentResult objects
+            List of MusicSource objects
         """
         try:
             headers = {
@@ -90,7 +95,7 @@ class Adapter1337x(IndexerAdapter):
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
                     # Filter out None and exceptions
-                    results = [r for r in results if isinstance(r, TorrentResult)]
+                    results = [r for r in results if isinstance(r, MusicSource)]
 
                 self._update_health(success=True)
                 return results
@@ -104,7 +109,7 @@ class Adapter1337x(IndexerAdapter):
 
     async def _fetch_torrent_details(
         self, session: aiohttp.ClientSession, detail_url: str, search_html: str
-    ) -> TorrentResult | None:
+    ) -> MusicSource | None:
         """Fetch torrent details from detail page.
 
         Args:
@@ -113,7 +118,7 @@ class Adapter1337x(IndexerAdapter):
             search_html: HTML from search page (for extracting metadata)
 
         Returns:
-            TorrentResult or None if failed
+            MusicSource or None if failed
         """
         try:
             async with asyncio.timeout(self.TIMEOUT):
@@ -187,17 +192,27 @@ class Adapter1337x(IndexerAdapter):
             bitrate = extractor.extract_bitrate(title)
             source = extractor.extract_source(title)
 
-            return TorrentResult(
+            # Generate infohash for ID
+            import hashlib
+            match = re.search(r"xt=urn:btih:([a-fA-F0-9]+)", magnet_link)
+            if match:
+                infohash = match.group(1).lower()
+            else:
+                infohash = hashlib.sha1(magnet_link.encode()).hexdigest()[:40].lower()
+
+            return MusicSource(
+                id=infohash,
                 title=title,
-                magnet_link=magnet_link,
-                size_bytes=size_bytes,
+                format=format_type,
+                source_type=SourceType.TORRENT,
+                url=magnet_link,
+                indexer=self.name,
                 seeders=seeders,
                 leechers=leechers,
+                size_bytes=size_bytes,
                 uploaded_at=uploaded_at,
-                indexer=self.name,
-                format=format_type,
                 bitrate=bitrate,
-                source=source,
+                magnet_link=magnet_link,  # Backward compatibility
             )
 
         except asyncio.TimeoutError:

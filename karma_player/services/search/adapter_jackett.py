@@ -8,13 +8,13 @@ from urllib.parse import quote_plus
 
 import aiohttp
 
-from karma_player.services.search.adapter_base import IndexerAdapter
-from karma_player.models.torrent import TorrentResult
+from karma_player.services.search.source_adapter import SourceAdapter
+from karma_player.models.source import MusicSource, SourceType
 from karma_player.services.search.metadata import MetadataExtractor
 from karma_player import __version__
 
 
-class AdapterJackett(IndexerAdapter):
+class AdapterJackett(SourceAdapter):
     """Adapter for Jackett proxy (supports 100+ indexers)."""
 
     # Torznab audio categories (search ALL audio formats)
@@ -54,14 +54,19 @@ class AdapterJackett(IndexerAdapter):
         """Return indexer name."""
         return f"Jackett ({self.indexer_id})"
 
-    async def search(self, query: str) -> List[TorrentResult]:
+    @property
+    def source_type(self) -> SourceType:
+        """Return source type."""
+        return SourceType.TORRENT
+
+    async def search(self, query: str) -> List[MusicSource]:
         """Search via Jackett Torznab API.
 
         Args:
             query: Search query
 
         Returns:
-            List of TorrentResult objects
+            List of MusicSource objects
         """
         if not self.api_key:
             # No API key configured, return empty
@@ -127,14 +132,14 @@ class AdapterJackett(IndexerAdapter):
         self._update_health(success=False)
         return []
 
-    def _parse_torznab_xml(self, xml_text: str) -> List[TorrentResult]:
+    def _parse_torznab_xml(self, xml_text: str) -> List[MusicSource]:
         """Parse Torznab XML response.
 
         Args:
             xml_text: XML response from Jackett
 
         Returns:
-            List of TorrentResult objects
+            List of MusicSource objects
         """
         results = []
 
@@ -221,18 +226,29 @@ class AdapterJackett(IndexerAdapter):
                                 elif "aac" in title_lower:
                                     format_type = "AAC"
 
+                    # Generate infohash for ID
+                    import re
+                    import hashlib
+                    match = re.search(r"xt=urn:btih:([a-fA-F0-9]+)", magnet_link)
+                    if match:
+                        infohash = match.group(1).lower()
+                    else:
+                        infohash = hashlib.sha1(magnet_link.encode()).hexdigest()[:40].lower()
+
                     results.append(
-                        TorrentResult(
+                        MusicSource(
+                            id=infohash,
                             title=title,
-                            magnet_link=magnet_link,
-                            size_bytes=size_bytes,
+                            format=format_type,
+                            source_type=SourceType.TORRENT,
+                            url=magnet_link,
+                            indexer=indexer,
                             seeders=seeders,
                             leechers=leechers,
+                            size_bytes=size_bytes,
                             uploaded_at=uploaded_at,
-                            indexer=indexer,
-                            format=format_type,
                             bitrate=bitrate,
-                            source=source,
+                            magnet_link=magnet_link,  # Backward compatibility
                         )
                     )
 

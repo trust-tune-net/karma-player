@@ -92,25 +92,54 @@ class SearchRequest(BaseModel):
     limit: int = 50
 
 
-class TorrentInfo(BaseModel):
+class MusicSourceInfo(BaseModel):
+    """Music source information (torrent, stream, or local)"""
+    id: str
     title: str
-    magnet_link: str
-    size_bytes: int
-    size_formatted: str
-    seeders: int
-    leechers: int
+    url: str
+    source_type: str  # "torrent", "youtube", "local", etc.
     format: Optional[str]
-    bitrate: Optional[str]
-    source: Optional[str]
     quality_score: float
     indexer: str
 
+    # Torrent-specific fields (optional)
+    magnet_link: Optional[str] = None  # For backward compatibility
+    size_bytes: Optional[int] = None
+    size_formatted: Optional[str] = None
+    seeders: Optional[int] = None
+    leechers: Optional[int] = None
 
-class RankedTorrent(BaseModel):
+    # Streaming-specific fields (optional)
+    codec: Optional[str] = None
+    bitrate: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
+
+
+class RankedSource(BaseModel):
     rank: int
-    torrent: TorrentInfo
+    source: MusicSourceInfo
     explanation: str
     tags: List[str]
+
+
+# Backward compatibility alias
+class TorrentInfo(MusicSourceInfo):
+    """Deprecated: Use MusicSourceInfo instead"""
+    pass
+
+
+class RankedTorrent(RankedSource):
+    """Deprecated: Use RankedSource instead"""
+    torrent: MusicSourceInfo = None  # Alias for source
+
+    def __init__(self, **data):
+        # Map 'torrent' field to 'source' for backward compatibility
+        if 'torrent' in data and 'source' not in data:
+            data['source'] = data.pop('torrent')
+        elif 'source' in data and 'torrent' not in data:
+            data['torrent'] = data['source']
+        super().__init__(**data)
 
 
 class SearchResponse(BaseModel):
@@ -118,7 +147,7 @@ class SearchResponse(BaseModel):
     sql_query: Optional[str]
     total_found: int
     search_time_ms: int
-    results: List[RankedTorrent]
+    results: List[RankedSource]
 
 
 class HealthResponse(BaseModel):
@@ -178,25 +207,34 @@ async def search(request: SearchRequest):
         )
 
         # Convert to response model
-        ranked_torrents = []
+        ranked_sources = []
         for ranked in result.results:
-            t = ranked.torrent
-            # Explicitly call property methods to get computed values
-            ranked_torrents.append(
-                RankedTorrent(
+            s = ranked.source  # MusicSource object
+            # Use the to_dict() method for proper serialization
+            source_dict = s.to_dict()
+
+            ranked_sources.append(
+                RankedSource(
                     rank=ranked.rank,
-                    torrent=TorrentInfo(
-                        title=t.title,
-                        magnet_link=t.magnet_link,
-                        size_bytes=t.size_bytes,
-                        size_formatted=t.size_formatted,  # Property method
-                        seeders=t.seeders,
-                        leechers=t.leechers,
-                        format=t.format if t.format else None,
-                        bitrate=t.bitrate if t.bitrate else None,
-                        source=t.source if t.source else None,
-                        quality_score=t.quality_score,  # Property method
-                        indexer=t.indexer
+                    source=MusicSourceInfo(
+                        id=s.id,
+                        title=s.title,
+                        url=s.url,
+                        source_type=s.source_type.value,
+                        format=s.format,
+                        quality_score=s.quality_score,
+                        indexer=s.indexer,
+                        # Torrent-specific
+                        magnet_link=s.magnet_link,
+                        size_bytes=s.size_bytes,
+                        size_formatted=s.size_formatted if s.size_bytes else None,
+                        seeders=s.seeders,
+                        leechers=s.leechers,
+                        # Streaming-specific
+                        codec=s.codec,
+                        bitrate=s.bitrate,
+                        thumbnail_url=s.thumbnail_url,
+                        duration_seconds=s.duration_seconds
                     ),
                     explanation=ranked.explanation,
                     tags=ranked.tags
@@ -208,7 +246,7 @@ async def search(request: SearchRequest):
             sql_query=result.sql_query,
             total_found=result.total_found,
             search_time_ms=result.search_time_ms,
-            results=ranked_torrents
+            results=ranked_sources
         )
 
     except Exception as e:
@@ -270,21 +308,42 @@ async def websocket_search(websocket: WebSocket):
         # Convert to response format
         ranked_torrents = []
         for ranked in result.results:
-            t = ranked.torrent
+            s = ranked.source  # MusicSource object
             ranked_torrents.append({
                 "rank": ranked.rank,
+                "source": {
+                    "id": s.id,
+                    "title": s.title,
+                    "url": s.url,
+                    "source_type": s.source_type.value,
+                    "format": s.format,
+                    "quality_score": s.quality_score,
+                    "indexer": s.indexer,
+                    # Torrent-specific
+                    "magnet_link": s.magnet_link,
+                    "size_bytes": s.size_bytes,
+                    "size_formatted": s.size_formatted if s.size_bytes else None,
+                    "seeders": s.seeders,
+                    "leechers": s.leechers,
+                    # Streaming-specific
+                    "codec": s.codec,
+                    "bitrate": s.bitrate,
+                    "thumbnail_url": s.thumbnail_url,
+                    "duration_seconds": s.duration_seconds
+                },
+                # Backward compatibility: also include as "torrent"
                 "torrent": {
-                    "title": t.title,
-                    "magnet_link": t.magnet_link,
-                    "size_bytes": t.size_bytes,
-                    "size_formatted": t.size_formatted,
-                    "seeders": t.seeders,
-                    "leechers": t.leechers,
-                    "format": t.format,
-                    "bitrate": t.bitrate,
-                    "source": t.source,
-                    "quality_score": t.quality_score,
-                    "indexer": t.indexer
+                    "title": s.title,
+                    "magnet_link": s.magnet_link,
+                    "size_bytes": s.size_bytes,
+                    "size_formatted": s.size_formatted if s.size_bytes else None,
+                    "seeders": s.seeders,
+                    "leechers": s.leechers,
+                    "format": s.format,
+                    "bitrate": s.bitrate,
+                    "source": s.indexer,  # Legacy field mapping
+                    "quality_score": s.quality_score,
+                    "indexer": s.indexer
                 },
                 "explanation": ranked.explanation,
                 "tags": ranked.tags

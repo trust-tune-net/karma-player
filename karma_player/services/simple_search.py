@@ -6,8 +6,9 @@ from typing import List, Optional, Callable
 from dataclasses import dataclass
 import time
 import logging
+import inspect
 
-from karma_player.models.torrent import TorrentResult, RankedResult
+from karma_player.models.source import MusicSource, RankedSource
 from karma_player.models.query import MusicQuery
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.ai.query_parser import SQLLikeParser, NaturalLanguageToSQL
@@ -20,7 +21,7 @@ class SimpleSearchResult:
     """Simple search result"""
     query: str
     sql_query: Optional[str]
-    results: List[RankedResult]
+    results: List[RankedSource]
     total_found: int
     search_time_ms: int
 
@@ -67,7 +68,11 @@ class SimpleSearch:
 
         async def progress(percent: int, message: str):
             if progress_callback:
-                await progress_callback(percent, message)
+                # Handle both sync and async callbacks
+                if inspect.iscoroutinefunction(progress_callback):
+                    await progress_callback(percent, message)
+                else:
+                    progress_callback(percent, message)
 
         await progress(10, "Parsing query...")
 
@@ -132,12 +137,12 @@ class SimpleSearch:
 
         # Rank (already sorted by quality_score)
         ranked = []
-        for i, torrent in enumerate(torrents[:music_query.limit], 1):
-            explanation = self._explain(torrent, i)
-            tags = self._tag(torrent, i)
+        for i, source in enumerate(torrents[:music_query.limit], 1):
+            explanation = self._explain(source, i)
+            tags = self._tag(source, i)
 
-            ranked.append(RankedResult(
-                torrent=torrent,
+            ranked.append(RankedSource(
+                source=source,
                 rank=i,
                 explanation=explanation,
                 tags=tags
@@ -158,37 +163,40 @@ class SimpleSearch:
             search_time_ms=search_time_ms
         )
 
-    def _explain(self, torrent: TorrentResult, rank: int) -> str:
+    def _explain(self, source: MusicSource, rank: int) -> str:
         """Generate simple explanation"""
         parts = []
 
         if rank == 1:
             parts.append("🏆")
 
-        if torrent.format:
-            parts.append(torrent.format)
+        if source.format:
+            parts.append(source.format)
 
-        if torrent.bitrate:
-            parts.append(torrent.bitrate)
+        if source.bitrate:
+            parts.append(source.bitrate)
 
-        parts.append(f"{torrent.seeders} seeders")
-        parts.append(torrent.size_formatted)
+        if source.seeders is not None:
+            parts.append(f"{source.seeders} seeders")
+
+        if source.size_formatted:
+            parts.append(source.size_formatted)
 
         return " • ".join(parts)
 
-    def _tag(self, torrent: TorrentResult, rank: int) -> List[str]:
+    def _tag(self, source: MusicSource, rank: int) -> List[str]:
         """Generate tags"""
         tags = []
 
         if rank == 1:
             tags.append("best")
 
-        if torrent.format == "FLAC":
+        if source.format == "FLAC":
             tags.append("lossless")
-            if torrent.bitrate and ("24" in torrent.bitrate or "DSD" in torrent.bitrate.upper()):
+            if source.bitrate and ("24" in source.bitrate or "DSD" in source.bitrate.upper()):
                 tags.append("hi-res")
 
-        if torrent.seeders >= 50:
+        if source.seeders is not None and source.seeders >= 50:
             tags.append("fast")
 
         return tags

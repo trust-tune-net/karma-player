@@ -1,20 +1,20 @@
-"""Search engine orchestrator for torrent indexers."""
+"""Search engine orchestrator for music sources."""
 
 import asyncio
 from typing import List, Optional
 
-from karma_player.models.torrent import TorrentResult
-from karma_player.services.search.adapter_base import IndexerAdapter
+from karma_player.models.source import MusicSource
+from karma_player.services.search.source_adapter import SourceAdapter
 
 
 class SearchEngine:
-    """Orchestrates searches across multiple torrent indexers."""
+    """Orchestrates searches across multiple music source adapters."""
 
-    def __init__(self, adapters: List[IndexerAdapter]):
+    def __init__(self, adapters: List[SourceAdapter]):
         """Initialize search engine with adapters.
 
         Args:
-            adapters: List of IndexerAdapter instances
+            adapters: List of SourceAdapter instances
         """
         self.adapters = adapters
 
@@ -23,16 +23,16 @@ class SearchEngine:
         query: str,
         format_filter: Optional[str] = None,
         min_seeders: int = 5,
-    ) -> List[TorrentResult]:
-        """Search all healthy indexers and return deduplicated, sorted results.
+    ) -> List[MusicSource]:
+        """Search all healthy sources and return deduplicated, sorted results.
 
         Args:
             query: Search query string
             format_filter: Optional format filter (FLAC, MP3, etc.)
-            min_seeders: Minimum number of seeders (default 5)
+            min_seeders: Minimum number of seeders (applies to torrent sources only)
 
         Returns:
-            List of TorrentResult objects, deduplicated and sorted by quality
+            List of MusicSource objects, deduplicated and sorted by quality
         """
         # Filter to healthy adapters only
         healthy_adapters = [a for a in self.adapters if a.is_healthy]
@@ -68,8 +68,12 @@ class SearchEngine:
                 unique_results.append(result)
             # else: duplicate, skip
 
-        # Filter by minimum seeders
-        filtered_results = [r for r in unique_results if r.seeders >= min_seeders]
+        # Filter by minimum seeders (only applies to torrent sources)
+        # Non-torrent sources (streaming) are always included since they don't have seeders
+        filtered_results = [
+            r for r in unique_results
+            if r.seeders is None or r.seeders >= min_seeders
+        ]
 
         # Filter by format if specified
         if format_filter:
