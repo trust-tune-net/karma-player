@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:trusttune_gui/services/transmission_client.dart';
+import 'package:karma_player/services/transmission_client.dart';
 
 void main() {
   test('Transmission client can connect and get session', () async {

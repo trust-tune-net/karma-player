@@ -107,6 +107,8 @@ class DaemonManager {
   }
 
   /// Start the transmission daemon
+  /// Returns true if started successfully, false otherwise
+  /// Throws Exception with user-friendly message if directory access fails
   Future<bool> startDaemon({String? customDownloadDir}) async {
     if (_isRunning) {
       print('[Daemon] Already running');
@@ -124,11 +126,60 @@ class DaemonManager {
     _lastStartAttempt = DateTime.now();
 
     try {
-      // Ensure directories exist
+      // Ensure directories exist - THIS IS CRITICAL FOR PERMISSIONS
       final config = configDir;
       final download = getDownloadDir(customDownloadDir);
-      await Directory(config).create(recursive: true);
-      await Directory(download).create(recursive: true);
+
+      // Try to create config directory with detailed error handling
+      try {
+        await Directory(config).create(recursive: true);
+        print('[Daemon] ✓ Config directory accessible: $config');
+      } on FileSystemException catch (e) {
+        print('[Daemon] ❌ ERROR: Cannot create config directory');
+        print('[Daemon] Path: $config');
+        print('[Daemon] Error: ${e.message}');
+        print('[Daemon] OS Error: ${e.osError?.message}');
+        throw Exception(
+          'Cannot access config directory:\n$config\n\n'
+          'Error: ${e.osError?.message ?? e.message}\n\n'
+          'This directory is required for transmission-daemon to work.'
+        );
+      }
+
+      // Try to create download directory with detailed error handling
+      try {
+        await Directory(download).create(recursive: true);
+        // Verify we can actually write to it
+        final testFile = File('$download/.trusttune_test');
+        await testFile.writeAsString('test');
+        await testFile.delete();
+        print('[Daemon] ✓ Download directory accessible and writable: $download');
+      } on FileSystemException catch (e) {
+        print('[Daemon] ❌ ERROR: Cannot create or write to download directory');
+        print('[Daemon] Path: $download');
+        print('[Daemon] Error: ${e.message}');
+        print('[Daemon] OS Error: ${e.osError?.message}');
+
+        final isCustomDir = customDownloadDir != null && customDownloadDir.isNotEmpty;
+
+        // Platform-specific tips for protected folders
+        String protectedFolderTip;
+        if (Platform.isMacOS) {
+          protectedFolderTip = 'Tip: Avoid protected folders like Music, Photos, or Desktop on macOS.';
+        } else if (Platform.isWindows) {
+          protectedFolderTip = 'Tip: Avoid system folders like Program Files, Windows, or protected locations.';
+        } else {
+          protectedFolderTip = 'Tip: Avoid system folders like /usr, /bin, or root-owned directories.';
+        }
+
+        throw Exception(
+          'Cannot access download directory:\n$download\n\n'
+          'Error: ${e.osError?.message ?? e.message}\n\n'
+          '${isCustomDir ? "This is a custom directory you selected. " : ""}'
+          'Please choose a different location${isCustomDir ? " in Settings" : ""}.\n\n'
+          '$protectedFolderTip'
+        );
+      }
 
       print('[Daemon] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       print('[Daemon] Attempting to start transmission-daemon');
