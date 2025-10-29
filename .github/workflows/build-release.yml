@@ -49,6 +49,14 @@ jobs:
 
           echo "✅ Transmission bundled successfully"
 
+      - name: Download yt-dlp for macOS
+        run: |
+          echo "📥 Downloading yt-dlp..."
+          curl -L -o gui/macos/Runner/Resources/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+          chmod +x gui/macos/Runner/Resources/bin/yt-dlp
+          echo "✅ Downloaded yt-dlp for macOS"
+          ls -lh gui/macos/Runner/Resources/bin/yt-dlp
+
       - name: Install dependencies
         run: |
           cd gui
@@ -89,11 +97,20 @@ jobs:
             done
           fi
 
-          # Verify binary works
-          echo "🧪 Testing bundled binary..."
-          "$APP_PATH/Contents/Resources/bin/transmission-daemon" --version || echo "⚠️ Binary test failed"
+          # Copy yt-dlp binary
+          if [ -f gui/macos/Runner/Resources/bin/yt-dlp ]; then
+            cp gui/macos/Runner/Resources/bin/yt-dlp "$APP_PATH/Contents/Resources/bin/"
+            chmod +x "$APP_PATH/Contents/Resources/bin/yt-dlp"
+            codesign --force --sign - "$APP_PATH/Contents/Resources/bin/yt-dlp"
+            echo "✅ yt-dlp copied and signed"
+          fi
 
-          echo "✅ Binaries copied to app bundle"
+          # Verify binaries work
+          echo "🧪 Testing bundled binaries..."
+          "$APP_PATH/Contents/Resources/bin/transmission-daemon" --version || echo "⚠️ Transmission test failed"
+          "$APP_PATH/Contents/Resources/bin/yt-dlp" --version || echo "⚠️ yt-dlp test failed"
+
+          echo "✅ All binaries copied to app bundle"
 
       - name: Create ZIP
         run: |
@@ -198,6 +215,23 @@ jobs:
           echo "📦 Bundled files:"
           ls -la gui/windows-binaries/
 
+      - name: Download yt-dlp for Windows
+        shell: bash
+        run: |
+          echo "📥 Downloading yt-dlp..."
+          YTDLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+
+          curl -L -o gui/windows-binaries/yt-dlp.exe "$YTDLP_URL"
+
+          if [ ! -f gui/windows-binaries/yt-dlp.exe ]; then
+            echo "❌ Failed to download yt-dlp.exe"
+            exit 1
+          fi
+
+          echo "✅ Downloaded yt-dlp.exe ($(ls -lh gui/windows-binaries/yt-dlp.exe | awk '{print $5}'))"
+          echo "📦 Final bundled files:"
+          ls -la gui/windows-binaries/
+
       - name: Install dependencies
         run: |
           cd gui
@@ -277,6 +311,14 @@ jobs:
 
           echo "✅ Transmission binary prepared for Linux"
 
+      - name: Download yt-dlp for Linux
+        run: |
+          echo "📥 Downloading yt-dlp..."
+          curl -L -o gui/linux-binaries/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          chmod +x gui/linux-binaries/bin/yt-dlp
+          echo "✅ Downloaded yt-dlp for Linux"
+          ls -lh gui/linux-binaries/bin/yt-dlp
+
       - name: Build Linux app
         run: |
           cd gui
@@ -292,6 +334,13 @@ jobs:
             cp gui/linux-binaries/bin/transmission-daemon "$BUILD_DIR/bin/"
             chmod +x "$BUILD_DIR/bin/transmission-daemon"
             echo "✅ Transmission bundled with Linux app"
+          fi
+
+          # Copy yt-dlp to bundle
+          if [ -f gui/linux-binaries/bin/yt-dlp ]; then
+            cp gui/linux-binaries/bin/yt-dlp "$BUILD_DIR/bin/"
+            chmod +x "$BUILD_DIR/bin/yt-dlp"
+            echo "✅ yt-dlp bundled with Linux app"
           fi
 
       - name: Create TAR.GZ
