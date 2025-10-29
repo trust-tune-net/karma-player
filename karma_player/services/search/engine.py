@@ -1,10 +1,13 @@
 """Search engine orchestrator for music sources."""
 
 import asyncio
+import logging
 from typing import List, Optional
 
 from karma_player.models.source import MusicSource
 from karma_player.services.search.source_adapter import SourceAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class SearchEngine:
@@ -36,6 +39,7 @@ class SearchEngine:
         """
         # Filter to healthy adapters only
         healthy_adapters = [a for a in self.adapters if a.is_healthy]
+        logger.info(f"🔍 Searching with {len(healthy_adapters)} healthy adapters: {[a.name for a in healthy_adapters]}")
 
         if not healthy_adapters:
             return []
@@ -49,9 +53,11 @@ class SearchEngine:
         for adapter, results in zip(healthy_adapters, results_lists):
             if isinstance(results, Exception):
                 # Adapter failed, mark unhealthy and continue
+                logger.error(f"   ❌ {adapter.name} failed: {results}", exc_info=results)
                 adapter._update_health(success=False)
                 continue
 
+            logger.info(f"   ✓ {adapter.name}: {len(results)} results")
             adapter._update_health(success=True)
             all_results.extend(results)
 

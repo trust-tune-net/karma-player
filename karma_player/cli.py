@@ -14,6 +14,7 @@ from karma_player import __version__, __app_name__
 from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
+from karma_player.services.search.adapter_youtube_music import AdapterYouTubeMusic
 
 # Store real stdout for JSON events
 _REAL_STDOUT = sys.stdout
@@ -102,8 +103,11 @@ async def _search(
             indexer_id="all"
         )
 
-        # Create search engine and simple search
-        engine = SearchEngine(adapters=[jackett])
+        # YouTube Music streaming adapter
+        youtube_music = AdapterYouTubeMusic()
+
+        # Create search engine with both torrent and streaming adapters
+        engine = SearchEngine(adapters=[jackett, youtube_music])
         search_service = SimpleSearch(engine)
 
         # Progress callback

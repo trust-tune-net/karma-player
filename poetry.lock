@@ -3547,6 +3547,21 @@ multidict = ">=4.0"
 propcache = ">=0.2.1"
 
 [[package]]
+name = "ytmusicapi"
+version = "1.11.1"
+description = "Unofficial API for YouTube Music"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "ytmusicapi-1.11.1-py3-none-any.whl", hash = "sha256:bcaf208fd18c9b5b8971bc4436b17af132a4296de98708049d7638fdba90f6c9"},
+    {file = "ytmusicapi-1.11.1.tar.gz", hash = "sha256:364a1b457fa28f85f7fdd9cd8fe16b2d34a98e93cbd1358e31a01fdd5a93a3b9"},
+]
+
+[package.dependencies]
+requests = ">=2.22"
+
+[[package]]
 name = "zipp"
 version = "3.23.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -3569,4 +3584,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "7e31372e6ee525c52f7cd0ef7f64a98ff4401d72a8fa9fbfafd8b38ab3236905"
+content-hash = "d1af3ba1495fdfe31454dfb99d045d62e46af04250a229a1fba1ac2ac69590b6"

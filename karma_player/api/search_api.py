@@ -18,6 +18,7 @@ from karma_player.config import config
 from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
+from karma_player.services.search.adapter_youtube_music import AdapterYouTubeMusic
 
 
 # Configure logging
@@ -51,13 +52,16 @@ async def lifespan(app: FastAPI):
         indexer_id=config.JACKETT_INDEXER
     )
 
-    # Search engine
-    search_engine = SearchEngine(adapters=[jackett])
+    # YouTube Music streaming adapter
+    youtube_music = AdapterYouTubeMusic()
+
+    # Search engine with both torrent and streaming sources
+    search_engine = SearchEngine(adapters=[jackett, youtube_music])
 
     # Simple search service
     search_service = SimpleSearch(search_engine)
 
-    logger.info("✅ Search infrastructure ready!")
+    logger.info("✅ Search infrastructure ready (torrent + streaming)!")
 
     yield
 
