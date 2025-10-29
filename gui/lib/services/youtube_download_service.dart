@@ -5,19 +5,35 @@
 //
 // Flow:
 // 1. User clicks play on YouTube result
-// 2. Service downloads audio to /tmp using yt-dlp
+// 2. Service downloads audio to temp directory using yt-dlp
 // 3. Returns local file path
 // 4. media_kit plays the local file (100% reliable)
+//
+// Cross-platform: Works on macOS, Windows, and Linux
 
 import 'dart:io';
 import 'dart:async';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class YouTubeDownloadService {
-  // Cache directory for YouTube downloads
-  final String _cacheDir = '/tmp';
+  // Cache directory for YouTube downloads (platform-specific)
+  String? _cacheDir;
 
   // Track active downloads to avoid duplicates
   final Map<String, Future<String?>> _activeDownloads = {};
+
+  /// Get platform-specific cache directory
+  ///
+  /// - macOS/Linux: /tmp
+  /// - Windows: C:\Users\...\AppData\Local\Temp
+  Future<String> _getCacheDir() async {
+    if (_cacheDir != null) return _cacheDir!;
+
+    final tempDir = await getTemporaryDirectory();
+    _cacheDir = tempDir.path;
+    return _cacheDir!;
+  }
 
   /// Download YouTube audio to temp file
   ///
@@ -52,8 +68,9 @@ class YouTubeDownloadService {
   /// Internal download logic
   Future<String?> _downloadAudioInternal(String videoId) async {
     try {
+      final cacheDir = await _getCacheDir();
       final url = 'https://music.youtube.com/watch?v=$videoId';
-      final outputTemplate = '$_cacheDir/youtube_%(id)s.%(ext)s';
+      final outputTemplate = path.join(cacheDir, 'youtube_%(id)s.%(ext)s');
 
       print('[YouTube Download] Starting download: $videoId');
       print('[YouTube Download]    URL: $url');
@@ -133,11 +150,13 @@ class YouTubeDownloadService {
 
   /// Check if file is already cached
   Future<String?> _getCachedFile(String videoId) async {
+    final cacheDir = await _getCacheDir();
+
     // Check for common extensions
     final extensions = ['webm', 'opus', 'm4a', 'mp3', 'ogg'];
 
     for (final ext in extensions) {
-      final filePath = '$_cacheDir/youtube_$videoId.$ext';
+      final filePath = path.join(cacheDir, 'youtube_$videoId.$ext');
       final file = File(filePath);
       if (await file.exists()) {
         final size = await file.length();
@@ -152,12 +171,13 @@ class YouTubeDownloadService {
 
   /// Find the downloaded file (yt-dlp may use different extensions)
   Future<String?> _findDownloadedFile(String videoId) async {
-    final dir = Directory(_cacheDir);
+    final cacheDir = await _getCacheDir();
+    final dir = Directory(cacheDir);
     final files = await dir.list().toList();
 
     for (final file in files) {
       if (file is File) {
-        final name = file.path.split('/').last;
+        final name = path.basename(file.path);
         // Match: youtube_VIDEO_ID.EXT
         if (name.startsWith('youtube_$videoId.')) {
           return file.path;
@@ -171,7 +191,8 @@ class YouTubeDownloadService {
   /// Clean up old cached files
   Future<void> cleanOldFiles({Duration maxAge = const Duration(hours: 24)}) async {
     try {
-      final dir = Directory(_cacheDir);
+      final cacheDir = await _getCacheDir();
+      final dir = Directory(cacheDir);
       final now = DateTime.now();
 
       final files = await dir.list().toList();
@@ -179,7 +200,7 @@ class YouTubeDownloadService {
 
       for (final file in files) {
         if (file is File) {
-          final name = file.path.split('/').last;
+          final name = path.basename(file.path);
           if (name.startsWith('youtube_')) {
             final stat = await file.stat();
             final age = now.difference(stat.modified);
