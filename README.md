@@ -79,6 +79,9 @@ Both get you the same results: AI-ranked, quality-scored, ready to play.
 - ✅ MusicBrainz metadata (35M+ recordings)
 - ✅ Built-in player + auto-tagging
 - ✅ **Bundled Transmission** - No separate installation!
+- ✅ **Dual playback modes:**
+  - 🎵 **Torrents:** Download high-quality files (FLAC, DSD, hi-res) to own forever
+  - ▶️ **YouTube:** Stream instantly (or "downplay" - download while playing)
 - ✅ Works out of the box (your grandma could use it)
 
 ### Phases 1-3 — The Vision
@@ -86,6 +89,134 @@ Both get you the same results: AI-ranked, quality-scored, ready to play.
 **Phase 1:** Community trust network (like Wikipedia for music quality)
 **Phase 2:** Federation protocol (anyone can run a node)
 **Phase 3:** Creator payments (95% to artists, not Spotify's $0.003)
+
+---
+
+## 🔧 Troubleshooting
+
+### Security Warnings (Expected Behavior)
+
+**⚠️ TrustTune is not code-signed**, so you'll see security warnings on first launch. This is normal and expected.
+
+#### macOS Security Warning
+
+When you first run TrustTune on macOS, you'll see:
+> **"TrustTune.app cannot be opened because it is from an unidentified developer"**
+
+**How to fix:**
+1. Right-click (or Control+click) on `TrustTune.app`
+2. Select **"Open"** from the menu
+3. Click **"Open"** in the security dialog
+
+**OR:**
+
+1. Try to open TrustTune normally (it will be blocked)
+2. Go to **System Settings** → **Privacy & Security**
+3. Scroll down to the **Security** section
+4. Look for the message: *"TrustTune.app was blocked from use because it is not from an identified developer"*
+5. Click **"Open Anyway"**
+6. Confirm by clicking **"Open"** in the dialog
+
+**Why this happens:**
+- Code signing certificates cost $99/year
+- TrustTune is open-source and community-driven
+- You can verify the source code yourself on GitHub
+- Once allowed, macOS will remember your choice
+
+#### Windows Security Warning
+
+Windows Defender SmartScreen may show:
+> **"Windows protected your PC"**
+
+**How to fix:**
+1. Click **"More info"**
+2. Click **"Run anyway"**
+
+**Why this happens:**
+- Windows flags unsigned applications
+- TrustTune is safe - check the source code yourself
+- Once allowed, Windows will remember your choice
+
+#### Linux Permission Issues
+
+If TrustTune won't run on Linux:
+
+```bash
+# Make it executable
+chmod +x TrustTune
+
+# If transmission-daemon won't start
+chmod +x resources/bin/transmission-daemon
+```
+
+### Common Issues
+
+#### "Transmission daemon failed to start"
+
+**Cause:** Port conflict or permission issue
+
+**Fix:**
+```bash
+# Check if transmission is already running
+ps aux | grep transmission
+
+# Kill existing processes
+pkill transmission-daemon
+
+# On macOS, also check for TrustTune processes
+pkill trusttune_gui
+```
+
+#### YouTube downloads not working (Windows)
+
+**Cause:** yt-dlp not in PATH or missing ffmpeg
+
+**Fix:**
+- TrustTune bundles yt-dlp automatically on Windows
+- If issues persist, restart TrustTune
+- Check logs: `%APPDATA%\Local\com.example.trusttuneGui\logs\`
+
+#### Audio not playing
+
+**Cause:** Missing audio codecs or permissions
+
+**Fix:**
+- **macOS:** Grant microphone/audio permissions in System Settings
+- **Windows:** Install Windows Media Feature Pack
+- **Linux:** Install `libmpv` and `ffmpeg`
+
+### Debug Logs
+
+**Log locations:**
+- **macOS:** `~/Library/Application Support/com.example.trusttuneGui/logs/` and `/tmp/log/karmaplayer.log`
+- **Windows:** `%APPDATA%\Local\com.example.trusttuneGui\logs\`
+- **Linux:** `~/.local/share/com.example.trusttuneGui/logs/`
+
+Check logs for detailed error messages if something goes wrong.
+
+### 🐛 Found a Bug? Help Us Fix It!
+
+If you're experiencing issues, **please help us improve TrustTune** by reporting them:
+
+**Quick bug report (macOS/Linux):**
+```bash
+# Copy the latest log to your clipboard
+cat /tmp/log/karmaplayer.log | pbcopy  # macOS
+cat /tmp/log/karmaplayer.log | xclip   # Linux
+
+# Or view the full log
+cat "$(ls -t ~/Library/Application\ Support/com.example.trusttuneGui/logs/*.log | head -1)"  # macOS
+cat "$(ls -t ~/.local/share/com.example.trusttuneGui/logs/*.log | head -1)"  # Linux
+```
+
+**Then:**
+1. Go to [GitHub Issues](https://github.com/trust-tune-net/karma-player/issues)
+2. Click **"New Issue"**
+3. Describe what happened and what you expected
+4. **Paste your error log** (it's anonymous - no personal data)
+5. Submit!
+
+**Your bug reports help everyone.** Every issue fixed makes TrustTune better for the community. Thank you! 🙏
 
 ---
 
@@ -134,7 +265,23 @@ SELECT track WHERE title="Paranoid Android" ORDER BY seeders DESC
 SELECT album WHERE artist="Miles Davis" AND year BETWEEN 1955 AND 1965
 ```
 
-Both interfaces → Same AI-ranked results → Built-in player → Done.
+Both interfaces → Same AI-ranked results → Choose your playback mode:
+
+### Two Playback Modes
+
+🎵 **Torrent Downloads** (High Quality)
+- Download FLAC, DSD, hi-res files to **own forever**
+- Quality-verified, seeder-ranked results
+- Auto-organized library with metadata
+- Built-in Transmission daemon handles everything
+
+▶️ **YouTube Streaming** (Instant Playback)
+- Stream instantly or "downplay" (download while playing)
+- Perfect for quick listening or previews
+- Uses yt-dlp for best quality streams
+- Optional: download for offline playback
+
+**Both modes work seamlessly** in the same interface with the built-in player.
 
 ### CLI — For Power Users & Scripts
 
