@@ -195,15 +195,16 @@ class LibraryScreenState extends State<LibraryScreen> {
         }
       }
 
-      // Now process files and extract metadata
+      // Now process files quickly (basic info only - metadata loaded on-demand)
       for (final fileInfo in filesToProcess) {
         final albumPath = fileInfo['albumPath'] as String;
         if (!albumMap.containsKey(albumPath)) {
           albumMap[albumPath] = [];
         }
 
-        // Extract metadata asynchronously
-        final song = await Song.fromFileWithMetadata(
+        // Use fast parsing (no metadata extraction) for library view
+        // Detailed metadata will be loaded on-demand when viewing file info
+        final song = Song.fromFile(
           fileInfo['path'] as String,
           albumName: fileInfo['albumName'] as String,
           artistName: fileInfo['artistName'] as String,
