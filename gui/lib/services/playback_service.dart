@@ -103,6 +103,12 @@ class PlaybackService extends ChangeNotifier {
 
   // Playback controls
   void playSong(Song song, {List<Song>? queue, bool isShuffled = false}) {
+    // Stop/pause current playback to avoid concurrent player.open() calls
+    if (_playerInitialized && _player != null && _isPlaying) {
+      print('[PLAYBACK] Stopping previous playback before starting new song');
+      _player!.pause();
+    }
+
     _currentSong = song;
 
     if (queue != null) {

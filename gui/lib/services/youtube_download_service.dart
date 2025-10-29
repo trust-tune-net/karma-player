@@ -23,6 +23,10 @@ class YouTubeDownloadService {
   // Track active downloads to avoid duplicates
   final Map<String, Future<String?>> _activeDownloads = {};
 
+  // Track active download processes for cancellation
+  final Map<String, Process> _activeProcesses = {};
+  String? _currentDownloadId;
+
   /// Get platform-specific cache directory
   ///
   /// - macOS/Linux: /tmp
@@ -40,6 +44,19 @@ class YouTubeDownloadService {
   /// Returns the local file path when ready for playback.
   /// Downloads are cached by video ID to avoid duplicate downloads.
   Future<String?> downloadAudio(String videoId) async {
+    // Cancel any previous download if a new one is requested
+    if (_currentDownloadId != null && _currentDownloadId != videoId) {
+      print('[YouTube Download] ⏹️  Canceling previous download: $_currentDownloadId');
+      final prevProcess = _activeProcesses[_currentDownloadId!];
+      if (prevProcess != null) {
+        prevProcess.kill();
+        _activeProcesses.remove(_currentDownloadId);
+      }
+      _activeDownloads.remove(_currentDownloadId);
+    }
+
+    _currentDownloadId = videoId;
+
     // Check if already downloading this video
     if (_activeDownloads.containsKey(videoId)) {
       print('[YouTube Download] Already downloading $videoId, waiting...');
@@ -62,6 +79,10 @@ class YouTubeDownloadService {
       return result;
     } finally {
       _activeDownloads.remove(videoId);
+      _activeProcesses.remove(videoId);
+      if (_currentDownloadId == videoId) {
+        _currentDownloadId = null;
+      }
     }
   }
 
@@ -91,6 +112,9 @@ class YouTubeDownloadService {
           url,
         ],
       );
+
+      // Store process for potential cancellation
+      _activeProcesses[videoId] = process;
 
       // Monitor download progress
       final stdout = <String>[];
