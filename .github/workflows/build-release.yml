@@ -8,7 +8,16 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-13        # Intel runner (x86_64)
+            arch: x86_64
+            name: Intel
+          - os: macos-14        # Apple Silicon runner (arm64)
+            arch: arm64
+            name: AppleSilicon
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -108,19 +117,19 @@ jobs:
           # Copy install instructions from repo root
           cp ../../../../../../MACOS_INSTALL.txt .
           
-          # Create ZIP with app and instructions
-          ditto -c -k --sequesterRsrc --keepParent KarmaPlayer.app ../../../../../KarmaPlayer-macOS.zip
+          # Create ZIP with app and instructions (architecture-specific naming)
+          ditto -c -k --sequesterRsrc --keepParent KarmaPlayer.app ../../../../../KarmaPlayer-macOS-${{ matrix.name }}.zip
           
           # Add install instructions to ZIP
-          zip -u ../../../../../KarmaPlayer-macOS.zip MACOS_INSTALL.txt
+          zip -u ../../../../../KarmaPlayer-macOS-${{ matrix.name }}.zip MACOS_INSTALL.txt
           
           cd ../../../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KarmaPlayer-macOS
-          path: gui/KarmaPlayer-macOS.zip
+          name: KarmaPlayer-macOS-${{ matrix.name }}
+          path: gui/KarmaPlayer-macOS-${{ matrix.name }}.zip
 
   build-windows:
     runs-on: windows-latest
@@ -353,11 +362,19 @@ jobs:
         with:
           path: artifacts
 
+      - name: Extract version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' gui/pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "📦 Extracted version: ${VERSION}"
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/KarmaPlayer-macOS/*
+            artifacts/KarmaPlayer-macOS-Intel/*
+            artifacts/KarmaPlayer-macOS-AppleSilicon/*
             artifacts/KarmaPlayer-Windows/*
             artifacts/KarmaPlayer-Linux/*
           draft: false
@@ -368,9 +385,18 @@ jobs:
 
             **AI-powered music discovery with built-in player**
 
-            ### ⚠️ IMPORTANT: macOS First-Time Installation
+            ### ⚠️ IMPORTANT: macOS Installation
 
-            **macOS will show a security warning on first launch.** This is normal for open-source apps not signed with an Apple Developer ID.
+            **1. Choose the Correct Version for Your Mac:**
+            
+            - Click Apple menu () → **About This Mac**
+            - Look at the **Chip** or **Processor** line:
+              - **Intel** processor (2020 and earlier) → Download **Intel** version
+              - **Apple M1/M2/M3** (2020+) → Download **AppleSilicon** version
+
+            **2. First Launch Security Warning:**
+            
+            macOS will show a security warning on first launch. This is normal for open-source apps.
 
             **To fix (choose ONE method):**
 
@@ -381,8 +407,9 @@ jobs:
 
             📄 See `MACOS_INSTALL.txt` (included in download) for detailed instructions.
 
-            ### 🎉 What's New in v0.9.5
+            ### 🎉 What's New in v${{ steps.version.outputs.version }}
 
+            - 🏗️ **Architecture-specific macOS builds** - Fixed "Bad CPU type" errors on Intel Macs
             - 🐛 **Fixed Flutter engine SIGPIPE on older macOS** - Big Sur (11.6.1) compatibility
             - 🐛 **Fixed SIGPIPE crashes** - No more random crashes during playback
             - 🐛 **Fixed MPV memory crashes** - Improved lifecycle management
@@ -391,9 +418,19 @@ jobs:
 
             ### Downloads
 
-            - **macOS**: Download the `.zip` file (Intel & Apple Silicon) - **See installation note above!**
-            - **Windows**: Download the `.zip` file, extract and run
-            - **Linux**: Download the `.tar.gz` file, extract and run
+            **macOS - Intel (x86_64)**
+            - For Intel-based Macs (2020 and earlier)
+            - Download: `KarmaPlayer-macOS-Intel.zip`
+
+            **macOS - Apple Silicon (ARM64)**
+            - For M1, M2, M3+ Macs (2020 and newer)
+            - Download: `KarmaPlayer-macOS-AppleSilicon.zip`
+
+            **Windows**
+            - Download the `.zip` file, extract and run
+
+            **Linux**
+            - Download the `.tar.gz` file, extract and run
 
             ### Features
             - 🎨 Modern GUI with responsive design

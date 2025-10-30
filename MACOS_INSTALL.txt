@@ -2,7 +2,23 @@
   KARMA PLAYER - macOS Installation Instructions
 ═══════════════════════════════════════════════════════════════
 
-⚠️  IMPORTANT: First-Time Installation on macOS
+⚠️  STEP 1: DOWNLOAD THE CORRECT VERSION FOR YOUR MAC
+
+Check your Mac's processor:
+1. Click Apple menu () → About This Mac
+2. Look at the "Chip" or "Processor" line:
+
+   • INTEL processor (2020 and earlier)
+     → Download: KarmaPlayer-macOS-Intel.zip
+
+   • APPLE M1/M2/M3 (2020 and newer)
+     → Download: KarmaPlayer-macOS-AppleSilicon.zip
+
+⚠️  IMPORTANT: Using the wrong version will show "Bad CPU type" error!
+
+═══════════════════════════════════════════════════════════════
+  STEP 2: FIRST-TIME INSTALLATION
+═══════════════════════════════════════════════════════════════
 
 macOS will block this app because it's not signed with an Apple
 Developer ID certificate ($99/year). This is NORMAL for open-source
