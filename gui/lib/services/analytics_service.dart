@@ -31,7 +31,8 @@ class AnalyticsService {
 
     // Load user preference
     final prefs = await SharedPreferences.getInstance();
-    _enabled = prefs.getBool('analytics_enabled') ?? false; // Default: OFF (privacy-first)
+    // BETA TESTING: Default to TRUE so all crashes are reported during testing
+    _enabled = prefs.getBool('analytics_enabled') ?? true;
 
     _initialized = true;
     debugPrint('[Analytics] Marked as initialized (enabled: $_enabled)');

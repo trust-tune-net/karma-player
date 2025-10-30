@@ -80,12 +80,13 @@ void main() async {
     // Handle SharedPreferences initialization errors
     try {
       prefs = await SharedPreferences.getInstance();
-      crashReportingEnabled = prefs.getBool('analytics_enabled') ?? false;
+      // BETA TESTING: Default to TRUE so all crashes are reported
+      crashReportingEnabled = prefs.getBool('analytics_enabled') ?? true;
     } catch (e, stackTrace) {
       debugPrint('⚠️  ERROR: Could not load SharedPreferences: $e');
       debugPrint('Stack trace: $stackTrace');
-      // Continue with crash reporting disabled (safe default)
-      crashReportingEnabled = false;
+      // BETA TESTING: Enable crash reporting even if SharedPreferences fails
+      crashReportingEnabled = true;
     }
 
     debugPrint('═══════════════════════════════════════════════');
