@@ -137,6 +137,24 @@ jobs:
 
           echo "✅ All binaries copied to app bundle"
 
+      - name: Re-sign app bundle
+        run: |
+          APP_PATH="gui/build/macos/Build/Products/Release/KarmaPlayer.app"
+          
+          echo "🔏 Re-signing app bundle after modifications..."
+          
+          # Re-sign the entire bundle with ad-hoc signature
+          # --force: Replace existing signature (which was invalidated by modifications)
+          # --deep: Sign all nested code (binaries, frameworks, etc.)
+          # --sign -: Use ad-hoc signing (no certificate needed)
+          codesign --force --deep --sign - "$APP_PATH"
+          
+          # Verify signature
+          echo "✅ Verifying signature..."
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH" 2>&1 || true
+          
+          echo "✅ App bundle re-signed successfully"
+
       - name: Create ZIP
         run: |
           cd gui/build/macos/Build/Products/Release
