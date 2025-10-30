@@ -31,6 +31,61 @@ class YouTubeDownloadService {
   // Track active stream subscriptions for cleanup (prevents SIGPIPE)
   final Map<String, List<StreamSubscription>> _activeSubscriptions = {};
 
+  /// Get the path to the yt-dlp binary
+  /// 
+  /// Resolves to bundled binary first, then falls back to system installation.
+  /// This prevents "No such file or directory" errors when macOS app is launched
+  /// from Finder with minimal PATH (doesn't include Homebrew directories).
+  String get ytDlpPath {
+    String bundledPath;
+
+    if (Platform.isMacOS) {
+      // macOS: binary is in app bundle Resources
+      final executable = Platform.resolvedExecutable;
+      // executable is .../KarmaPlayer.app/Contents/MacOS/KarmaPlayer
+      // we want .../KarmaPlayer.app/Contents
+      final contentsDir = path.dirname(path.dirname(executable));
+      bundledPath = path.join(contentsDir, 'Resources', 'bin', 'yt-dlp');
+    } else if (Platform.isWindows) {
+      // Windows: binary is next to executable
+      final executable = Platform.resolvedExecutable;
+      final appDir = path.dirname(executable);
+      bundledPath = path.join(appDir, 'yt-dlp.exe');
+    } else {
+      // Linux: binary is in app directory
+      final executable = Platform.resolvedExecutable;
+      final appDir = path.dirname(executable);
+      bundledPath = path.join(appDir, 'bin', 'yt-dlp');
+    }
+
+    // Check if bundled binary exists
+    if (File(bundledPath).existsSync()) {
+      return bundledPath;
+    }
+
+    // Fallback to system yt-dlp (mainly for debug mode without bundled binary)
+    if (Platform.isMacOS) {
+      // Try Homebrew locations
+      final brewPaths = [
+        '/opt/homebrew/bin/yt-dlp',  // Apple Silicon
+        '/usr/local/bin/yt-dlp',     // Intel Mac
+      ];
+      for (final brewPath in brewPaths) {
+        if (File(brewPath).existsSync()) {
+          return brewPath;
+        }
+      }
+    } else if (Platform.isLinux) {
+      const systemPath = '/usr/bin/yt-dlp';
+      if (File(systemPath).existsSync()) {
+        return systemPath;
+      }
+    }
+
+    // Return bundled path anyway (will fail with helpful error message)
+    return bundledPath;
+  }
+
   /// Get platform-specific cache directory
   ///
   /// - macOS/Linux: /tmp
@@ -134,7 +189,7 @@ class YouTubeDownloadService {
       // --newline: Progress on separate lines (easier to parse)
       // --no-warnings: Reduce output noise
       final process = await Process.start(
-        'yt-dlp',
+        ytDlpPath,  // Use full path instead of relying on system PATH
         [
           '-f', 'bestaudio',
           '--no-playlist',

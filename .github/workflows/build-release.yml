@@ -58,6 +58,20 @@ jobs:
 
           echo "✅ Transmission bundled successfully"
 
+      - name: Download and bundle yt-dlp
+        run: |
+          echo "📥 Downloading yt-dlp for macOS..."
+          
+          # Download yt-dlp (universal binary works for both architectures)
+          curl -L -o gui/macos/Runner/Resources/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          
+          chmod +x gui/macos/Runner/Resources/bin/yt-dlp
+          
+          # Verify download
+          ls -lh gui/macos/Runner/Resources/bin/yt-dlp
+          
+          echo "✅ yt-dlp bundled successfully"
+
       - name: Install dependencies
         run: |
           cd gui
@@ -87,6 +101,18 @@ jobs:
             # Re-sign after modifying
             echo "🔏 Signing binary..."
             codesign --force --sign - "$APP_PATH/Contents/Resources/bin/transmission-daemon"
+          fi
+
+          # Copy yt-dlp binary
+          if [ -f gui/macos/Runner/Resources/bin/yt-dlp ]; then
+            cp gui/macos/Runner/Resources/bin/yt-dlp "$APP_PATH/Contents/Resources/bin/"
+            chmod +x "$APP_PATH/Contents/Resources/bin/yt-dlp"
+            
+            # Sign the binary
+            echo "🔏 Signing yt-dlp binary..."
+            codesign --force --sign - "$APP_PATH/Contents/Resources/bin/yt-dlp"
+            
+            echo "✅ yt-dlp copied and signed"
           fi
 
           if [ -d gui/macos/Runner/Resources/lib ]; then
@@ -318,6 +344,20 @@ jobs:
 
           echo "✅ Transmission binary prepared for Linux"
 
+      - name: Download and bundle yt-dlp (Linux)
+        run: |
+          echo "📥 Downloading yt-dlp for Linux..."
+          
+          mkdir -p gui/linux-binaries/bin
+          curl -L -o gui/linux-binaries/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          
+          chmod +x gui/linux-binaries/bin/yt-dlp
+          
+          # Verify download
+          ls -lh gui/linux-binaries/bin/yt-dlp
+          
+          echo "✅ yt-dlp bundled successfully"
+
       - name: Build Linux app
         run: |
           cd gui
@@ -333,6 +373,13 @@ jobs:
             cp gui/linux-binaries/bin/transmission-daemon "$BUILD_DIR/bin/"
             chmod +x "$BUILD_DIR/bin/transmission-daemon"
             echo "✅ Transmission bundled with Linux app"
+          fi
+
+          # Copy yt-dlp to bundle
+          if [ -f gui/linux-binaries/bin/yt-dlp ]; then
+            cp gui/linux-binaries/bin/yt-dlp "$BUILD_DIR/bin/"
+            chmod +x "$BUILD_DIR/bin/yt-dlp"
+            echo "✅ yt-dlp bundled with Linux app"
           fi
 
       - name: Create TAR.GZ
