@@ -62,8 +62,9 @@ jobs:
         run: |
           echo "📥 Downloading yt-dlp for macOS..."
           
-          # Download yt-dlp (universal binary works for both architectures)
-          curl -L -o gui/macos/Runner/Resources/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          # Download yt-dlp standalone binary (no Python dependency)
+          # Using yt-dlp_macos instead of yt-dlp to avoid Python 3.10+ requirement
+          curl -L -o gui/macos/Runner/Resources/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
           
           chmod +x gui/macos/Runner/Resources/bin/yt-dlp
           
@@ -348,8 +349,10 @@ jobs:
         run: |
           echo "📥 Downloading yt-dlp for Linux..."
           
+          # Download yt-dlp standalone binary (no Python dependency)
+          # Using yt-dlp_linux instead of yt-dlp to avoid Python 3.10+ requirement
           mkdir -p gui/linux-binaries/bin
-          curl -L -o gui/linux-binaries/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          curl -L -o gui/linux-binaries/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           
           chmod +x gui/linux-binaries/bin/yt-dlp
           
