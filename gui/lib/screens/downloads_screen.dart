@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/transmission_client.dart';
+import '../services/analytics_service.dart';
 import '../main.dart';
 
 class DownloadsScreen extends StatefulWidget {
@@ -115,8 +116,25 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
       } else {
         print('[Downloads] Widget not mounted, skipping setState');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[Downloads] Error loading downloads: $e');
+      
+      // Report to Glitchtip (non-connection errors only)
+      final isConnectionError = e.toString().contains('Connection refused') ||
+                                e.toString().contains('Failed to connect') ||
+                                e.toString().contains('SocketException');
+      
+      if (!isConnectionError) {
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'downloads_load_torrents',
+          extras: {
+            'api_url': appSettings.transmissionRpcUrl,
+          },
+        );
+      }
+      
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -160,8 +178,20 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
           SnackBar(content: Text('Deleted "$title"')),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error deleting download: $e');
+      
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'downloads_delete_torrent',
+        extras: {
+          'torrent_id': downloadId,
+          'title': title,
+        },
+      );
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error deleting download')),

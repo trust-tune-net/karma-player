@@ -85,6 +85,8 @@ void main() async {
     } catch (e, stackTrace) {
       debugPrint('⚠️  ERROR: Could not load SharedPreferences: $e');
       debugPrint('Stack trace: $stackTrace');
+      // NOTE: This error will be caught and reported by the outer try-catch block in main()
+      // if it prevents the app from starting. Otherwise, crashReportingEnabled defaults to true.
       // BETA TESTING: Enable crash reporting even if SharedPreferences fails
       crashReportingEnabled = true;
     }
@@ -133,6 +135,22 @@ void main() async {
     // Final safety net: catch any errors in main() that weren't caught elsewhere
     debugPrint('❌ CRITICAL ERROR in main(): $e');
     debugPrint('Stack trace: $stackTrace');
+    
+    // Try to report to Sentry directly (if it was initialized)
+    try {
+      await Sentry.captureException(
+        e,
+        stackTrace: stackTrace,
+        hint: Hint.withMap({
+          'context': 'main_startup_fatal',
+          'stage': 'before_runApp',
+        }),
+      );
+    } catch (_) {
+      // Sentry not initialized, can't report
+      debugPrint('⚠️  Could not report error to Sentry (not initialized)');
+    }
+    
     // Still try to run the app
     try {
       await _runApp();

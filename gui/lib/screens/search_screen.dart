@@ -11,6 +11,7 @@ import '../models/song.dart';
 import '../services/transmission_client.dart';
 import '../services/playback_service.dart';
 import '../services/youtube_download_service.dart';
+import '../services/analytics_service.dart';
 import '../main.dart';
 
 enum SourceFilter { all, torrents, streaming }
@@ -130,7 +131,18 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           _isSearching = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'search_api',
+        extras: {
+          'query': _searchController.text,
+          'api_url': appSettings.searchApiUrl,
+        },
+      );
+      
       setState(() {
         _statusMessage = 'Search error: $e';
         _isSearching = false;
@@ -313,7 +325,22 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         );
 
         // Play using shared playback service
-        widget.onSongTap?.call(downloadedSong);
+        try {
+          widget.onSongTap?.call(downloadedSong);
+        } catch (e, stackTrace) {
+          print('[YouTube Download] Error calling onSongTap: $e');
+          AnalyticsService().captureError(
+            e,
+            stackTrace,
+            context: 'youtube_play_callback',
+            extras: {
+              'video_id': sourceId,
+              'title': title,
+            },
+          );
+          // Rethrow to be caught by outer handler
+          rethrow;
+        }
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -330,8 +357,21 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         print('[STREAMING] Non-YouTube URL: $url');
         throw Exception('Only YouTube Music streaming is supported');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[YouTube Download] ❌ Error: $e');
+      
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'youtube_stream_play',
+        extras: {
+          'video_id': sourceId,
+          'title': title,
+          'url': url.toString(),
+        },
+      );
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -413,6 +453,19 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       final isConnectionError = errorStr.contains('Connection refused') ||
                                  errorStr.contains('Failed to connect') ||
                                  errorStr.contains('SocketException');
+
+      // Report to Glitchtip (non-connection errors only, to avoid spam)
+      if (!isConnectionError) {
+        AnalyticsService().captureError(
+          e,
+          StackTrace.current,
+          context: 'torrent_download',
+          extras: {
+            'title': title,
+            'magnet_link': magnetLink.toString().substring(0, 100),
+          },
+        );
+      }
 
       if (isConnectionError) {
         // Transmission daemon is not running

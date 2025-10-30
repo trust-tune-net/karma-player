@@ -140,6 +140,19 @@ class DaemonManager {
         print('[Daemon] Path: $config');
         print('[Daemon] Error: ${e.message}');
         print('[Daemon] OS Error: ${e.osError?.message}');
+        
+        // Report to Glitchtip
+        AnalyticsService().captureError(
+          e,
+          StackTrace.current,
+          context: 'daemon_config_dir_permission',
+          extras: {
+            'path': config,
+            'os_error': e.osError?.message,
+            'platform': Platform.operatingSystem,
+          },
+        );
+        
         throw Exception(
           'Cannot access config directory:\n$config\n\n'
           'Error: ${e.osError?.message ?? e.message}\n\n'
@@ -160,6 +173,19 @@ class DaemonManager {
         print('[Daemon] Path: $download');
         print('[Daemon] Error: ${e.message}');
         print('[Daemon] OS Error: ${e.osError?.message}');
+
+        // Report to Glitchtip
+        AnalyticsService().captureError(
+          e,
+          StackTrace.current,
+          context: 'daemon_download_dir_permission',
+          extras: {
+            'path': download,
+            'is_custom_dir': customDownloadDir != null && customDownloadDir.isNotEmpty,
+            'os_error': e.osError?.message,
+            'platform': Platform.operatingSystem,
+          },
+        );
 
         final isCustomDir = customDownloadDir != null && customDownloadDir.isNotEmpty;
 
@@ -228,12 +254,38 @@ class DaemonManager {
       print('[Daemon] Process started with PID: ${_daemonProcess!.pid}');
 
       // Listen for stdout/stderr
-      _daemonProcess!.stdout.transform(utf8.decoder).listen((data) {
-        print('[Daemon STDOUT] $data');
-      });
-      _daemonProcess!.stderr.transform(utf8.decoder).listen((data) {
-        print('[Daemon STDERR] $data');
-      });
+      _daemonProcess!.stdout.transform(utf8.decoder).listen(
+        (data) {
+          print('[Daemon STDOUT] $data');
+        },
+        onError: (error, stackTrace) {
+          print('[Daemon STDOUT] Stream error: $error');
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'daemon_stdout_stream',
+            extras: {
+              'platform': Platform.operatingSystem,
+            },
+          );
+        },
+      );
+      _daemonProcess!.stderr.transform(utf8.decoder).listen(
+        (data) {
+          print('[Daemon STDERR] $data');
+        },
+        onError: (error, stackTrace) {
+          print('[Daemon STDERR] Stream error: $error');
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'daemon_stderr_stream',
+            extras: {
+              'platform': Platform.operatingSystem,
+            },
+          );
+        },
+      );
 
       // Wait a bit for daemon to start
       await Future.delayed(const Duration(seconds: 2));
@@ -319,6 +371,20 @@ class DaemonManager {
     } catch (e, stackTrace) {
       print('[Daemon] ❌ ERROR starting daemon: $e');
       print('[Daemon] Stack trace: $stackTrace');
+      
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'daemon_startup',
+        extras: {
+          'daemon_path': daemonPath,
+          'config_dir': configDir,
+          'download_dir': getDownloadDir(customDownloadDir),
+          'platform': Platform.operatingSystem,
+        },
+      );
+      
       _isRunning = false;
       _daemonProcess = null;
     }

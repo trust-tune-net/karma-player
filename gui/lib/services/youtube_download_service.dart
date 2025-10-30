@@ -15,6 +15,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'analytics_service.dart';
 
 class YouTubeDownloadService {
   // Cache directory for YouTube downloads (platform-specific)
@@ -49,7 +50,12 @@ class YouTubeDownloadService {
       print('[YouTube Download] ⏹️  Canceling previous download: $_currentDownloadId');
       final prevProcess = _activeProcesses[_currentDownloadId!];
       if (prevProcess != null) {
-        prevProcess.kill();
+        try {
+          prevProcess.kill();
+        } catch (e) {
+          print('[YouTube Download] Error killing process: $e (may already be dead)');
+          // Don't report to Glitchtip - expected behavior
+        }
         _activeProcesses.remove(_currentDownloadId);
       }
       _activeDownloads.remove(_currentDownloadId);
@@ -120,28 +126,66 @@ class YouTubeDownloadService {
       final stdout = <String>[];
       final stderr = <String>[];
 
-      process.stdout.listen((data) {
-        final line = String.fromCharCodes(data).trim();
-        stdout.add(line);
+      process.stdout.listen(
+        (data) {
+          try {
+            final line = String.fromCharCodes(data).trim();
+            stdout.add(line);
 
-        // Log progress
-        if (line.contains('[download]')) {
-          // Extract percentage if available
-          final match = RegExp(r'\[download\]\s+(\d+\.\d+)%').firstMatch(line);
-          if (match != null) {
-            final percent = match.group(1);
-            print('[YouTube Download] Progress: $percent%');
+            // Log progress
+            if (line.contains('[download]')) {
+              // Extract percentage if available
+              final match = RegExp(r'\[download\]\s+(\d+\.\d+)%').firstMatch(line);
+              if (match != null) {
+                final percent = match.group(1);
+                print('[YouTube Download] Progress: $percent%');
+              }
+            }
+          } catch (e) {
+            print('[YouTube Download] Error parsing stdout: $e');
           }
-        }
-      });
+        },
+        onError: (error, stackTrace) {
+          print('[YouTube Download] stdout stream error: $error');
+          // Report to Glitchtip
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'youtube_download_stdout_stream',
+            extras: {
+              'video_id': videoId,
+            },
+          );
+        },
+        cancelOnError: false, // Continue listening even if error occurs
+      );
 
-      process.stderr.listen((data) {
-        final line = String.fromCharCodes(data).trim();
-        stderr.add(line);
-        if (line.isNotEmpty) {
-          print('[YouTube Download] stderr: $line');
-        }
-      });
+      process.stderr.listen(
+        (data) {
+          try {
+            final line = String.fromCharCodes(data).trim();
+            stderr.add(line);
+            if (line.isNotEmpty) {
+              print('[YouTube Download] stderr: $line');
+            }
+          } catch (e) {
+            print('[YouTube Download] Error parsing stderr: $e');
+          }
+        },
+        onError: (error, stackTrace) {
+          print('[YouTube Download] stderr stream error: $error');
+          // Report to Glitchtip
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'youtube_download_stderr_stream',
+            extras: {
+              'video_id': videoId,
+            },
+          );
+        },
+        cancelOnError: false,
+      );
 
       // Wait for download to complete
       final exitCode = await process.exitCode;
@@ -168,6 +212,18 @@ class YouTubeDownloadService {
     } catch (e, stackTrace) {
       print('[YouTube Download] ❌ Error: $e');
       print('[YouTube Download]    Stack: $stackTrace');
+      
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'youtube_download',
+        extras: {
+          'video_id': videoId,
+          'url': 'https://music.youtube.com/watch?v=$videoId',
+        },
+      );
+      
       return null;
     }
   }
@@ -197,7 +253,23 @@ class YouTubeDownloadService {
   Future<String?> _findDownloadedFile(String videoId) async {
     final cacheDir = await _getCacheDir();
     final dir = Directory(cacheDir);
-    final files = await dir.list().toList();
+    
+    List<FileSystemEntity> files;
+    try {
+      files = await dir.list().toList();
+    } catch (e, stackTrace) {
+      print('[YouTube Download] Error listing directory: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'youtube_find_downloaded_file',
+        extras: {
+          'video_id': videoId,
+          'cache_dir': cacheDir,
+        },
+      );
+      return null;
+    }
 
     for (final file in files) {
       if (file is File) {
@@ -241,8 +313,18 @@ class YouTubeDownloadService {
       if (deletedCount > 0) {
         print('[YouTube Download] Cleaned up $deletedCount old file(s)');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[YouTube Download] Error cleaning cache: $e');
+      
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'youtube_cache_cleanup',
+        extras: {
+          'max_age_hours': maxAge.inHours,
+        },
+      );
     }
   }
 
@@ -254,8 +336,18 @@ class YouTubeDownloadService {
         await File(filePath).delete();
         print('[YouTube Download] Deleted cached file: $filePath');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[YouTube Download] Error deleting file: $e');
+      
+      // Report to Glitchtip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'youtube_delete_cached_file',
+        extras: {
+          'video_id': videoId,
+        },
+      );
     }
   }
 }
