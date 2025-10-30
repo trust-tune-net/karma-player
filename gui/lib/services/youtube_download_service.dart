@@ -28,6 +28,9 @@ class YouTubeDownloadService {
   final Map<String, Process> _activeProcesses = {};
   String? _currentDownloadId;
 
+  // Track active stream subscriptions for cleanup (prevents SIGPIPE)
+  final Map<String, List<StreamSubscription>> _activeSubscriptions = {};
+
   /// Get platform-specific cache directory
   ///
   /// - macOS/Linux: /tmp
@@ -48,6 +51,20 @@ class YouTubeDownloadService {
     // Cancel any previous download if a new one is requested
     if (_currentDownloadId != null && _currentDownloadId != videoId) {
       print('[YouTube Download] ⏹️  Canceling previous download: $_currentDownloadId');
+      
+      // Cancel stream subscriptions first (prevents SIGPIPE)
+      final subscriptions = _activeSubscriptions[_currentDownloadId!];
+      if (subscriptions != null) {
+        for (final sub in subscriptions) {
+          await sub.cancel();
+        }
+        _activeSubscriptions.remove(_currentDownloadId);
+      }
+
+      // Small delay to ensure streams are fully closed
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Now safe to kill the process
       final prevProcess = _activeProcesses[_currentDownloadId!];
       if (prevProcess != null) {
         try {
@@ -86,6 +103,15 @@ class YouTubeDownloadService {
     } finally {
       _activeDownloads.remove(videoId);
       _activeProcesses.remove(videoId);
+      
+      // Clean up subscriptions (prevents SIGPIPE and memory leaks)
+      final subs = _activeSubscriptions.remove(videoId);
+      if (subs != null) {
+        for (final sub in subs) {
+          await sub.cancel();
+        }
+      }
+      
       if (_currentDownloadId == videoId) {
         _currentDownloadId = null;
       }
@@ -126,7 +152,7 @@ class YouTubeDownloadService {
       final stdout = <String>[];
       final stderr = <String>[];
 
-      process.stdout.listen(
+      final stdoutSub = process.stdout.listen(
         (data) {
           try {
             final line = String.fromCharCodes(data).trim();
@@ -160,7 +186,7 @@ class YouTubeDownloadService {
         cancelOnError: false, // Continue listening even if error occurs
       );
 
-      process.stderr.listen(
+      final stderrSub = process.stderr.listen(
         (data) {
           try {
             final line = String.fromCharCodes(data).trim();
@@ -186,6 +212,9 @@ class YouTubeDownloadService {
         },
         cancelOnError: false,
       );
+
+      // Store subscriptions for cleanup (prevents SIGPIPE on process kill)
+      _activeSubscriptions[videoId] = [stdoutSub, stderrSub];
 
       // Wait for download to complete
       final exitCode = await process.exitCode;
@@ -349,5 +378,39 @@ class YouTubeDownloadService {
         },
       );
     }
+  }
+
+  /// Dispose of the service and clean up resources
+  /// 
+  /// Cancels all active downloads and stream subscriptions to prevent
+  /// SIGPIPE crashes and memory leaks when the service is destroyed.
+  Future<void> dispose() async {
+    print('[YouTube Download] Disposing service, canceling ${_activeProcesses.length} active download(s)');
+    
+    // Cancel all active downloads
+    for (final videoId in _activeProcesses.keys.toList()) {
+      // Cancel subscriptions first
+      final subs = _activeSubscriptions[videoId];
+      if (subs != null) {
+        for (final sub in subs) {
+          await sub.cancel();
+        }
+      }
+      
+      // Kill the process
+      try {
+        _activeProcesses[videoId]?.kill();
+      } catch (e) {
+        print('[YouTube Download] Error killing process during dispose: $e');
+      }
+    }
+    
+    // Clear all tracking maps
+    _activeDownloads.clear();
+    _activeProcesses.clear();
+    _activeSubscriptions.clear();
+    _currentDownloadId = null;
+    
+    print('[YouTube Download] ✅ Service disposed successfully');
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import '../models/song.dart';
@@ -30,6 +31,12 @@ class PlaybackService extends ChangeNotifier {
   // Mutex to prevent concurrent playback operations
   bool _isPlaybackLocked = false;
 
+  // Stream subscriptions for cleanup (prevents EXC_BAD_ACCESS)
+  StreamSubscription? _playingSubscription;
+  StreamSubscription? _positionSubscription;
+  StreamSubscription? _durationSubscription;
+  StreamSubscription? _completedSubscription;
+
   // Getters
   Player? get player => _player;
   bool get isPlayerInitialized => _playerInitialized;
@@ -54,8 +61,9 @@ class PlaybackService extends ChangeNotifier {
       _player = Player();
 
       // Listen to playback state changes
-      _player!.stream.playing.listen(
+      _playingSubscription = _player!.stream.playing.listen(
         (playing) {
+          if (_player == null || !_playerInitialized) return;
           _isPlaying = playing;
           notifyListeners();
         },
@@ -69,8 +77,9 @@ class PlaybackService extends ChangeNotifier {
         },
       );
 
-      _player!.stream.position.listen(
+      _positionSubscription = _player!.stream.position.listen(
         (position) {
+          if (_player == null || !_playerInitialized) return;
           _position = position;
           notifyListeners();
         },
@@ -84,8 +93,9 @@ class PlaybackService extends ChangeNotifier {
         },
       );
 
-      _player!.stream.duration.listen(
+      _durationSubscription = _player!.stream.duration.listen(
         (duration) {
+          if (_player == null || !_playerInitialized) return;
           _duration = duration;
           notifyListeners();
         },
@@ -99,8 +109,9 @@ class PlaybackService extends ChangeNotifier {
         },
       );
 
-      _player!.stream.completed.listen(
+      _completedSubscription = _player!.stream.completed.listen(
         (completed) {
+          if (_player == null || !_playerInitialized) return;
           if (completed) {
             _onSongCompleted();
           }
@@ -136,7 +147,8 @@ class PlaybackService extends ChangeNotifier {
   }
 
   void _onSongCompleted() {
-    if (!_playerInitialized || _player == null) return;
+    // Safety checks: prevent crashes during disposal or concurrent operations
+    if (!_playerInitialized || _player == null || _isPlaybackLocked) return;
 
     if (_repeatMode == RepeatMode.one && _currentSong != null) {
       _player!.seek(Duration.zero);
@@ -311,7 +323,7 @@ class PlaybackService extends ChangeNotifier {
     await playAtIndex(nextIndex);
   }
 
-  void playPrevious() {
+  Future<void> playPrevious() async {
     if (!_playerInitialized || _player == null) {
       print('[PLAYBACK] Cannot play previous: Player not initialized');
       return;
@@ -326,7 +338,7 @@ class PlaybackService extends ChangeNotifier {
     if (_queue.isEmpty || _currentIndex <= 0) return;
 
     final prevIndex = _currentIndex - 1;
-    playAtIndex(prevIndex);
+    await playAtIndex(prevIndex);
   }
 
   Future<void> playAtIndex(int index) async {
@@ -455,9 +467,35 @@ class PlaybackService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Safely pause playback during lifecycle events (app backgrounding/termination)
+  /// 
+  /// This method is called when the app goes to background or is being terminated.
+  /// It ensures safe cleanup without interfering with ongoing playback operations.
+  void pauseForLifecycle() {
+    if (!_playerInitialized || _player == null || _isPlaybackLocked) return;
+    
+    try {
+      if (_isPlaying) {
+        print('[PLAYBACK] Pausing for lifecycle event');
+        _player!.pause();
+      }
+    } catch (e) {
+      print('[PLAYBACK] Error pausing for lifecycle: $e');
+      // Don't report to analytics - expected during shutdown
+    }
+  }
+
   @override
   void dispose() {
+    // Cancel all stream subscriptions FIRST (prevents EXC_BAD_ACCESS)
+    _playingSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _completedSubscription?.cancel();
+    
+    // Then dispose player
     _player?.dispose();
+    
     super.dispose();
   }
 }

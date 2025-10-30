@@ -51,6 +51,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void dispose() {
     _searchController.dispose();
     _channel?.sink.close();
+    _youtubeDownloadService.dispose();
     super.dispose();
   }
 

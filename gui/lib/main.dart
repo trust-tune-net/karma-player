@@ -533,7 +533,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     // Stop player when app is being terminated or going to background
     // This ensures MPV shuts down cleanly before the app process is killed
     if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
-      _playbackService.player?.pause();
+      _playbackService.pauseForLifecycle();
     }
   }
 

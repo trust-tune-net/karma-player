@@ -1,0 +1,72 @@
+═══════════════════════════════════════════════════════════════
+  KARMA PLAYER - macOS Installation Instructions
+═══════════════════════════════════════════════════════════════
+
+⚠️  IMPORTANT: First-Time Installation on macOS
+
+macOS will block this app because it's not signed with an Apple
+Developer ID certificate ($99/year). This is NORMAL for open-source
+apps distributed outside the Mac App Store.
+
+═══════════════════════════════════════════════════════════════
+  HOW TO INSTALL (Choose ONE method)
+═══════════════════════════════════════════════════════════════
+
+METHOD 1: Right-Click (Easiest) ⭐ RECOMMENDED
+──────────────────────────────────────────────
+1. Right-click (or Control+click) on KarmaPlayer.app
+2. Select "Open" from the context menu
+3. Click "Open" in the security dialog that appears
+4. The app will now launch normally!
+
+After the first time, you can double-click normally.
+
+
+METHOD 2: System Settings
+──────────────────────────────────────────────
+1. Try to open KarmaPlayer.app (it will be blocked)
+2. Open System Settings → Privacy & Security
+3. Scroll down to find "KarmaPlayer was blocked"
+4. Click "Open Anyway"
+5. Confirm by clicking "Open"
+
+
+METHOD 3: Terminal Command
+──────────────────────────────────────────────
+1. Open Terminal (Applications → Utilities → Terminal)
+2. Run this command:
+   
+   xattr -cr ~/Downloads/KarmaPlayer.app
+
+   (Adjust path if you moved the app elsewhere)
+
+3. Press Enter
+4. Double-click KarmaPlayer.app
+
+
+═══════════════════════════════════════════════════════════════
+  WHY DOES THIS HAPPEN?
+═══════════════════════════════════════════════════════════════
+
+macOS Gatekeeper blocks apps from "unidentified developers" to
+protect your Mac from malware. This app is:
+
+✅ Open source (you can review the code on GitHub)
+✅ Built by the community
+✅ Safe to use
+
+Apple requires a $99/year Developer Program membership to avoid
+this warning. As an open-source project, we don't pay for that.
+
+═══════════════════════════════════════════════════════════════
+  NEED HELP?
+═══════════════════════════════════════════════════════════════
+
+• GitHub: https://github.com/trust-tune-net/karma-player
+• Issues: https://github.com/trust-tune-net/karma-player/issues
+• Apple Support: https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616
+
+═══════════════════════════════════════════════════════════════
+
+Enjoy your music! 🎵
+

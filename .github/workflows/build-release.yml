@@ -98,7 +98,16 @@ jobs:
       - name: Create ZIP
         run: |
           cd gui/build/macos/Build/Products/Release
+          
+          # Copy install instructions
+          cp ../../../../../MACOS_INSTALL.txt .
+          
+          # Create ZIP with app and instructions
           ditto -c -k --sequesterRsrc --keepParent KarmaPlayer.app ../../../../../KarmaPlayer-macOS.zip
+          
+          # Add install instructions to ZIP
+          zip -u ../../../../../KarmaPlayer-macOS.zip MACOS_INSTALL.txt
+          
           cd ../../../../..
 
       - name: Upload artifact
@@ -353,24 +362,39 @@ jobs:
 
             **AI-powered music discovery with built-in player**
 
-            ### 🎉 Major Update: Transmission Now Bundled!
+            ### ⚠️ IMPORTANT: macOS First-Time Installation
 
-            **No more separate installation required!** Transmission is now bundled with KarmaPlayer for all platforms.
+            **macOS will show a security warning on first launch.** This is normal for open-source apps not signed with an Apple Developer ID.
+
+            **To fix (choose ONE method):**
+
+            1. **Right-click method** (easiest): Right-click `KarmaPlayer.app` → Open → Click "Open" in dialog
+            2. **Terminal method**: Run `xattr -cr /path/to/KarmaPlayer.app`
+
+            **Why?** Apple requires a $99/year Developer Program to avoid this. As an open-source project, we don't pay for that. The app is safe - you can review the code on GitHub.
+
+            📄 See `MACOS_INSTALL.txt` (included in download) for detailed instructions.
+
+            ### 🎉 What's New in v0.9.4
+
+            - 🐛 **Fixed SIGPIPE crashes** - No more random crashes during playback
+            - 🐛 **Fixed MPV memory crashes** - Improved lifecycle management
+            - 📖 **macOS installation guide** - Clear instructions for first-time setup
+            - ✅ **Bundled Transmission** - No separate installation needed!
 
             ### Downloads
 
-            - **macOS**: Download the `.zip` file (Intel & Apple Silicon)
+            - **macOS**: Download the `.zip` file (Intel & Apple Silicon) - **See installation note above!**
             - **Windows**: Download the `.zip` file, extract and run
             - **Linux**: Download the `.tar.gz` file, extract and run
 
-            ### What's New
-            - ✅ **Bundled Transmission** - No separate installation needed!
-            - 🎨 Improved GUI with responsive design
+            ### Features
+            - 🎨 Modern GUI with responsive design
             - 📊 Statistics badges (albums, plays, downloads)
             - 🎵 Built-in music player with MPV
             - ⭐ Favorites and ratings for tracks
             - 🌐 Connection quality indicator
-            - 📖 Updated documentation
+            - 🔍 AI-powered music discovery
 
             ### Requirements
             - **macOS**: 10.15 (Catalina) or later
@@ -379,15 +403,11 @@ jobs:
 
             ### Quick Start
             1. Download for your platform
-            2. Extract and launch KarmaPlayer
-            3. Search for music (try: "radiohead ok computer flac")
-            4. Click download - Transmission starts automatically!
-            5. Enjoy your high-quality music!
-
-            ### First-Time Users
-            - **No setup required!** Just download and run
-            - Transmission daemon starts automatically when needed
-            - Downloads go to ~/Music by default (configurable in Settings)
+            2. **macOS users**: Follow installation instructions above
+            3. Extract and launch KarmaPlayer
+            4. Search for music (try: "radiohead ok computer flac")
+            5. Click download - Transmission starts automatically!
+            6. Enjoy your high-quality music!
 
             ---
 

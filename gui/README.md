@@ -2,6 +2,27 @@
 
 Flutter desktop app for TrustTune - AI-powered music torrent search.
 
+## 🍎 macOS Installation (First Time)
+
+**⚠️ macOS will block the app on first launch** because it's not signed with an Apple Developer ID certificate. This is normal for open-source apps.
+
+### How to Fix (Choose ONE method):
+
+**Method 1: Right-Click (Easiest)** ⭐
+1. Right-click (or Control+click) on `KarmaPlayer.app`
+2. Select "Open" from the menu
+3. Click "Open" in the security dialog
+4. Done! App will launch normally from now on.
+
+**Method 2: Terminal**
+```bash
+xattr -cr /path/to/KarmaPlayer.app
+```
+
+**Why does this happen?** Apple requires a $99/year Developer Program membership to avoid Gatekeeper warnings. As an open-source project, we don't pay for that. The app is safe - you can review the source code on GitHub.
+
+See `MACOS_INSTALL.txt` (included in download) for detailed instructions.
+
 ## Quick Start
 
 **Note:** Start scripts are located at repo root: `/Users/fcavalcanti/dev/karma-player/`
