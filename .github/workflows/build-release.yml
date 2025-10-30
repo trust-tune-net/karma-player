@@ -61,7 +61,7 @@ jobs:
 
       - name: Copy bundled binaries to app bundle
         run: |
-          APP_PATH="gui/build/macos/Build/Products/Release/trusttune_gui.app"
+          APP_PATH="gui/build/macos/Build/Products/Release/KarmaPlayer.app"
           mkdir -p "$APP_PATH/Contents/Resources/bin"
           mkdir -p "$APP_PATH/Contents/Resources/lib"
 
@@ -98,14 +98,14 @@ jobs:
       - name: Create ZIP
         run: |
           cd gui/build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent trusttune_gui.app ../../../../../TrustTune-macOS.zip
+          ditto -c -k --sequesterRsrc --keepParent KarmaPlayer.app ../../../../../KarmaPlayer-macOS.zip
           cd ../../../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TrustTune-macOS
-          path: gui/TrustTune-macOS.zip
+          name: KarmaPlayer-macOS
+          path: gui/KarmaPlayer-macOS.zip
 
   build-windows:
     runs-on: windows-latest
@@ -255,14 +255,14 @@ jobs:
       - name: Create ZIP
         run: |
           cd gui/build/windows/x64/runner
-          Compress-Archive -Path Release -DestinationPath TrustTune-Windows.zip
-          Move-Item TrustTune-Windows.zip ../../../../TrustTune-Windows.zip
+          Compress-Archive -Path Release -DestinationPath KarmaPlayer-Windows.zip
+          Move-Item KarmaPlayer-Windows.zip ../../../../KarmaPlayer-Windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TrustTune-Windows
-          path: gui/TrustTune-Windows.zip
+          name: KarmaPlayer-Windows
+          path: gui/KarmaPlayer-Windows.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -314,13 +314,13 @@ jobs:
       - name: Create TAR.GZ
         run: |
           cd gui
-          tar -czf TrustTune-Linux.tar.gz -C build/linux/x64/release/bundle .
+          tar -czf KarmaPlayer-Linux.tar.gz -C build/linux/x64/release/bundle .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TrustTune-Linux
-          path: gui/TrustTune-Linux.tar.gz
+          name: KarmaPlayer-Linux
+          path: gui/KarmaPlayer-Linux.tar.gz
 
   create-release:
     needs: [build-macos, build-windows, build-linux]
@@ -342,20 +342,20 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/TrustTune-macOS/*
-            artifacts/TrustTune-Windows/*
-            artifacts/TrustTune-Linux/*
+            artifacts/KarmaPlayer-macOS/*
+            artifacts/KarmaPlayer-Windows/*
+            artifacts/KarmaPlayer-Linux/*
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            ## 🎵 TrustTune Release
+            ## 🎵 KarmaPlayer Release
 
             **AI-powered music discovery with built-in player**
 
             ### 🎉 Major Update: Transmission Now Bundled!
 
-            **No more separate installation required!** Transmission is now bundled with TrustTune for all platforms.
+            **No more separate installation required!** Transmission is now bundled with KarmaPlayer for all platforms.
 
             ### Downloads
 
@@ -379,7 +379,7 @@ jobs:
 
             ### Quick Start
             1. Download for your platform
-            2. Extract and launch TrustTune
+            2. Extract and launch KarmaPlayer
             3. Search for music (try: "radiohead ok computer flac")
             4. Click download - Transmission starts automatically!
             5. Enjoy your high-quality music!
