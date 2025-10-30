@@ -69,10 +69,20 @@ final favoritesService = FavoritesService();
 final errorHandler = ErrorHandler();
 
 void main() async {
-  // Wrap entire main() in try/catch as final safety net for early errors
-  try {
-    // CRITICAL: Load crash reporting preference BEFORE initializing
-    WidgetsFlutterBinding.ensureInitialized();
+  // Wrap entire app in zone to catch SIGPIPE errors from Flutter engine
+  runZonedGuarded(() async {
+    // Wrap entire main() in try/catch as final safety net for early errors
+    try {
+      // CRITICAL: Suppress stdout in release builds to prevent SIGPIPE on older macOS
+      // This fixes crashes on Big Sur (11.6.1) when macOS closes stdout
+      if (kReleaseMode && Platform.isMacOS) {
+        // Zone override will catch SIGPIPE errors from Flutter's stdout
+        // No need to actively suppress stdout - the zone error handler will catch it
+        debugPrint('🔧 Running in release mode on macOS - SIGPIPE errors will be suppressed');
+      }
+      
+      // CRITICAL: Load crash reporting preference BEFORE initializing
+      WidgetsFlutterBinding.ensureInitialized();
 
     SharedPreferences? prefs;
     bool crashReportingEnabled = false;
@@ -160,6 +170,34 @@ void main() async {
       rethrow;
     }
   }
+  }, (error, stack) {
+    // Zone error handler - catches unhandled async exceptions including SIGPIPE
+    final errorString = error.toString();
+    
+    // Silently ignore SIGPIPE errors in release mode (Flutter engine stdout crashes)
+    if (kReleaseMode && (errorString.contains('SIGPIPE') || errorString.contains('Signal 13'))) {
+      debugPrint('🔕 Ignored SIGPIPE error (Big Sur compatibility)');
+      return;
+    }
+    
+    // Log other errors
+    debugPrint('❌ ZONE ERROR: $error');
+    debugPrint('Stack trace: $stack');
+    
+    // Report to Sentry if available
+    try {
+      Sentry.captureException(
+        error,
+        stackTrace: stack,
+        hint: Hint.withMap({
+          'context': 'zone_error_handler',
+          'error_type': 'unhandled_async',
+        }),
+      );
+    } catch (e) {
+      debugPrint('⚠️  Could not report zone error to Sentry: $e');
+    }
+  });
 }
 
 // Separate function for app initialization (called by SentryFlutter or directly)

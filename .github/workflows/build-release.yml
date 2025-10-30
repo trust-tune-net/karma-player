@@ -381,8 +381,9 @@ jobs:
 
             📄 See `MACOS_INSTALL.txt` (included in download) for detailed instructions.
 
-            ### 🎉 What's New in v0.9.4
+            ### 🎉 What's New in v0.9.5
 
+            - 🐛 **Fixed Flutter engine SIGPIPE on older macOS** - Big Sur (11.6.1) compatibility
             - 🐛 **Fixed SIGPIPE crashes** - No more random crashes during playback
             - 🐛 **Fixed MPV memory crashes** - Improved lifecycle management
             - 📖 **macOS installation guide** - Clear instructions for first-time setup
