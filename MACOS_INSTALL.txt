@@ -5,7 +5,7 @@
 ⚠️  STEP 1: DOWNLOAD THE CORRECT VERSION FOR YOUR MAC
 
 Check your Mac's processor:
-1. Click Apple menu () → About This Mac
+1. Click Apple menu () → About This Mac
 2. Look at the "Chip" or "Processor" line:
 
    • INTEL processor (2020 and earlier)
@@ -14,13 +14,13 @@ Check your Mac's processor:
    • APPLE M1/M2/M3 (2020 and newer)
      → Download: KarmaPlayer-macOS-AppleSilicon.zip
 
-⚠️  IMPORTANT: Using the wrong version will show "Bad CPU type" error!
+⚠️  IMPORTANT: Using the wrong version will show a "Bad CPU type" error!
 
 ═══════════════════════════════════════════════════════════════
   STEP 2: FIRST-TIME INSTALLATION
 ═══════════════════════════════════════════════════════════════
 
-macOS will block this app because it's not signed with an Apple
+macOS may block this app because it's not signed with an Apple
 Developer ID certificate ($99/year). This is NORMAL for open-source
 apps distributed outside the Mac App Store.
 
@@ -28,54 +28,75 @@ apps distributed outside the Mac App Store.
   HOW TO INSTALL (Choose ONE method)
 ═══════════════════════════════════════════════════════════════
 
-METHOD 1: Right-Click (Easiest) ⭐ RECOMMENDED
+## METHOD 1: Right-Click (Easiest) ⭐ RECOMMENDED
 ──────────────────────────────────────────────
-1. Right-click (or Control+click) on KarmaPlayer.app
-2. Select "Open" from the context menu
-3. Click "Open" in the security dialog that appears
-4. The app will now launch normally!
 
-After the first time, you can double-click normally.
+1. **Right-click** (or **Control+click**) on `KarmaPlayer.app`
+2. Select **Open**
+3. A warning will appear saying the app is from an unidentified developer
+4. Click **Open**
+5. From now on, macOS will remember your choice ✅
 
+---
 
-METHOD 2: System Settings
+## METHOD 2: Allow Through macOS Security Settings
+(Needed when the dialog has no “Open” button)
 ──────────────────────────────────────────────
-1. Try to open KarmaPlayer.app (it will be blocked)
-2. Open System Settings → Privacy & Security
-3. Scroll down to find "KarmaPlayer was blocked"
-4. Click "Open Anyway"
-5. Confirm by clicking "Open"
 
+1. Attempt to open `KarmaPlayer.app` normally (double-click)
+   → You’ll see “KarmaPlayer.app was blocked…”
+2. Open **System Settings**
+3. Go to **Privacy & Security**
+4. Scroll down until you see:
+   **“KarmaPlayer.app was blocked from opening…”**
+5. Click **Open Anyway**
+6. Confirm by clicking **Open**
 
-METHOD 3: Terminal Command
+After this one-time approval, the app will launch normally.
+
+---
+
+## METHOD 3: Terminal (Rare Edge Case)
 ──────────────────────────────────────────────
-1. Open Terminal (Applications → Utilities → Terminal)
-2. Run this command:
-   
-   xattr -cr ~/Downloads/KarmaPlayer.app
 
-   (Adjust path if you moved the app elsewhere)
+If macOS still refuses:
 
-3. Press Enter
-4. Double-click KarmaPlayer.app
+1. Open **Terminal** (Applications → Utilities → Terminal)
+2. Run this command (adjust path if needed):
 
+```
+
+xattr -cr ~/Downloads/KarmaPlayer.app
+
+```
+
+3. Press **Enter**
+4. Double-click `KarmaPlayer.app` again
+
+This removes the quarantine flag safely.
+
+---
+
+## NOTE (macOS Gatekeeper Logic)
+macOS requires **one** explicit user action to trust apps from outside the
+App Store. After that, it stops blocking this specific app bundle.
 
 ═══════════════════════════════════════════════════════════════
-  WHY DOES THIS HAPPEN?
+WHY DOES THIS HAPPEN?
 ═══════════════════════════════════════════════════════════════
 
 macOS Gatekeeper blocks apps from "unidentified developers" to
-protect your Mac from malware. This app is:
+protect you from malware. This app is:
 
-✅ Open source (you can review the code on GitHub)
+✅ Open source (review the code on GitHub)
 ✅ Built by the community
 ✅ Safe to use
 
-Apple requires a $99/year Developer Program membership to avoid
-this warning. As an open-source project, we don't pay for that.
+Apple requires a $99/year Developer membership to notarize apps
+and remove this warning. As an open-source project, we don’t pay for that.
 
 ═══════════════════════════════════════════════════════════════
-  NEED HELP?
+NEED HELP?
 ═══════════════════════════════════════════════════════════════
 
 • GitHub: https://github.com/trust-tune-net/karma-player
@@ -85,4 +106,3 @@ this warning. As an open-source project, we don't pay for that.
 ═══════════════════════════════════════════════════════════════
 
 Enjoy your music! 🎵
-
