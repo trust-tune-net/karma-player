@@ -81,7 +81,13 @@ jobs:
           fi
 
           if [ -d gui/macos/Runner/Resources/lib ]; then
-            cp -r gui/macos/Runner/Resources/lib/* "$APP_PATH/Contents/Resources/lib/" || true
+            # Copy dylibs if they don't exist (avoid permission errors)
+            for dylib in gui/macos/Runner/Resources/lib/*.dylib; do
+              dylib_name=$(basename "$dylib")
+              if [ ! -f "$APP_PATH/Contents/Resources/lib/$dylib_name" ]; then
+                cp "$dylib" "$APP_PATH/Contents/Resources/lib/" || true
+              fi
+            done
 
             # Sign dylibs
             for dylib in "$APP_PATH/Contents/Resources/lib/"*.dylib; do
@@ -99,8 +105,8 @@ jobs:
         run: |
           cd gui/build/macos/Build/Products/Release
           
-          # Copy install instructions
-          cp ../../../../../MACOS_INSTALL.txt .
+          # Copy install instructions from repo root
+          cp ../../../../../../MACOS_INSTALL.txt .
           
           # Create ZIP with app and instructions
           ditto -c -k --sequesterRsrc --keepParent KarmaPlayer.app ../../../../../KarmaPlayer-macOS.zip
