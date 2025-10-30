@@ -69,51 +69,77 @@ final favoritesService = FavoritesService();
 final errorHandler = ErrorHandler();
 
 void main() async {
-  // CRITICAL: Load crash reporting preference BEFORE initializing
-  WidgetsFlutterBinding.ensureInitialized();
+  // Wrap entire main() in try/catch as final safety net for early errors
+  try {
+    // CRITICAL: Load crash reporting preference BEFORE initializing
+    WidgetsFlutterBinding.ensureInitialized();
 
-  final prefs = await SharedPreferences.getInstance();
-  final crashReportingEnabled = prefs.getBool('analytics_enabled') ?? false;
+    SharedPreferences? prefs;
+    bool crashReportingEnabled = false;
 
-  debugPrint('═══════════════════════════════════════════════');
-  debugPrint('🔧 CRASH REPORTING: ${crashReportingEnabled ? "ENABLED" : "DISABLED"}');
-  debugPrint('═══════════════════════════════════════════════');
+    // Handle SharedPreferences initialization errors
+    try {
+      prefs = await SharedPreferences.getInstance();
+      crashReportingEnabled = prefs.getBool('analytics_enabled') ?? false;
+    } catch (e, stackTrace) {
+      debugPrint('⚠️  ERROR: Could not load SharedPreferences: $e');
+      debugPrint('Stack trace: $stackTrace');
+      // Continue with crash reporting disabled (safe default)
+      crashReportingEnabled = false;
+    }
 
-  // If crash reporting is enabled, wrap app with SentryFlutter.init
-  // This is the CORRECT way to catch Flutter errors (not Sentry.init!)
-  if (crashReportingEnabled) {
-    final packageInfo = await PackageInfo.fromPlatform();
+    debugPrint('═══════════════════════════════════════════════');
+    debugPrint('🔧 CRASH REPORTING: ${crashReportingEnabled ? "ENABLED" : "DISABLED"}');
+    debugPrint('═══════════════════════════════════════════════');
 
-    await SentryFlutter.init(
-      (options) {
-        options.dsn = 'https://1c067b18cd32421e83ec2512d9e649d5@trust-tune-trust-tune-glitchtip.62ickh.easypanel.host/1';
-        options.release = packageInfo.version;
-        options.environment = kDebugMode ? 'development' : 'production';
+    // If crash reporting is enabled, wrap app with SentryFlutter.init
+    // This is the CORRECT way to catch Flutter errors (not Sentry.init!)
+    if (crashReportingEnabled) {
+      final packageInfo = await PackageInfo.fromPlatform();
 
-        // CRITICAL: Enable debug mode to see Sentry SDK logs
-        options.debug = kDebugMode;
+      await SentryFlutter.init(
+        (options) {
+          options.dsn = 'https://1c067b18cd32421e83ec2512d9e649d5@trust-tune-trust-tune-glitchtip.62ickh.easypanel.host/1';
+          options.release = packageInfo.version;
+          options.environment = kDebugMode ? 'development' : 'production';
 
-        // Privacy settings
-        options.sendDefaultPii = false; // CRITICAL: No personal data
+          // CRITICAL: Enable debug mode to see Sentry SDK logs
+          options.debug = kDebugMode;
 
-        // Send ALL crash events (no sampling)
-        options.tracesSampleRate = 1.0;
+          // Privacy settings
+          options.sendDefaultPii = false; // CRITICAL: No personal data
 
-        // Capture ALL errors (don't filter for now)
-        options.beforeSend = (event, hint) async {
-          debugPrint('🚨 SENTRY: Sending event to GlitchTip: ${event.message ?? event.exceptions?.first.type}');
-          return event; // Send everything
-        };
+          // Send ALL crash events (no sampling)
+          options.tracesSampleRate = 1.0;
 
-        debugPrint('✅ SENTRY: Initialized with DSN: ${options.dsn}');
-        debugPrint('✅ SENTRY: Release: ${options.release}');
-        debugPrint('✅ SENTRY: Environment: ${options.environment}');
-      },
-      appRunner: () => _runApp(), // ← CRITICAL: This wraps the app to catch Flutter errors!
-    );
-  } else {
-    // Crash reporting disabled - run app normally
-    await _runApp();
+          // Capture ALL errors (don't filter for now)
+          options.beforeSend = (event, hint) async {
+            debugPrint('🚨 SENTRY: Sending event to GlitchTip: ${event.message ?? event.exceptions?.first.type}');
+            return event; // Send everything
+          };
+
+          debugPrint('✅ SENTRY: Initialized with DSN: ${options.dsn}');
+          debugPrint('✅ SENTRY: Release: ${options.release}');
+          debugPrint('✅ SENTRY: Environment: ${options.environment}');
+        },
+        appRunner: () => _runApp(), // ← CRITICAL: This wraps the app to catch Flutter errors!
+      );
+    } else {
+      // Crash reporting disabled - run app normally
+      await _runApp();
+    }
+  } catch (e, stackTrace) {
+    // Final safety net: catch any errors in main() that weren't caught elsewhere
+    debugPrint('❌ CRITICAL ERROR in main(): $e');
+    debugPrint('Stack trace: $stackTrace');
+    // Still try to run the app
+    try {
+      await _runApp();
+    } catch (e2) {
+      debugPrint('❌ FATAL: Could not start app: $e2');
+      // Nothing more we can do - app cannot start
+      rethrow;
+    }
   }
 }
 
@@ -142,15 +168,23 @@ Future<void> _runApp() async {
   try {
     final packageInfo = await PackageInfo.fromPlatform();
     await errorHandler.logStartup('📦 Version: ${packageInfo.version} (build ${packageInfo.buildNumber})');
-  } catch (e) {
+  } catch (e, stackTrace) {
     await errorHandler.logStartup('⚠️  Could not read version info');
+    await errorHandler.logStartupError('Package info error', e, stackTrace);
+    AnalyticsService().captureError(e, stackTrace, context: 'package_info_startup');
   }
   await errorHandler.logStartup('═══════════════════════════════════════════════');
 
-  // Load settings
+  // Load settings with error handling
   await errorHandler.logStartup('Loading settings...');
-  await appSettings.load();
-  await errorHandler.logStartup('Settings loaded');
+  try {
+    await appSettings.load();
+    await errorHandler.logStartup('Settings loaded');
+  } catch (e, stackTrace) {
+    await errorHandler.logStartupError('Failed to load settings', e, stackTrace);
+    AnalyticsService().captureError(e, stackTrace, context: 'settings_load_startup');
+    // Continue with default settings (AppSettings should handle this gracefully)
+  }
   await errorHandler.logStartup('═══════════════════════════════════════════════');
   await errorHandler.logStartup('Launching app UI...');
   runApp(const KarmaPlayerApp());
