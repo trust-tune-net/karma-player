@@ -96,30 +96,30 @@ Both get you the same results: AI-ranked, quality-scored, ready to play.
 
 ### Security Warnings (Expected Behavior)
 
-**⚠️ TrustTune is not code-signed**, so you'll see security warnings on first launch. This is normal and expected.
+**⚠️ KarmaPlayer is not code-signed**, so you'll see security warnings on first launch. This is normal and expected.
 
 #### macOS Security Warning
 
-When you first run TrustTune on macOS, you'll see:
-> **"TrustTune.app cannot be opened because it is from an unidentified developer"**
+When you first run KarmaPlayer on macOS, you'll see:
+> **"KarmaPlayer.app cannot be opened because it is from an unidentified developer"**
 
 **How to fix:**
-1. Right-click (or Control+click) on `TrustTune.app`
+1. Right-click (or Control+click) on `KarmaPlayer.app`
 2. Select **"Open"** from the menu
 3. Click **"Open"** in the security dialog
 
 **OR:**
 
-1. Try to open TrustTune normally (it will be blocked)
+1. Try to open KarmaPlayer normally (it will be blocked)
 2. Go to **System Settings** → **Privacy & Security**
 3. Scroll down to the **Security** section
-4. Look for the message: *"TrustTune.app was blocked from use because it is not from an identified developer"*
+4. Look for the message: *"KarmaPlayer.app was blocked from use because it is not from an identified developer"*
 5. Click **"Open Anyway"**
 6. Confirm by clicking **"Open"** in the dialog
 
 **Why this happens:**
 - Code signing certificates cost $99/year
-- TrustTune is open-source and community-driven
+- KarmaPlayer is open-source and community-driven
 - You can verify the source code yourself on GitHub
 - Once allowed, macOS will remember your choice
 
@@ -134,16 +134,16 @@ Windows Defender SmartScreen may show:
 
 **Why this happens:**
 - Windows flags unsigned applications
-- TrustTune is safe - check the source code yourself
+- KarmaPlayer is safe - check the source code yourself
 - Once allowed, Windows will remember your choice
 
 #### Linux Permission Issues
 
-If TrustTune won't run on Linux:
+If KarmaPlayer won't run on Linux:
 
 ```bash
 # Make it executable
-chmod +x TrustTune
+chmod +x KarmaPlayer
 
 # If transmission-daemon won't start
 chmod +x resources/bin/transmission-daemon
@@ -163,8 +163,8 @@ ps aux | grep transmission
 # Kill existing processes
 pkill transmission-daemon
 
-# On macOS, also check for TrustTune processes
-pkill trusttune_gui
+# On macOS, also check for KarmaPlayer processes
+pkill karma_player
 ```
 
 #### YouTube downloads not working (Windows)
@@ -172,9 +172,9 @@ pkill trusttune_gui
 **Cause:** yt-dlp not in PATH or missing ffmpeg
 
 **Fix:**
-- TrustTune bundles yt-dlp automatically on Windows
-- If issues persist, restart TrustTune
-- Check logs: `%APPDATA%\Local\com.example.trusttuneGui\logs\`
+- KarmaPlayer bundles yt-dlp automatically on Windows
+- If issues persist, restart KarmaPlayer
+- Check logs: `%APPDATA%\Local\com.example.karma_player\logs\`
 
 #### Audio not playing
 
@@ -188,15 +188,15 @@ pkill trusttune_gui
 ### Debug Logs
 
 **Log locations:**
-- **macOS:** `~/Library/Application Support/com.example.trusttuneGui/logs/` and `/tmp/log/karmaplayer.log`
-- **Windows:** `%APPDATA%\Local\com.example.trusttuneGui\logs\`
-- **Linux:** `~/.local/share/com.example.trusttuneGui/logs/`
+- **macOS:** `~/Library/Application Support/com.example.karma_player/logs/` and `/tmp/log/karmaplayer.log`
+- **Windows:** `%APPDATA%\Local\com.example.karma_player\logs\`
+- **Linux:** `~/.local/share/com.example.karma_player/logs/`
 
 Check logs for detailed error messages if something goes wrong.
 
 ### 🐛 Found a Bug? Help Us Fix It!
 
-If you're experiencing issues, **please help us improve TrustTune** by reporting them:
+If you're experiencing issues, **please help us improve KarmaPlayer** by reporting them:
 
 **Quick bug report (macOS/Linux):**
 ```bash
@@ -205,8 +205,8 @@ cat /tmp/log/karmaplayer.log | pbcopy  # macOS
 cat /tmp/log/karmaplayer.log | xclip   # Linux
 
 # Or view the full log
-cat "$(ls -t ~/Library/Application\ Support/com.example.trusttuneGui/logs/*.log | head -1)"  # macOS
-cat "$(ls -t ~/.local/share/com.example.trusttuneGui/logs/*.log | head -1)"  # Linux
+cat "$(ls -t ~/Library/Application\ Support/com.example.karma_player/logs/*.log | head -1)"  # macOS
+cat "$(ls -t ~/.local/share/com.example.karma_player/logs/*.log | head -1)"  # Linux
 ```
 
 **Then:**
@@ -216,7 +216,7 @@ cat "$(ls -t ~/.local/share/com.example.trusttuneGui/logs/*.log | head -1)"  # L
 4. **Paste your error log** (it's anonymous - no personal data)
 5. Submit!
 
-**Your bug reports help everyone.** Every issue fixed makes TrustTune better for the community. Thank you! 🙏
+**Your bug reports help everyone.** Every issue fixed makes KarmaPlayer better for the community. Thank you! 🙏
 
 ---
 
@@ -228,11 +228,11 @@ cat "$(ls -t ~/.local/share/com.example.trusttuneGui/logs/*.log | head -1)"  # L
 
 | Platform | Download | Notes |
 |----------|----------|-------|
-| **macOS** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-macOS.zip) | Intel & Apple Silicon |
-| **Windows** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Windows.zip) | Windows 10/11 |
-| **Linux** | [Download TAR.GZ](https://github.com/trust-tune-net/karma-player/releases/latest/download/TrustTune-Linux.tar.gz) | Ubuntu/Debian/Fedora |
+| **macOS** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-macOS.zip) | Intel & Apple Silicon |
+| **Windows** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-Windows.zip) | Windows 10/11 |
+| **Linux** | [Download TAR.GZ](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-Linux.tar.gz) | Ubuntu/Debian/Fedora |
 
-> **✅ Everything Included:** TrustTune now comes with Transmission bundled - just download, extract, and run! No separate installation needed. See **[Setup Guide](SETUP.md)** for details.
+> **✅ Everything Included:** KarmaPlayer now comes with Transmission bundled - just download, extract, and run! No separate installation needed. See **[Setup Guide](SETUP.md)** for details.
 
 ### CLI (For Power Users)
 
