@@ -100,6 +100,10 @@ Both get you the same results: AI-ranked, quality-scored, ready to play.
 
 #### macOS Security Warning
 
+**⚠️ First, make sure you downloaded the correct version for your Mac:**
+- **Intel Macs** (2020 and earlier): Use `KarmaPlayer-macOS-Intel.zip`
+- **Apple Silicon** (M1/M2/M3+): Use `KarmaPlayer-macOS-AppleSilicon.zip`
+
 When you first run KarmaPlayer on macOS, you'll see:
 > **"KarmaPlayer.app cannot be opened because it is from an unidentified developer"**
 
@@ -150,6 +154,16 @@ chmod +x resources/bin/transmission-daemon
 ```
 
 ### Common Issues
+
+#### "Bad CPU type in executable" (macOS)
+
+**Cause:** Downloaded wrong architecture version
+
+**Fix:**
+- Check your Mac processor: Apple menu () → About This Mac
+- **Intel processor**: Download `KarmaPlayer-macOS-Intel.zip`
+- **Apple M1/M2/M3**: Download `KarmaPlayer-macOS-AppleSilicon.zip`
+- Delete the wrong version and download the correct one
 
 #### "Transmission daemon failed to start"
 
@@ -228,7 +242,8 @@ cat "$(ls -t ~/.local/share/com.example.karma_player/logs/*.log | head -1)"  # L
 
 | Platform | Download | Notes |
 |----------|----------|-------|
-| **macOS** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-macOS.zip) | Intel & Apple Silicon |
+| **macOS Intel** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-macOS-Intel.zip) | Intel Macs (2020 and earlier) |
+| **macOS Apple Silicon** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-macOS-AppleSilicon.zip) | M1/M2/M3+ Macs (2020+) |
 | **Windows** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-Windows.zip) | Windows 10/11 |
 | **Linux** | [Download TAR.GZ](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-Linux.tar.gz) | Ubuntu/Debian/Fedora |
 
