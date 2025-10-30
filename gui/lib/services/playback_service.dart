@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import '../models/song.dart';
+import 'analytics_service.dart';
 
 enum RepeatMode { off, all, one }
 
@@ -83,6 +84,14 @@ class PlaybackService extends ChangeNotifier {
       print('[PLAYBACK] ❌ Player initialization failed: $e');
       print('[PLAYBACK] Stack trace: $stackTrace');
       print('[PLAYBACK] App will continue without audio playback');
+
+      // Report startup error to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'player_initialization',
+        extras: {'error_type': 'startup'},
+      );
     }
   }
 
@@ -188,6 +197,19 @@ class PlaybackService extends ChangeNotifier {
           print('[PLAYBACK] ❌ Error during open/play: $e');
           print('[PLAYBACK] Stack trace: $stackTrace');
           _playerError = 'Failed to play song: $e';
+
+          // Report playback error to GlitchTip
+          AnalyticsService().captureError(
+            e,
+            stackTrace,
+            context: 'playback_open_play',
+            extras: {
+              'error_type': 'playback',
+              'song_title': song.title,
+              'song_artist': song.artist,
+              'file_path': song.filePath,
+            },
+          );
         }
       } else {
         print('[PLAYBACK] Cannot play song: Player not initialized');
@@ -296,8 +318,20 @@ class PlaybackService extends ChangeNotifier {
       await _player!.open(Media(_queue[index].filePath, httpHeaders: _queue[index].httpHeaders ?? {}));
       _player!.play();
       notifyListeners();
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[PLAYBACK] ❌ Error in playAtIndex: $e');
+
+      // Report playback error to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'playback_play_at_index',
+        extras: {
+          'error_type': 'playback',
+          'index': index,
+          'queue_length': _queue.length,
+        },
+      );
     } finally {
       _isPlaybackLocked = false;
     }

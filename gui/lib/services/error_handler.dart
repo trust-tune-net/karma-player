@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'analytics_service.dart';
 
 /// Global error handling service
 ///
@@ -99,6 +100,18 @@ class ErrorHandler {
       details.stack,
       details.context?.toString(),
     );
+
+    // Report to GlitchTip (global error reporting)
+    AnalyticsService().captureError(
+      details.exception,
+      details.stack,
+      context: 'flutter_error',
+      extras: {
+        'error_type': 'flutter_framework',
+        'context': details.context?.toString() ?? 'none',
+        'library': details.library ?? 'unknown',
+      },
+    );
   }
 
   /// Handle async/platform errors
@@ -109,6 +122,16 @@ class ErrorHandler {
 
     // Log to file
     _logError('ASYNC ERROR', error, stack, null);
+
+    // Report to GlitchTip (global error reporting)
+    AnalyticsService().captureError(
+      error,
+      stack,
+      context: 'async_error',
+      extras: {
+        'error_type': 'async_platform',
+      },
+    );
   }
 
   /// Log an error with full details

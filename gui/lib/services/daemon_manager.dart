@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
+import 'analytics_service.dart';
 
 /// Manages the transmission-daemon lifecycle
 class DaemonManager {
