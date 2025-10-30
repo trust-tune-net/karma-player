@@ -26,6 +26,9 @@ class PlaybackService extends ChangeNotifier {
   RepeatMode _repeatMode = RepeatMode.off;
   bool _isShuffle = false;
 
+  // Mutex to prevent concurrent playback operations
+  bool _isPlaybackLocked = false;
+
   // Getters
   Player? get player => _player;
   bool get isPlayerInitialized => _playerInitialized;
@@ -102,67 +105,99 @@ class PlaybackService extends ChangeNotifier {
   }
 
   // Playback controls
-  void playSong(Song song, {List<Song>? queue, bool isShuffled = false}) {
-    // Stop/pause current playback to avoid concurrent player.open() calls
-    if (_playerInitialized && _player != null && _isPlaying) {
-      print('[PLAYBACK] Stopping previous playback before starting new song');
-      _player!.pause();
+  Future<void> playSong(Song song, {List<Song>? queue, bool isShuffled = false}) async {
+    // Mutex: prevent concurrent playback operations
+    if (_isPlaybackLocked) {
+      print('[PLAYBACK] ⚠️ Playback operation already in progress, queuing request...');
+      // Wait briefly for the current operation to finish
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (_isPlaybackLocked) {
+        print('[PLAYBACK] ❌ Playback still locked, aborting to prevent crash');
+        return;
+      }
     }
 
-    _currentSong = song;
+    _isPlaybackLocked = true;
 
-    if (queue != null) {
-      if (isShuffled) {
-        // Shuffle the queue internally - PlaybackService owns the shuffle logic
-        _isShuffle = true;
-        _originalQueue = List.from(queue);  // Store original unshuffled order
+    try {
+      // Stop/pause current playback to avoid concurrent player.open() calls
+      if (_playerInitialized && _player != null && _isPlaying) {
+        print('[PLAYBACK] Stopping previous playback before starting new song');
+        _player!.pause();
+        // Give pause operation time to complete (prevents SIGPIPE crashes)
+        await Future.delayed(const Duration(milliseconds: 100));
+        print('[PLAYBACK] ✓ Previous playback stopped');
+      }
 
-        // Shuffle while keeping current song at index 0
-        _queue = List<Song>.from(queue);
-        _queue.remove(song);
-        _queue.shuffle();
-        _queue.insert(0, song);
-        _currentIndex = 0;
+      _currentSong = song;
 
-        print('[PLAYBACK] Started with shuffled queue (${_queue.length} songs)');
-      } else {
-        // Normal play, reset shuffle state
-        _isShuffle = false;
-        _originalQueue.clear();
-        _queue = queue;
-        _currentIndex = queue.indexOf(song);
-        if (_currentIndex == -1) {
+      if (queue != null) {
+        if (isShuffled) {
+          // Shuffle the queue internally - PlaybackService owns the shuffle logic
+          _isShuffle = true;
+          _originalQueue = List.from(queue);  // Store original unshuffled order
+
+          // Shuffle while keeping current song at index 0
+          _queue = List<Song>.from(queue);
+          _queue.remove(song);
+          _queue.shuffle();
           _queue.insert(0, song);
           _currentIndex = 0;
-        }
-        print('[PLAYBACK] Started with normal queue (${_queue.length} songs)');
-      }
-    } else if (_queue.isEmpty) {
-      _queue = [song];
-      _currentIndex = 0;
-      _isShuffle = false;
-      _originalQueue.clear();
-    } else {
-      final index = _queue.indexOf(song);
-      if (index != -1) {
-        _currentIndex = index;
-      } else {
-        _queue.add(song);
-        _currentIndex = _queue.length - 1;
-      }
-    }
 
-    if (_playerInitialized && _player != null) {
-      print('[PLAYBACK] Opening media: ${song.filePath}');
-      print('[PLAYBACK] Song title: ${song.title}');
-      // Pass HTTP headers if available (needed for YouTube streams)
-      _player!.open(Media(song.filePath, httpHeaders: song.httpHeaders ?? {}));
-      _player!.play();
-      print('[PLAYBACK] Called play()');
-    } else {
-      print('[PLAYBACK] Cannot play song: Player not initialized');
+          print('[PLAYBACK] Started with shuffled queue (${_queue.length} songs)');
+        } else {
+          // Normal play, reset shuffle state
+          _isShuffle = false;
+          _originalQueue.clear();
+          _queue = queue;
+          _currentIndex = queue.indexOf(song);
+          if (_currentIndex == -1) {
+            _queue.insert(0, song);
+            _currentIndex = 0;
+          }
+          print('[PLAYBACK] Started with normal queue (${_queue.length} songs)');
+        }
+      } else if (_queue.isEmpty) {
+        _queue = [song];
+        _currentIndex = 0;
+        _isShuffle = false;
+        _originalQueue.clear();
+      } else {
+        final index = _queue.indexOf(song);
+        if (index != -1) {
+          _currentIndex = index;
+        } else {
+          _queue.add(song);
+          _currentIndex = _queue.length - 1;
+        }
+      }
+
+      if (_playerInitialized && _player != null) {
+        print('[PLAYBACK] Opening media: ${song.filePath}');
+        print('[PLAYBACK] Song title: ${song.title}');
+
+        try {
+          // Pass HTTP headers if available (needed for YouTube streams)
+          // CRITICAL: await open() before calling play() to prevent race condition
+          await _player!.open(Media(song.filePath, httpHeaders: song.httpHeaders ?? {}));
+          print('[PLAYBACK] ✓ Media opened successfully');
+
+          _player!.play();
+          print('[PLAYBACK] ✓ Started playback');
+        } catch (e, stackTrace) {
+          print('[PLAYBACK] ❌ Error during open/play: $e');
+          print('[PLAYBACK] Stack trace: $stackTrace');
+          _playerError = 'Failed to play song: $e';
+        }
+      } else {
+        print('[PLAYBACK] Cannot play song: Player not initialized');
+      }
+
+      notifyListeners();
+    } finally {
+      // Always unlock the mutex
+      _isPlaybackLocked = false;
     }
-    notifyListeners();
   }
 
   void togglePlayPause() {
@@ -179,7 +214,7 @@ class PlaybackService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void playNext() {
+  Future<void> playNext() async {
     if (_queue.isEmpty) return;
     if (!_playerInitialized || _player == null) {
       print('[PLAYBACK] Cannot play next: Player not initialized');
@@ -190,22 +225,18 @@ class PlaybackService extends ChangeNotifier {
     if (_currentIndex >= _queue.length - 1) {
       // If shuffle is on, re-shuffle and play from start
       if (_isShuffle && _originalQueue.isNotEmpty) {
+        // Use playAtIndex to properly handle async open/play
         final shuffled = List<Song>.from(_originalQueue);
         shuffled.shuffle();
         _queue = shuffled;
-        _currentIndex = 0;
-        _currentSong = _queue[0];
-        // Pass HTTP headers if available (needed for YouTube streams)
-        _player!.open(Media(_queue[0].filePath, httpHeaders: _queue[0].httpHeaders ?? {}));
-        _player!.play();
-        notifyListeners();
+        await playAtIndex(0);
         print('[PLAYBACK] Re-shuffled at end of queue');
         return;
       }
 
       // If repeat all is on, loop to start
       if (_repeatMode == RepeatMode.all) {
-        playAtIndex(0);
+        await playAtIndex(0);
         return;
       }
 
@@ -215,7 +246,7 @@ class PlaybackService extends ChangeNotifier {
 
     // Normal case: play next song
     final nextIndex = _currentIndex + 1;
-    playAtIndex(nextIndex);
+    await playAtIndex(nextIndex);
   }
 
   void playPrevious() {
@@ -236,19 +267,40 @@ class PlaybackService extends ChangeNotifier {
     playAtIndex(prevIndex);
   }
 
-  void playAtIndex(int index) {
+  Future<void> playAtIndex(int index) async {
     if (index < 0 || index >= _queue.length) return;
     if (!_playerInitialized || _player == null) {
       print('[PLAYBACK] Cannot play at index: Player not initialized');
       return;
     }
 
-    _currentIndex = index;
-    _currentSong = _queue[index];
-    // Pass HTTP headers if available (needed for YouTube streams)
-    _player!.open(Media(_queue[index].filePath, httpHeaders: _queue[index].httpHeaders ?? {}));
-    _player!.play();
-    notifyListeners();
+    // Mutex: prevent concurrent operations
+    if (_isPlaybackLocked) {
+      print('[PLAYBACK] ⚠️ Playback locked, skipping playAtIndex');
+      return;
+    }
+    _isPlaybackLocked = true;
+
+    try {
+      // Stop previous playback if playing
+      if (_isPlaying) {
+        _player!.pause();
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      _currentIndex = index;
+      _currentSong = _queue[index];
+
+      // Pass HTTP headers if available (needed for YouTube streams)
+      // CRITICAL: await open() before calling play()
+      await _player!.open(Media(_queue[index].filePath, httpHeaders: _queue[index].httpHeaders ?? {}));
+      _player!.play();
+      notifyListeners();
+    } catch (e) {
+      print('[PLAYBACK] ❌ Error in playAtIndex: $e');
+    } finally {
+      _isPlaybackLocked = false;
+    }
   }
 
   void seek(Duration position) {

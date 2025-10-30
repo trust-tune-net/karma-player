@@ -485,8 +485,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 
   // Wrapper methods to integrate with PlaybackService
-  void _playSong(Song song, {List<Song>? queue, bool? isShuffled}) {
-    _playbackService.playSong(song, queue: queue, isShuffled: isShuffled ?? false);
+  Future<void> _playSong(Song song, {List<Song>? queue, bool? isShuffled}) async {
+    // Await playSong to ensure proper sequencing and prevent race conditions
+    await _playbackService.playSong(song, queue: queue, isShuffled: isShuffled ?? false);
     // Track play count
     appSettings.incrementPlays();
   }
