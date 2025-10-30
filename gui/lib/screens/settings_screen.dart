@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../main.dart';
 import '../widgets/diagnostics_dialog.dart';
+import '../services/analytics_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,12 +18,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _configDir = '';
   bool _daemonRunning = false;
   bool _isCheckingDaemon = false;
+  bool _analyticsEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _checkDaemonStatus();
+    _loadAnalyticsPreference();
+  }
+
+  Future<void> _loadAnalyticsPreference() async {
+    setState(() {
+      _analyticsEnabled = AnalyticsService().isEnabled;
+    });
   }
 
   Future<void> _loadSettings() async {
@@ -200,6 +209,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _toggleAnalytics(bool enabled) async {
+    await AnalyticsService().setEnabled(enabled);
+    setState(() {
+      _analyticsEnabled = enabled;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? 'Crash reporting enabled. Thank you for helping improve TrustTune!'
+                : 'Crash reporting disabled',
+          ),
+          backgroundColor: enabled ? Colors.green : Colors.orange,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -372,6 +401,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontFamily: 'monospace',
                   ),
+            ),
+          ),
+          const Divider(),
+
+          // Privacy Section
+          ListTile(
+            title: Text(
+              'Privacy',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          ListTile(
+            leading: Icon(
+              _analyticsEnabled ? Icons.shield : Icons.shield_outlined,
+              color: _analyticsEnabled ? Colors.green : Colors.grey,
+            ),
+            title: const Text('Crash Reporting'),
+            subtitle: const Text(
+              'Help improve TrustTune by automatically sending anonymous crash reports to our self-hosted GlitchTip server. No personal data is collected.',
+            ),
+            trailing: Switch(
+              value: _analyticsEnabled,
+              onChanged: _toggleAnalytics,
+              activeColor: Colors.green,
+              inactiveThumbColor: Colors.grey[400],
+              inactiveTrackColor: Colors.grey[800],
+              trackOutlineColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                return null; // No outline
+              }),
             ),
           ),
           const Divider(),

@@ -10,6 +10,7 @@ import 'services/daemon_manager.dart';
 import 'services/app_settings.dart';
 import 'services/playback_service.dart';
 import 'services/error_handler.dart';
+import 'services/analytics_service.dart';
 import 'screens/now_playing_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/downloads_screen.dart';
@@ -72,12 +73,17 @@ void main() async {
     // FIRST: Initialize error handler (sets up logging and global error catching)
     await errorHandler.initialize();
 
+    // SECOND: Initialize crash reporting (opt-in, privacy-first)
+    // Sentry will automatically catch Flutter errors and async errors
+    await AnalyticsService().initialize();
+
     // Initialize MediaKit with error handling (may fail on some Windows systems)
     try {
       MediaKit.ensureInitialized();
       await errorHandler.logStartup('✅ MediaKit initialized');
     } catch (e, stackTrace) {
       await errorHandler.logStartupError('⚠️  MediaKit initialization failed (audio playback may not work)', e, stackTrace);
+      AnalyticsService().captureError(e, stackTrace, context: 'mediakit_init');
     }
 
     await errorHandler.logStartup('═══════════════════════════════════════════════');
@@ -122,6 +128,14 @@ void main() async {
     // Catch ANY uncaught error in the app
     print('[UNCAUGHT ERROR] $error');
     print('[UNCAUGHT ERROR] Stack: $stack');
+
+    // Report to Sentry (if enabled)
+    AnalyticsService().captureError(
+      error,
+      stack,
+      context: 'uncaught_zone_error',
+      extras: {'error_type': error.runtimeType.toString()},
+    );
   });
 }
 
