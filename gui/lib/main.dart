@@ -75,6 +75,10 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final crashReportingEnabled = prefs.getBool('analytics_enabled') ?? false;
 
+  debugPrint('═══════════════════════════════════════════════');
+  debugPrint('🔧 CRASH REPORTING: ${crashReportingEnabled ? "ENABLED" : "DISABLED"}');
+  debugPrint('═══════════════════════════════════════════════');
+
   // If crash reporting is enabled, wrap app with SentryFlutter.init
   // This is the CORRECT way to catch Flutter errors (not Sentry.init!)
   if (crashReportingEnabled) {
@@ -86,27 +90,24 @@ void main() async {
         options.release = packageInfo.version;
         options.environment = kDebugMode ? 'development' : 'production';
 
+        // CRITICAL: Enable debug mode to see Sentry SDK logs
+        options.debug = kDebugMode;
+
         // Privacy settings
         options.sendDefaultPii = false; // CRITICAL: No personal data
-        options.tracesSampleRate = 0.1; // 10% of transactions
 
-        // Filter sensitive data
+        // Send ALL crash events (no sampling)
+        options.tracesSampleRate = 1.0;
+
+        // Capture ALL errors (don't filter for now)
         options.beforeSend = (event, hint) async {
-          if (event.breadcrumbs != null) {
-            event = event.copyWith(
-              breadcrumbs: event.breadcrumbs!.map((b) {
-                if (b.data != null && b.data!.containsKey('url')) {
-                  final url = b.data!['url'].toString();
-                  if (url.contains('api_key') || url.contains('token')) {
-                    return b.copyWith(data: {...b.data!, 'url': '[REDACTED]'});
-                  }
-                }
-                return b;
-              }).toList(),
-            );
-          }
-          return event;
+          debugPrint('🚨 SENTRY: Sending event to GlitchTip: ${event.message ?? event.exceptions?.first.type}');
+          return event; // Send everything
         };
+
+        debugPrint('✅ SENTRY: Initialized with DSN: ${options.dsn}');
+        debugPrint('✅ SENTRY: Release: ${options.release}');
+        debugPrint('✅ SENTRY: Environment: ${options.environment}');
       },
       appRunner: () => _runApp(), // ← CRITICAL: This wraps the app to catch Flutter errors!
     );

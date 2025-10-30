@@ -1,14 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
-/// Privacy-first Analytics & Crash Reporting Service
+/// Privacy-first Crash Reporting Service
 ///
 /// Integrates with:
 /// - Sentry (crash reporting) → works with self-hosted GlitchTip
-/// - PostHog (usage analytics) → self-hostable
 ///
 /// Features:
 /// - Opt-in by default (respects user privacy)
@@ -26,10 +23,6 @@ class AnalyticsService {
   // Self-hosted GlitchTip (Sentry-compatible crash reporting)
   static const String? _sentryDsn =
       'https://1c067b18cd32421e83ec2512d9e649d5@trust-tune-trust-tune-glitchtip.62ickh.easypanel.host/1';
-
-  // PostHog (optional - for usage analytics, not needed for crash reporting)
-  static const String? _posthogApiKey = null; // Not configured yet
-  static const String? _posthogHost = null; // Not configured yet
 
   /// Mark analytics as initialized (called from main.dart after SentryFlutter.init)
   /// NOTE: Actual Sentry initialization happens in main.dart with SentryFlutter.init()
@@ -57,7 +50,7 @@ class AnalyticsService {
   /// Get current enabled status
   bool get isEnabled => _enabled;
 
-  /// Track an event (usage analytics)
+  /// Track an event (usage analytics) - adds breadcrumb to crash reports
   ///
   /// Music player events:
   /// - 'song_played', 'song_paused', 'song_skipped'
@@ -67,15 +60,7 @@ class AnalyticsService {
     if (!_enabled || !_initialized) return;
 
     try {
-      // Send to PostHog
-      if (_posthogApiKey != null) {
-        Posthog().capture(
-          eventName: eventName,
-          properties: properties?.cast<String, Object>() ?? {},
-        );
-      }
-
-      // Also create breadcrumb in Sentry for crash context
+      // Create breadcrumb in Sentry for crash context
       if (_sentryDsn != null) {
         Sentry.addBreadcrumb(
           Breadcrumb(
@@ -93,14 +78,19 @@ class AnalyticsService {
     }
   }
 
-  /// Track screen view
+  /// Track screen view - adds breadcrumb to crash reports
   void trackScreen(String screenName) {
     if (!_enabled || !_initialized) return;
 
     try {
-      if (_posthogApiKey != null) {
-        Posthog().screen(screenName: screenName);
-      }
+      // Add screen breadcrumb to Sentry for crash context
+      Sentry.addBreadcrumb(
+        Breadcrumb(
+          message: 'Screen: $screenName',
+          category: 'navigation',
+          level: SentryLevel.info,
+        ),
+      );
 
       debugPrint('[Analytics] Screen tracked: $screenName');
     } catch (e) {
@@ -145,15 +135,11 @@ class AnalyticsService {
 
   /// Set user context (anonymous ID only, no PII)
   ///
-  /// This helps with funnel analysis while maintaining privacy
+  /// This helps with crash tracking while maintaining privacy
   void setUserContext({String? anonymousId}) {
     if (!_enabled || !_initialized) return;
 
     try {
-      if (_posthogApiKey != null && anonymousId != null) {
-        Posthog().identify(userId: anonymousId);
-      }
-
       if (_sentryDsn != null && anonymousId != null) {
         Sentry.configureScope((scope) {
           scope.setUser(SentryUser(id: anonymousId));

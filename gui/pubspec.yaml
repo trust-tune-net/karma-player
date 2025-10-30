@@ -67,9 +67,8 @@ dependencies:
   google_fonts: ^6.2.1  # Already included - will use Inter font
   flutter_slidable: ^3.1.1
 
-  # Crash Reporting & Analytics (Privacy-first, OSS-compatible)
+  # Crash Reporting (Privacy-first, OSS-compatible)
   sentry_flutter: ^8.11.0  # Works with self-hosted GlitchTip
-  posthog_flutter: ^4.7.2  # Self-hostable analytics
 
 dev_dependencies:
   flutter_test:
