@@ -67,48 +67,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _toggleDaemon(bool enable) async {
-    if (enable) {
-      // Start daemon
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Starting daemon...')),
+    try {
+      if (enable) {
+        // Start daemon
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Starting daemon...')),
+        );
+
+        final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(started ? 'Daemon started successfully' : 'Failed to start daemon'),
+              backgroundColor: started ? Colors.green : Colors.red,
+            ),
+          );
+          _checkDaemonStatus();
+        }
+      } else {
+        // Stop daemon
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Stopping daemon...')),
+        );
+
+        await daemonManager.stopDaemon();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Daemon stopped'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          _checkDaemonStatus();
+        }
+      }
+    } catch (e, stackTrace) {
+      print('[Settings] Error toggling daemon: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'settings_toggle_daemon',
+        extras: {
+          'action': enable ? 'start' : 'stop',
+        },
       );
-
-      final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(started ? 'Daemon started successfully' : 'Failed to start daemon'),
-            backgroundColor: started ? Colors.green : Colors.red,
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
           ),
         );
-        _checkDaemonStatus();
-      }
-    } else {
-      // Stop daemon
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stopping daemon...')),
-      );
-
-      await daemonManager.stopDaemon();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Daemon stopped'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        _checkDaemonStatus();
       }
     }
   }
 
   Future<void> _restartDaemon() async {
-    await daemonManager.stopDaemon();
-    await Future.delayed(const Duration(seconds: 1));
-    await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-    _checkDaemonStatus();
+    try {
+      await daemonManager.stopDaemon();
+      await Future.delayed(const Duration(seconds: 1));
+      await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+      _checkDaemonStatus();
+    } catch (e, stackTrace) {
+      print('[Settings] Error restarting daemon: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'settings_restart_daemon',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error restarting daemon: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _editSearchApiUrl() async {

@@ -54,26 +54,66 @@ class PlaybackService extends ChangeNotifier {
       _player = Player();
 
       // Listen to playback state changes
-      _player!.stream.playing.listen((playing) {
-        _isPlaying = playing;
-        notifyListeners();
-      });
+      _player!.stream.playing.listen(
+        (playing) {
+          _isPlaying = playing;
+          notifyListeners();
+        },
+        onError: (error, stackTrace) {
+          print('[PLAYBACK] Playing stream error: $error');
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'playback_playing_stream',
+          );
+        },
+      );
 
-      _player!.stream.position.listen((position) {
-        _position = position;
-        notifyListeners();
-      });
+      _player!.stream.position.listen(
+        (position) {
+          _position = position;
+          notifyListeners();
+        },
+        onError: (error, stackTrace) {
+          print('[PLAYBACK] Position stream error: $error');
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'playback_position_stream',
+          );
+        },
+      );
 
-      _player!.stream.duration.listen((duration) {
-        _duration = duration;
-        notifyListeners();
-      });
+      _player!.stream.duration.listen(
+        (duration) {
+          _duration = duration;
+          notifyListeners();
+        },
+        onError: (error, stackTrace) {
+          print('[PLAYBACK] Duration stream error: $error');
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'playback_duration_stream',
+          );
+        },
+      );
 
-      _player!.stream.completed.listen((completed) {
-        if (completed) {
-          _onSongCompleted();
-        }
-      });
+      _player!.stream.completed.listen(
+        (completed) {
+          if (completed) {
+            _onSongCompleted();
+          }
+        },
+        onError: (error, stackTrace) {
+          print('[PLAYBACK] Completed stream error: $error');
+          AnalyticsService().captureError(
+            error,
+            stackTrace,
+            context: 'playback_completed_stream',
+          );
+        },
+      );
 
       _player!.setVolume(_volume * 100);
       _playerInitialized = true;

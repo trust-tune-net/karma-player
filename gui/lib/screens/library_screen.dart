@@ -204,13 +204,19 @@ class LibraryScreenState extends State<LibraryScreen> {
 
         // Extract lightweight metadata (format, file size, estimated quality)
         // This is fast - just file stat + extension parsing, no audio decoding
-        final song = await Song.fromFileWithMetadata(
-          fileInfo['path'] as String,
-          albumName: fileInfo['albumName'] as String,
-          artistName: fileInfo['artistName'] as String,
-        );
+        try {
+          final song = await Song.fromFileWithMetadata(
+            fileInfo['path'] as String,
+            albumName: fileInfo['albumName'] as String,
+            artistName: fileInfo['artistName'] as String,
+          );
 
-        albumMap[albumPath]!.add(song);
+          albumMap[albumPath]!.add(song);
+        } catch (e) {
+          // Skip corrupted files silently - don't report to Glitchtip (too noisy for user libraries)
+          print('[Library] Error reading file: ${fileInfo['path']} - $e');
+          // Continue with next file
+        }
       }
 
       // Create Album objects with artwork

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/playback_service.dart';
+import '../services/analytics_service.dart';
 import '../main.dart';
 
 class NowPlayingScreen extends StatefulWidget {
@@ -632,8 +633,17 @@ class _DetailedFileInfo extends StatelessWidget {
                 await Process.run('xdg-open', [dir]);
               }
             }
-          } catch (e) {
+          } catch (e, stackTrace) {
             print('Error opening file location: $e');
+            AnalyticsService().captureError(
+              e,
+              stackTrace,
+              context: 'open_file_location',
+              extras: {
+                'platform': Platform.operatingSystem,
+                'path': fullPath,
+              },
+            );
           }
         },
         child: Padding(

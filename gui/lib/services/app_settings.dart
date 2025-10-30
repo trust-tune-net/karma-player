@@ -34,7 +34,14 @@ class AppSettings extends ChangeNotifier {
 
     // Load completed torrent IDs
     final completedIds = prefs.getStringList('completed_torrent_ids') ?? [];
-    completedTorrentIds = completedIds.map((id) => int.parse(id)).toSet();
+    completedTorrentIds = completedIds.map((id) {
+      try {
+        return int.parse(id);
+      } catch (e) {
+        print('[AppSettings] Invalid torrent ID: $id');
+        return null;
+      }
+    }).whereType<int>().toSet();
   }
 
   Future<void> saveSearchApiUrl(String url) async {
