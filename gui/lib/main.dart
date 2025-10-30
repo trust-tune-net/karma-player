@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'models/song.dart';
 import 'services/daemon_manager.dart';
 import 'services/app_settings.dart';
@@ -66,76 +69,108 @@ final favoritesService = FavoritesService();
 final errorHandler = ErrorHandler();
 
 void main() async {
-  // Wrap entire app in runZonedGuarded to catch ALL uncaught exceptions
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+  // CRITICAL: Load crash reporting preference BEFORE initializing
+  WidgetsFlutterBinding.ensureInitialized();
 
-    // FIRST: Initialize error handler (sets up logging and global error catching)
-    await errorHandler.initialize();
+  final prefs = await SharedPreferences.getInstance();
+  final crashReportingEnabled = prefs.getBool('analytics_enabled') ?? false;
 
-    // SECOND: Initialize crash reporting (opt-in, privacy-first)
-    // Sentry will automatically catch Flutter errors and async errors
-    await AnalyticsService().initialize();
+  // If crash reporting is enabled, wrap app with SentryFlutter.init
+  // This is the CORRECT way to catch Flutter errors (not Sentry.init!)
+  if (crashReportingEnabled) {
+    final packageInfo = await PackageInfo.fromPlatform();
 
-    // Initialize MediaKit with error handling (may fail on some Windows systems)
-    try {
-      MediaKit.ensureInitialized();
-      await errorHandler.logStartup('✅ MediaKit initialized');
-    } catch (e, stackTrace) {
-      await errorHandler.logStartupError('⚠️  MediaKit initialization failed (audio playback may not work)', e, stackTrace);
-      AnalyticsService().captureError(e, stackTrace, context: 'mediakit_init');
-    }
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = 'https://1c067b18cd32421e83ec2512d9e649d5@trust-tune-trust-tune-glitchtip.62ickh.easypanel.host/1';
+        options.release = packageInfo.version;
+        options.environment = kDebugMode ? 'development' : 'production';
 
-    await errorHandler.logStartup('═══════════════════════════════════════════════');
-    await errorHandler.logStartup('🎵 TrustTune Starting Up');
-    await errorHandler.logStartup('═══════════════════════════════════════════════');
+        // Privacy settings
+        options.sendDefaultPii = false; // CRITICAL: No personal data
+        options.tracesSampleRate = 0.1; // 10% of transactions
 
-    // Get and log version dynamically
-    try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      await errorHandler.logStartup('📦 Version: ${packageInfo.version} (build ${packageInfo.buildNumber})');
-    } catch (e) {
-      await errorHandler.logStartup('⚠️  Could not read version info');
-    }
-    await errorHandler.logStartup('═══════════════════════════════════════════════');
-
-    // Load settings
-    await errorHandler.logStartup('Loading settings...');
-    await appSettings.load();
-    await errorHandler.logStartup('Settings loaded');
-    await errorHandler.logStartup('═══════════════════════════════════════════════');
-    await errorHandler.logStartup('Launching app UI...');
-    runApp(const KarmaPlayerApp());
-
-    // Start transmission daemon in background (non-blocking)
-    await errorHandler.logStartup('═══════════════════════════════════════════════');
-    await errorHandler.logStartup('Starting transmission daemon in background...');
-    await errorHandler.logStartup('═══════════════════════════════════════════════');
-
-    Future.microtask(() async {
-      try {
-        final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
-        if (started) {
-          await errorHandler.logStartup('✅ Transmission daemon started successfully');
-        } else {
-          await errorHandler.logStartupError('❌ Failed to start transmission daemon', null);
-        }
-      } catch (e, stackTrace) {
-        await errorHandler.logStartupError('❌ ERROR starting daemon', e, stackTrace);
-      }
-    });
-  }, (error, stack) {
-    // Catch ANY uncaught error in the app
-    print('[UNCAUGHT ERROR] $error');
-    print('[UNCAUGHT ERROR] Stack: $stack');
-
-    // Report to Sentry (if enabled)
-    AnalyticsService().captureError(
-      error,
-      stack,
-      context: 'uncaught_zone_error',
-      extras: {'error_type': error.runtimeType.toString()},
+        // Filter sensitive data
+        options.beforeSend = (event, hint) async {
+          if (event.breadcrumbs != null) {
+            event = event.copyWith(
+              breadcrumbs: event.breadcrumbs!.map((b) {
+                if (b.data != null && b.data!.containsKey('url')) {
+                  final url = b.data!['url'].toString();
+                  if (url.contains('api_key') || url.contains('token')) {
+                    return b.copyWith(data: {...b.data!, 'url': '[REDACTED]'});
+                  }
+                }
+                return b;
+              }).toList(),
+            );
+          }
+          return event;
+        };
+      },
+      appRunner: () => _runApp(), // ← CRITICAL: This wraps the app to catch Flutter errors!
     );
+  } else {
+    // Crash reporting disabled - run app normally
+    await _runApp();
+  }
+}
+
+// Separate function for app initialization (called by SentryFlutter or directly)
+Future<void> _runApp() async {
+  // Initialize error handler (sets up logging and global error catching)
+  await errorHandler.initialize();
+
+  // Mark crash reporting as initialized (preference already loaded in main)
+  await AnalyticsService().markAsInitialized();
+
+  // Initialize MediaKit with error handling (may fail on some Windows systems)
+  try {
+    MediaKit.ensureInitialized();
+    await errorHandler.logStartup('✅ MediaKit initialized');
+  } catch (e, stackTrace) {
+    await errorHandler.logStartupError('⚠️  MediaKit initialization failed (audio playback may not work)', e, stackTrace);
+    AnalyticsService().captureError(e, stackTrace, context: 'mediakit_init');
+  }
+
+  await errorHandler.logStartup('═══════════════════════════════════════════════');
+  await errorHandler.logStartup('🎵 TrustTune Starting Up');
+  await errorHandler.logStartup('═══════════════════════════════════════════════');
+
+  // Get and log version dynamically
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    await errorHandler.logStartup('📦 Version: ${packageInfo.version} (build ${packageInfo.buildNumber})');
+  } catch (e) {
+    await errorHandler.logStartup('⚠️  Could not read version info');
+  }
+  await errorHandler.logStartup('═══════════════════════════════════════════════');
+
+  // Load settings
+  await errorHandler.logStartup('Loading settings...');
+  await appSettings.load();
+  await errorHandler.logStartup('Settings loaded');
+  await errorHandler.logStartup('═══════════════════════════════════════════════');
+  await errorHandler.logStartup('Launching app UI...');
+  runApp(const KarmaPlayerApp());
+
+  // Start transmission daemon in background (non-blocking)
+  await errorHandler.logStartup('═══════════════════════════════════════════════');
+  await errorHandler.logStartup('Starting transmission daemon in background...');
+  await errorHandler.logStartup('═══════════════════════════════════════════════');
+
+  Future.microtask(() async {
+    try {
+      final started = await daemonManager.startDaemon(customDownloadDir: appSettings.customDownloadDir);
+      if (started) {
+        await errorHandler.logStartup('✅ Transmission daemon started successfully');
+      } else {
+        await errorHandler.logStartupError('❌ Failed to start transmission daemon', null);
+      }
+    } catch (e, stackTrace) {
+      await errorHandler.logStartupError('❌ ERROR starting daemon', e, stackTrace);
+      AnalyticsService().captureError(e, stackTrace, context: 'daemon_start');
+    }
   });
 }
 

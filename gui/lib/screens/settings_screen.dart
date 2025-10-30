@@ -220,10 +220,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SnackBar(
           content: Text(
             enabled
-                ? 'Crash reporting enabled. Thank you for helping improve TrustTune!'
-                : 'Crash reporting disabled',
+                ? 'Crash reporting enabled. Restart app to activate. Thank you for helping improve TrustTune!'
+                : 'Crash reporting disabled. Restart app to take effect.',
           ),
           backgroundColor: enabled ? Colors.green : Colors.orange,
+          duration: const Duration(seconds: 5), // Longer duration to ensure user reads the message
         ),
       );
     }

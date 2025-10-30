@@ -31,82 +31,27 @@ class AnalyticsService {
   static const String? _posthogApiKey = null; // Not configured yet
   static const String? _posthogHost = null; // Not configured yet
 
-  /// Initialize analytics (call this in main.dart before runApp)
-  Future<void> initialize() async {
+  /// Mark analytics as initialized (called from main.dart after SentryFlutter.init)
+  /// NOTE: Actual Sentry initialization happens in main.dart with SentryFlutter.init()
+  Future<void> markAsInitialized() async {
     if (_initialized) return;
 
     // Load user preference
     final prefs = await SharedPreferences.getInstance();
     _enabled = prefs.getBool('analytics_enabled') ?? false; // Default: OFF (privacy-first)
 
-    if (!_enabled) {
-      debugPrint('[Analytics] Disabled by user preference');
-      _initialized = true;
-      return;
-    }
-
-    // Get app version
-    final packageInfo = await PackageInfo.fromPlatform();
-    final appVersion = packageInfo.version;
-
-    // Initialize Sentry (if DSN is configured)
-    if (_sentryDsn != null && _sentryDsn!.isNotEmpty) {
-      await Sentry.init(
-        (options) {
-          options.dsn = _sentryDsn;
-          options.release = appVersion;
-          options.environment = kDebugMode ? 'development' : 'production';
-
-          // Privacy settings
-          options.sendDefaultPii = false; // CRITICAL: No personal data
-
-          // Performance monitoring (optional)
-          options.tracesSampleRate = 0.1; // 10% of transactions
-
-          // Before send callback (filter sensitive data)
-          options.beforeSend = (event, hint) async {
-            // Remove any potential PII from breadcrumbs
-            if (event.breadcrumbs != null) {
-              event = event.copyWith(
-                breadcrumbs: event.breadcrumbs!.map((b) {
-                  // Remove URLs with potential tokens/keys
-                  if (b.data != null && b.data!.containsKey('url')) {
-                    final url = b.data!['url'].toString();
-                    if (url.contains('api_key') || url.contains('token')) {
-                      return b.copyWith(data: {...b.data!, 'url': '[REDACTED]'});
-                    }
-                  }
-                  return b;
-                }).toList(),
-              );
-            }
-            return event;
-          };
-        },
-      );
-      debugPrint('[Analytics] Sentry initialized (DSN configured)');
-    } else {
-      debugPrint('[Analytics] Sentry DISABLED (no DSN configured)');
-    }
-
-    // PostHog is not configured (not needed for crash reporting)
-    debugPrint('[Analytics] PostHog DISABLED (not configured)');
-
     _initialized = true;
-    debugPrint('[Analytics] Initialization complete (enabled: $_enabled)');
+    debugPrint('[Analytics] Marked as initialized (enabled: $_enabled)');
+    debugPrint('[Analytics] Sentry initialization handled by main.dart (SentryFlutter.init)');
   }
 
   /// Enable/disable analytics (user preference)
+  /// NOTE: Requires app restart to take effect (SentryFlutter.init runs on startup)
   Future<void> setEnabled(bool enabled) async {
     _enabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('analytics_enabled', enabled);
-    debugPrint('[Analytics] User preference set to: $enabled');
-
-    if (!_initialized && enabled) {
-      // Re-initialize if user enables after startup
-      await initialize();
-    }
+    debugPrint('[Analytics] User preference set to: $enabled (requires restart)');
   }
 
   /// Get current enabled status
