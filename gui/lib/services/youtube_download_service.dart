@@ -173,16 +173,40 @@ class YouTubeDownloadService {
     }
   }
 
-  /// Internal download logic
-  Future<String?> _downloadAudioInternal(String videoId) async {
+  /// Internal download logic with retry support
+  Future<String?> _downloadAudioInternal(String videoId, {int retryCount = 0}) async {
+    const maxRetries = 2;
+    const retryDelayMs = 2000; // 2 seconds
+    
     try {
+      // Log download start to GlitchTip
+      AnalyticsService().addBreadcrumb(
+        message: 'Starting yt-dlp download',
+        category: 'youtube_download',
+        data: {
+          'video_id': videoId,
+          'retry_count': retryCount,
+        },
+      );
+      
       final cacheDir = await _getCacheDir();
       final url = 'https://music.youtube.com/watch?v=$videoId';
       final outputTemplate = path.join(cacheDir, 'youtube_%(id)s.%(ext)s');
 
-      print('[YouTube Download] Starting download: $videoId');
+      print('[YouTube Download] Starting download: $videoId (attempt ${retryCount + 1})');
       print('[YouTube Download]    URL: $url');
 
+      // Log yt-dlp execution
+      AnalyticsService().addBreadcrumb(
+        message: 'Executing yt-dlp',
+        category: 'youtube_download',
+        data: {
+          'video_id': videoId,
+          'yt_dlp_path': ytDlpPath,
+          'url': url,
+        },
+      );
+      
       // Run yt-dlp to download audio
       // -f bestaudio: Get best audio quality
       // --no-playlist: Don't download playlists
@@ -271,8 +295,49 @@ class YouTubeDownloadService {
       // Store subscriptions for cleanup (prevents SIGPIPE on process kill)
       _activeSubscriptions[videoId] = [stdoutSub, stderrSub];
 
-      // Wait for download to complete
-      final exitCode = await process.exitCode;
+      // Wait for download to complete with timeout
+      final exitCodeFuture = process.exitCode;
+      final timeoutDuration = Duration(minutes: 5); // 5 minute timeout
+
+      int exitCode;
+      try {
+        exitCode = await exitCodeFuture.timeout(
+          timeoutDuration,
+          onTimeout: () {
+            print('[YouTube Download] ⏱️  Timeout after ${timeoutDuration.inMinutes} minutes');
+            process.kill(); // Kill hung process
+            
+            // Report timeout to GlitchTip
+            AnalyticsService().captureError(
+              TimeoutException('yt-dlp download timeout', timeoutDuration),
+              StackTrace.current,
+              context: 'youtube_download_timeout',
+              extras: {
+                'video_id': videoId,
+                'url': url,
+                'timeout_minutes': timeoutDuration.inMinutes,
+                'retry_count': retryCount,
+              },
+            );
+            
+            throw TimeoutException('Download timeout', timeoutDuration);
+          },
+        );
+      } catch (e) {
+        rethrow;
+      }
+
+      // Log success breadcrumb
+      if (exitCode == 0) {
+        AnalyticsService().addBreadcrumb(
+          message: 'yt-dlp completed successfully',
+          category: 'youtube_download',
+          data: {
+            'video_id': videoId,
+            'exit_code': exitCode,
+          },
+        );
+      }
 
       if (exitCode == 0) {
         // Download successful, find the file
@@ -284,17 +349,76 @@ class YouTubeDownloadService {
           print('[YouTube Download]    Size: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
           return filePath;
         } else {
+          // File not found after successful download - report this anomaly
           print('[YouTube Download] ❌ Downloaded but file not found');
+          
+          // List what files ARE in the directory for debugging
+          final dir = Directory(cacheDir);
+          List<String> filesInCache = [];
+          try {
+            final files = await dir.list().toList();
+            filesInCache = files.map((f) => path.basename(f.path)).toList();
+          } catch (e) {
+            filesInCache = ['Error listing: $e'];
+          }
+          
+          AnalyticsService().captureError(
+            Exception('yt-dlp succeeded but output file not found'),
+            StackTrace.current,
+            context: 'youtube_download_file_not_found',
+            extras: {
+              'video_id': videoId,
+              'expected_pattern': 'youtube_$videoId.*',
+              'cache_dir': cacheDir,
+              'files_in_cache': filesInCache.join(', '),
+              'exit_code': exitCode,
+              'stdout': stdout.join('\n'),
+              'stderr': stderr.join('\n'),
+            },
+          );
+          
           return null;
         }
       } else {
+        // yt-dlp failed - capture detailed error for GlitchTip
+        final stderrText = stderr.join('\n');
+        final stdoutText = stdout.join('\n');
+        
         print('[YouTube Download] ❌ yt-dlp failed with exit code: $exitCode');
-        print('[YouTube Download]    stdout: ${stdout.join("\n")}');
-        print('[YouTube Download]    stderr: ${stderr.join("\n")}');
+        print('[YouTube Download]    stderr: $stderrText');
+        print('[YouTube Download]    stdout: $stdoutText');
+        
+        // Report to GlitchTip with full details
+        final errorMessage = 'yt-dlp failed (exit $exitCode): ${stderrText.isNotEmpty ? stderrText : "No error output"}';
+        
+        AnalyticsService().captureError(
+          Exception(errorMessage),
+          StackTrace.current,
+          context: 'youtube_download_ytdlp_failed',
+          extras: {
+            'video_id': videoId,
+            'url': url,
+            'exit_code': exitCode,
+            'stderr': stderrText,
+            'stdout': stdoutText,
+            'yt_dlp_path': ytDlpPath,
+            'cache_dir': cacheDir,
+            'retry_count': retryCount,
+          },
+        );
+        
         return null;
       }
     } catch (e, stackTrace) {
-      print('[YouTube Download] ❌ Error: $e');
+      // Check if we should retry
+      if (retryCount < maxRetries && _shouldRetry(e)) {
+        print('[YouTube Download] 🔄 Retry ${retryCount + 1}/$maxRetries after ${retryDelayMs}ms...');
+        await Future.delayed(Duration(milliseconds: retryDelayMs));
+        return _downloadAudioInternal(videoId, retryCount: retryCount + 1);
+      }
+      
+      // Max retries reached or non-retryable error
+      print('[YouTube Download] ❌ Error: $e (after $retryCount retries)');
       print('[YouTube Download]    Stack: $stackTrace');
       
       // Report to Glitchtip
@@ -305,10 +429,80 @@ class YouTubeDownloadService {
         extras: {
           'video_id': videoId,
           'url': 'https://music.youtube.com/watch?v=$videoId',
+          'retry_count': retryCount,
+          'max_retries': maxRetries,
         },
       );
       
       return null;
+    }
+  }
+
+  /// Check if an error should trigger a retry
+  bool _shouldRetry(dynamic error) {
+    final errorStr = error.toString().toLowerCase();
+    // Retry on network errors, timeouts, rate limits
+    return errorStr.contains('network') ||
+           errorStr.contains('timeout') ||
+           errorStr.contains('connection') ||
+           errorStr.contains('429') || // Rate limit
+           errorStr.contains('503'); // Service unavailable
+  }
+
+  /// Verify yt-dlp binary is working
+  /// 
+  /// Call this once when the service is first used to ensure yt-dlp is available.
+  /// Returns true if yt-dlp is working, false otherwise.
+  Future<bool> verifyYtDlp() async {
+    try {
+      print('[YouTube Download] Verifying yt-dlp binary...');
+      
+      final result = await Process.run(ytDlpPath, ['--version']);
+      
+      if (result.exitCode == 0) {
+        final version = result.stdout.toString().trim();
+        print('[YouTube Download] ✅ yt-dlp version: $version');
+        
+        AnalyticsService().addBreadcrumb(
+          message: 'yt-dlp verified',
+          category: 'youtube_download',
+          data: {
+            'version': version,
+            'path': ytDlpPath,
+          },
+        );
+        
+        return true;
+      } else {
+        print('[YouTube Download] ❌ yt-dlp verification failed: ${result.stderr}');
+        
+        AnalyticsService().captureError(
+          Exception('yt-dlp binary verification failed'),
+          StackTrace.current,
+          context: 'youtube_download_verification',
+          extras: {
+            'yt_dlp_path': ytDlpPath,
+            'exit_code': result.exitCode,
+            'stderr': result.stderr.toString(),
+            'stdout': result.stdout.toString(),
+          },
+        );
+        
+        return false;
+      }
+    } catch (e, stackTrace) {
+      print('[YouTube Download] ❌ yt-dlp verification error: $e');
+      
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'youtube_download_verification_error',
+        extras: {
+          'yt_dlp_path': ytDlpPath,
+        },
+      );
+      
+      return false;
     }
   }
 

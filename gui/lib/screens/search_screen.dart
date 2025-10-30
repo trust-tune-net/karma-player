@@ -45,6 +45,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void initState() {
     super.initState();
     _loadFilterPreference();
+    _verifyYtDlp();
+  }
+
+  /// Verify yt-dlp binary is available and working
+  void _verifyYtDlp() async {
+    // Run verification in background, don't block UI
+    await _youtubeDownloadService.verifyYtDlp();
   }
 
   @override

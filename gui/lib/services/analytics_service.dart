@@ -168,6 +168,35 @@ class AnalyticsService {
     }
   }
 
+  /// Add breadcrumb for debugging context in crash reports
+  /// 
+  /// Use this to add detailed execution flow information that helps
+  /// understand what led to a crash or error.
+  void addBreadcrumb({
+    required String message,
+    required String category,
+    Map<String, dynamic>? data,
+  }) {
+    if (!_enabled || !_initialized) return;
+
+    try {
+      if (_sentryDsn != null) {
+        Sentry.addBreadcrumb(
+          Breadcrumb(
+            message: message,
+            category: category,
+            data: data,
+            level: SentryLevel.info,
+          ),
+        );
+      }
+
+      debugPrint('[Analytics] Breadcrumb added: $message ($category)');
+    } catch (e) {
+      debugPrint('[Analytics] Failed to add breadcrumb: $e');
+    }
+  }
+
   /// Close and flush (call on app termination)
   Future<void> close() async {
     if (!_initialized) return;
