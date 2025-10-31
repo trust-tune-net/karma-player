@@ -30,7 +30,7 @@
 
 ## What and Why
 
-> **Music discovery doesn't have a quality problem—it has a trust problem.**
+> **The future of music shouldn’t be controlled by algorithms, middlemen, or opaque platforms.**
 
 You can stream anything on Spotify, but artists get **$0.003 per play**. You can find FLAC torrents, but which ones are real? Which are transcodes? Which uploaders are trusted?
 

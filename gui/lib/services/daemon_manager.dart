@@ -254,7 +254,7 @@ class DaemonManager {
       print('[Daemon] Process started with PID: ${_daemonProcess!.pid}');
 
       // Listen for stdout/stderr
-      _daemonProcess!.stdout.transform(utf8.decoder).listen(
+      _daemonProcess!.stdout.transform(latin1.decoder).listen(
         (data) {
           print('[Daemon STDOUT] $data');
         },
@@ -270,7 +270,7 @@ class DaemonManager {
           );
         },
       );
-      _daemonProcess!.stderr.transform(utf8.decoder).listen(
+      _daemonProcess!.stderr.transform(latin1.decoder).listen(
         (data) {
           print('[Daemon STDERR] $data');
         },
