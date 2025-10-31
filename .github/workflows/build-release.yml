@@ -82,7 +82,7 @@ jobs:
           curl -L -o ffprobe.7z https://evermeet.cx/ffmpeg/ffprobe-7.1.7z
           
           # Extract FFprobe from 7z archive
-          7z x ffprobe.7.1.7z
+          7z x ffprobe.7z
           
           # Move to app bundle resources
           mv ffprobe gui/macos/Runner/Resources/bin/ffprobe
@@ -93,7 +93,7 @@ jobs:
           gui/macos/Runner/Resources/bin/ffprobe -version | head -n 1
           
           # Clean up archive
-          rm -f ffprobe.7.1.7z
+          rm -f ffprobe.7z
           
           echo "✅ FFprobe bundled successfully"
 
