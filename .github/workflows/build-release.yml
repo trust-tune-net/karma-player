@@ -73,6 +73,30 @@ jobs:
           
           echo "✅ yt-dlp bundled successfully"
 
+      - name: Download and bundle FFprobe
+        run: |
+          echo "📥 Downloading FFprobe for macOS..."
+          
+          # Download FFprobe static binary from evermeet.cx (trusted macOS FFmpeg builds)
+          # This provides EXACT audio quality reading for audiophile-grade accuracy
+          curl -L -o ffprobe.7z https://evermeet.cx/ffmpeg/ffprobe-7.1.7z
+          
+          # Extract FFprobe from 7z archive
+          7z x ffprobe.7.1.7z
+          
+          # Move to app bundle resources
+          mv ffprobe gui/macos/Runner/Resources/bin/ffprobe
+          chmod +x gui/macos/Runner/Resources/bin/ffprobe
+          
+          # Verify download
+          ls -lh gui/macos/Runner/Resources/bin/ffprobe
+          gui/macos/Runner/Resources/bin/ffprobe -version | head -n 1
+          
+          # Clean up archive
+          rm -f ffprobe.7.1.7z
+          
+          echo "✅ FFprobe bundled successfully"
+
       - name: Install dependencies
         run: |
           cd gui
@@ -114,6 +138,18 @@ jobs:
             codesign --force --sign - "$APP_PATH/Contents/Resources/bin/yt-dlp"
             
             echo "✅ yt-dlp copied and signed"
+          fi
+
+          # Copy FFprobe binary
+          if [ -f gui/macos/Runner/Resources/bin/ffprobe ]; then
+            cp gui/macos/Runner/Resources/bin/ffprobe "$APP_PATH/Contents/Resources/bin/"
+            chmod +x "$APP_PATH/Contents/Resources/bin/ffprobe"
+            
+            # Sign the binary
+            echo "🔏 Signing FFprobe binary..."
+            codesign --force --sign - "$APP_PATH/Contents/Resources/bin/ffprobe"
+            
+            echo "✅ FFprobe copied and signed"
           fi
 
           if [ -d gui/macos/Runner/Resources/lib ]; then
@@ -284,6 +320,30 @@ jobs:
           echo "📦 Final bundled files:"
           ls -la gui/windows-binaries/
 
+      - name: Download FFprobe for Windows
+        shell: bash
+        run: |
+          echo "📥 Downloading FFprobe..."
+          
+          # Download FFprobe essentials from gyan.dev (trusted Windows FFmpeg builds)
+          # This provides EXACT audio quality reading for audiophile-grade accuracy
+          FFPROBE_URL="https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          
+          curl -L -o ffmpeg-essentials.zip "$FFPROBE_URL"
+          
+          # Extract ffprobe.exe from the archive
+          unzip -j ffmpeg-essentials.zip '*/bin/ffprobe.exe' -d gui/windows-binaries/
+          
+          if [ ! -f gui/windows-binaries/ffprobe.exe ]; then
+            echo "❌ Failed to extract ffprobe.exe"
+            exit 1
+          fi
+          
+          # Cleanup
+          rm -f ffmpeg-essentials.zip
+          
+          echo "✅ Downloaded ffprobe.exe ($(ls -lh gui/windows-binaries/ffprobe.exe | awk '{print $5}'))"
+
       - name: Install dependencies
         run: |
           cd gui
@@ -379,6 +439,31 @@ jobs:
           
           echo "✅ yt-dlp bundled successfully"
 
+      - name: Download and bundle FFprobe (Linux)
+        run: |
+          echo "📥 Downloading FFprobe for Linux..."
+          
+          # Download FFprobe static binary from John Van Sickle (trusted Linux FFmpeg builds)
+          # This provides EXACT audio quality reading for audiophile-grade accuracy
+          mkdir -p gui/linux-binaries/bin
+          
+          # Download and extract FFmpeg static build (includes FFprobe)
+          curl -L -o ffmpeg-release.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+          tar -xJf ffmpeg-release.tar.xz
+          
+          # Find and move ffprobe binary (it's in a versioned directory)
+          find . -name ffprobe -type f -executable -exec mv {} gui/linux-binaries/bin/ffprobe \;
+          chmod +x gui/linux-binaries/bin/ffprobe
+          
+          # Verify download
+          ls -lh gui/linux-binaries/bin/ffprobe
+          gui/linux-binaries/bin/ffprobe -version | head -n 1
+          
+          # Clean up
+          rm -rf ffmpeg-*
+          
+          echo "✅ FFprobe bundled successfully"
+
       - name: Build Linux app
         run: |
           cd gui
@@ -401,6 +486,13 @@ jobs:
             cp gui/linux-binaries/bin/yt-dlp "$BUILD_DIR/bin/"
             chmod +x "$BUILD_DIR/bin/yt-dlp"
             echo "✅ yt-dlp bundled with Linux app"
+          fi
+
+          # Copy FFprobe to bundle
+          if [ -f gui/linux-binaries/bin/ffprobe ]; then
+            cp gui/linux-binaries/bin/ffprobe "$BUILD_DIR/bin/"
+            chmod +x "$BUILD_DIR/bin/ffprobe"
+            echo "✅ FFprobe bundled with Linux app"
           fi
 
       - name: Create TAR.GZ

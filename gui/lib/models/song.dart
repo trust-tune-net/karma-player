@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../services/metadata_service.dart';
 
 class Song {
   final String id;
@@ -14,8 +15,14 @@ class Song {
   final int? bitrate; // in kbps
   final int? sampleRate; // in Hz (44100, 48000, 96000, 192000, etc.)
   final int? bitDepth; // 16, 24, 32
+  final int? channels; // 2, 6, 8
+  final String? channelLayout; // "stereo", "5.1", "7.1(side)"
+  final String? codecDetails; // "FLAC (Free Lossless Audio Codec)"
+  final String? rawMetadata; // Raw FFprobe JSON (for power users)
+  final String? metadataToolVersion; // "FFprobe 7.1"
   final int? fileSize; // in bytes
   final String? format; // FLAC, MP3, ALAC, etc.
+  final bool isEstimated; // false = exact from FFprobe, true = estimated from file size
 
   // HTTP headers for streaming URLs (e.g., YouTube requires User-Agent)
   final Map<String, String>? httpHeaders;
@@ -32,8 +39,14 @@ class Song {
     this.bitrate,
     this.sampleRate,
     this.bitDepth,
+    this.channels,
+    this.channelLayout,
+    this.codecDetails,
+    this.rawMetadata,
+    this.metadataToolVersion,
     this.fileSize,
     this.format,
+    this.isEstimated = false, // Default to false (exact)
     this.httpHeaders,
   });
 
@@ -95,13 +108,51 @@ class Song {
   }
 
   // Extract full metadata including audio quality info
+  // NOW READS REAL METADATA from ID3/FLAC tags!
   static Future<Song> fromFileWithMetadata(
     String path, {
     String? albumName,
     String? artistName,
     String? artworkPath,
+    bool useRealMetadata = true, // New flag to enable/disable metadata reading
   }) async {
-    print('[METADATA] Extracting metadata for: $path');
+    // Create metadata service instance to read ID3 tags + FFprobe data
+    final metadataService = MetadataService();
+    
+    if (useRealMetadata) {
+      try {
+        // REAL METADATA EXTRACTION
+        final metadata = await metadataService.extractSongMetadata(path);
+        
+        return Song(
+          id: path.hashCode.toString(),
+          title: metadata.title ?? _extractTitleFromFilename(path),
+          artist: metadata.artist ?? artistName ?? 'Unknown Artist',
+          album: metadata.album ?? albumName,
+          filePath: path,
+          trackNumber: metadata.trackNumber,
+          duration: metadata.duration,
+          artworkPath: artworkPath,
+          bitrate: metadata.bitrate,      // EXACT or estimated from FFprobe
+          sampleRate: metadata.sampleRate,  // EXACT or estimated from FFprobe
+          bitDepth: metadata.bitDepth,      // EXACT or estimated from FFprobe
+          channels: metadata.channels,      // 2, 6, 8
+          channelLayout: metadata.channelLayout,  // "stereo", "5.1", "7.1(side)"
+          codecDetails: metadata.codecDetails,    // "FLAC (Free Lossless Audio Codec)"
+          rawMetadata: metadata.rawMetadata,      // Raw FFprobe JSON
+          metadataToolVersion: metadata.metadataToolVersion, // "FFprobe 7.1"
+          fileSize: metadata.fileSize,
+          format: metadata.format,
+          isEstimated: metadata.isEstimated, // Track if quality is exact or estimated
+        );
+      } catch (e) {
+        print('[METADATA] WARNING: Failed to read metadata, falling back to estimation: $e');
+        // Fall through to estimation logic
+      }
+    }
+    
+    // FALLBACK: Use estimation (old behavior)
+    print('[METADATA] Using estimation for: $path');
 
     // Get basic info first
     final basicSong = Song.fromFile(path, albumName: albumName, artistName: artistName, artworkPath: artworkPath);
@@ -113,7 +164,6 @@ class Song {
 
       // Extract format from extension
       final ext = path.split('.').last.toUpperCase();
-      print('[METADATA] Format: $ext, Size: ${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB');
 
       // Estimate audio quality based on file size and format
       int? sampleRate;
@@ -121,21 +171,15 @@ class Song {
       int? bitrate;
 
       if (ext == 'FLAC') {
-        // Estimate based on file size per minute
-        // Typical FLAC sizes:
-        // 16/44.1 (CD quality): ~25-30 MB/min
-        // 24/96 (Hi-Res): ~60-80 MB/min
-        // 24/192 (Ultra Hi-Res): ~120-150 MB/min
         final mbSize = fileSize / (1024 * 1024);
-
         if (mbSize > 100) {
           sampleRate = 192000;
           bitDepth = 24;
-          bitrate = 4608; // 24bit * 192kHz * 2 channels / 1000
+          bitrate = 4608;
         } else if (mbSize > 50) {
           sampleRate = 96000;
           bitDepth = 24;
-          bitrate = 2304; // 24bit * 96kHz * 2 channels / 1000
+          bitrate = 2304;
         } else if (mbSize > 30) {
           sampleRate = 48000;
           bitDepth = 24;
@@ -143,10 +187,9 @@ class Song {
         } else {
           sampleRate = 44100;
           bitDepth = 16;
-          bitrate = 1411; // CD quality
+          bitrate = 1411;
         }
       } else if (ext == 'MP3') {
-        // MP3 bitrates are typically 128, 192, 256, 320 kbps
         final mbSize = fileSize / (1024 * 1024);
         if (mbSize > 8) {
           bitrate = 320;
@@ -158,10 +201,8 @@ class Song {
           bitrate = 128;
         }
         sampleRate = 44100;
-        bitDepth = null; // MP3 doesn't have fixed bit depth
+        bitDepth = null;
       }
-
-      print('[METADATA] Determined: ${bitDepth != null && sampleRate != null ? "$bitDepth/${sampleRate! ~/ 1000}" : "N/A"}, Bitrate: ${bitrate ?? "N/A"} kbps');
 
       return Song(
         id: basicSong.id,
@@ -177,9 +218,9 @@ class Song {
         bitDepth: bitDepth,
         fileSize: fileSize,
         format: ext,
+        isEstimated: true, // This is an estimation!
       );
     } catch (e) {
-      // If extraction fails, return basic song with just format
       final ext = path.split('.').last.toUpperCase();
       return Song(
         id: basicSong.id,
@@ -191,8 +232,25 @@ class Song {
         artworkPath: basicSong.artworkPath,
         trackNumber: basicSong.trackNumber,
         format: ext,
+        isEstimated: true, // This is an estimation (fallback case)
       );
     }
+  }
+
+  // Helper to extract title from filename
+  static String _extractTitleFromFilename(String path) {
+    final parts = path.split('/');
+    final fileName = parts.last;
+    final nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+    
+    // Try to parse track number and title
+    if (nameWithoutExt.contains(' - ')) {
+      final splitParts = nameWithoutExt.split(' - ');
+      if (splitParts.length >= 2) {
+        return splitParts.sublist(1).join(' - ').trim();
+      }
+    }
+    return nameWithoutExt;
   }
 
   String get displayTitle => '$title - $artist';

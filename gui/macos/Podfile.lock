@@ -4,6 +4,8 @@ PODS:
   - FlutterMacOS (1.0.0)
   - media_kit_libs_macos_audio (1.0.4):
     - FlutterMacOS
+  - metadata_god (0.0.1):
+    - FlutterMacOS
   - package_info_plus (0.0.1):
     - FlutterMacOS
   - path_provider_foundation (0.0.1):
@@ -22,6 +24,7 @@ DEPENDENCIES:
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - media_kit_libs_macos_audio (from `Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_audio/macos`)
+  - metadata_god (from `Flutter/ephemeral/.symlinks/plugins/metadata_god/macos`)
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - sentry_flutter (from `Flutter/ephemeral/.symlinks/plugins/sentry_flutter/macos`)
@@ -38,6 +41,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
   media_kit_libs_macos_audio:
     :path: Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_audio/macos
+  metadata_god:
+    :path: Flutter/ephemeral/.symlinks/plugins/metadata_god/macos
   package_info_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
   path_provider_foundation:
@@ -51,6 +56,7 @@ SPEC CHECKSUMS:
   file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   media_kit_libs_macos_audio: 06f3cf88d6d89c7c3c87eae57689d1c6adb335b2
+  metadata_god: 8029e6ff4b1400ae4f13c38d2c478e8633f0e58b
   package_info_plus: f0052d280d17aa382b932f399edf32507174e870
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   Sentry: da60d980b197a46db0b35ea12cb8f39af48d8854

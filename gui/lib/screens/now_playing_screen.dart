@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/playback_service.dart';
 import '../services/analytics_service.dart';
@@ -529,10 +530,17 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> {
 }
 
 // Detailed file information widget
-class _DetailedFileInfo extends StatelessWidget {
+class _DetailedFileInfo extends StatefulWidget {
   final dynamic song;
 
   const _DetailedFileInfo({required this.song});
+
+  @override
+  State<_DetailedFileInfo> createState() => _DetailedFileInfoState();
+}
+
+class _DetailedFileInfoState extends State<_DetailedFileInfo> {
+  bool _showRawData = false;
 
   @override
   Widget build(BuildContext context) {
@@ -550,28 +558,131 @@ class _DetailedFileInfo extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Technical Details',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFFA855F7),
-            ),
+          // Header with Raw Data toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Technical Details',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFA855F7),
+                ),
+              ),
+              if (widget.song.rawMetadata != null)
+                TextButton.icon(
+                  onPressed: () => setState(() => _showRawData = !_showRawData),
+                  icon: Icon(
+                    _showRawData ? Icons.code_off : Icons.code,
+                    size: 16,
+                    color: const Color(0xFFA855F7),
+                  ),
+                  label: Text(
+                    _showRawData ? 'Hide Raw' : 'Raw Data',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFA855F7),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
-          _buildInfoRow('Format', song.format ?? 'Unknown'),
-          if (song.bitDepth != null && song.sampleRate != null)
-            _buildInfoRow('Quality', '${song.bitDepth}-bit / ${song.sampleRate! ~/ 1000} kHz'),
-          if (song.bitrate != null)
-            _buildInfoRow('Bitrate', '${song.bitrate} kbps'),
-          if (song.fileSize != null)
-            _buildInfoRow('File Size', song.fileSizeDisplay ?? 'Unknown'),
-          _buildInfoRow('Type', song.isLossless ? 'Lossless' : 'Lossy'),
-          const SizedBox(height: 8),
-          _buildClickablePathRow('Path', song.filePath),
+          // Show formatted details OR raw data
+          if (!_showRawData) ...[
+            _buildInfoRow('Format', widget.song.format ?? 'Unknown'),
+            if (widget.song.bitDepth != null && widget.song.sampleRate != null)
+              _buildInfoRow('Quality', '${widget.song.bitDepth}-bit / ${widget.song.sampleRate! ~/ 1000} kHz${widget.song.isEstimated ? " (est.)" : ""}'),
+            if (widget.song.channels != null || widget.song.channelLayout != null)
+              _buildInfoRow('Channels', _formatChannels(widget.song.channelLayout, widget.song.channels)),
+            if (widget.song.codecDetails != null)
+              _buildInfoRow('Codec', widget.song.codecDetails!),
+            if (widget.song.bitrate != null)
+              _buildInfoRow('Bitrate', '${widget.song.bitrate} kbps${widget.song.isEstimated ? " (est.)" : ""}'),
+            if (widget.song.fileSize != null)
+              _buildInfoRow('File Size', widget.song.fileSizeDisplay ?? 'Unknown'),
+            _buildInfoRow('Type', widget.song.isLossless ? 'Lossless' : 'Lossy'),
+            const SizedBox(height: 8),
+            _buildClickablePathRow('Path', widget.song.filePath),
+          ] else ...[
+            // Raw FFprobe output - Always show tool info
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                widget.song.metadataToolVersion != null 
+                  ? 'Tool: ${widget.song.metadataToolVersion}'
+                  : 'Tool: FFprobe (version unknown)',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF888888),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 300),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0A0A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF00FF00).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Text(
+                    _prettyPrintJson(widget.song.rawMetadata!),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF00FF00), // Matrix green
+                      fontFamily: 'monospace',
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _formatChannels(String? layout, int? channels) {
+    if (layout == null && channels == null) return 'Unknown';
+    if (layout != null && channels != null) {
+      return '${_capitalizeLayout(layout)} ($channels.0)'; // "Stereo (2.0)"
+    }
+    if (channels != null) return '$channels.0';
+    return _capitalizeLayout(layout!);
+  }
+
+  String _capitalizeLayout(String layout) {
+    if (layout == 'stereo') return 'Stereo';
+    if (layout == '5.1') return '5.1 Surround';
+    if (layout == '5.1(side)') return '5.1 Surround';
+    if (layout == '7.1') return '7.1 Surround';
+    if (layout == '7.1(side)') return '7.1 Surround';
+    if (layout == 'mono') return 'Mono';
+    // Capitalize first letter for unknown layouts
+    return layout[0].toUpperCase() + layout.substring(1);
+  }
+
+  String _prettyPrintJson(String json) {
+    try {
+      final decoded = jsonDecode(json);
+      final encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(decoded);
+    } catch (e) {
+      return json;
+    }
   }
 
   Widget _buildInfoRow(String label, String value, {bool mono = false}) {

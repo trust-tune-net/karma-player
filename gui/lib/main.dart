@@ -14,6 +14,7 @@ import 'services/app_settings.dart';
 import 'services/playback_service.dart';
 import 'services/error_handler.dart';
 import 'services/analytics_service.dart';
+import 'services/metadata_service.dart';
 import 'screens/now_playing_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/downloads_screen.dart';
@@ -215,6 +216,29 @@ Future<void> _runApp() async {
   } catch (e, stackTrace) {
     await errorHandler.logStartupError('⚠️  MediaKit initialization failed (audio playback may not work)', e, stackTrace);
     AnalyticsService().captureError(e, stackTrace, context: 'mediakit_init');
+  }
+
+  // Initialize MetadataService for reading ID3/FLAC tags
+  try {
+    await MetadataService.initialize();
+    await errorHandler.logStartup('✅ MetadataService initialized (ID3/FLAC tag reading enabled)');
+  } catch (e, stackTrace) {
+    await errorHandler.logStartupError('⚠️  MetadataService initialization failed (will use file size estimation)', e, stackTrace);
+    // Not critical - we'll fall back to estimation
+  }
+
+  // Verify FFprobe for EXACT audio quality reading
+  try {
+    final metadataService = MetadataService();
+    final ffprobeAvailable = await metadataService.verifyFFprobe();
+    if (ffprobeAvailable) {
+      await errorHandler.logStartup('✅ FFprobe verified (EXACT audio quality enabled)');
+    } else {
+      await errorHandler.logStartup('⚠️  FFprobe not found (will estimate audio quality from file size)');
+    }
+  } catch (e, stackTrace) {
+    await errorHandler.logStartupError('⚠️  FFprobe verification failed (will estimate audio quality)', e, stackTrace);
+    // Not critical - we'll fall back to estimation
   }
 
   await errorHandler.logStartup('═══════════════════════════════════════════════');

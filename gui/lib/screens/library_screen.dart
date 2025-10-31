@@ -27,6 +27,10 @@ class LibraryScreenState extends State<LibraryScreen> {
   Timer? _downloadPollTimer;
   Timer? _autoRefreshTimer; // Auto-refresh library every 10 minutes
   late final TransmissionClient _transmissionClient;
+  
+  // Lazy loading state
+  bool _isLoadingMetadata = false;
+  Set<String> _albumsWithMetadata = {}; // Track which albums have full metadata loaded
 
   @override
   void initState() {
@@ -202,10 +206,10 @@ class LibraryScreenState extends State<LibraryScreen> {
           albumMap[albumPath] = [];
         }
 
-        // Extract lightweight metadata (format, file size, estimated quality)
-        // This is fast - just file stat + extension parsing, no audio decoding
+        // Extract lightweight metadata (NO ID3/FFprobe reading for fast scanning)
+        // Full metadata will be loaded lazily when album is clicked
         try {
-          final song = await Song.fromFileWithMetadata(
+          final song = Song.fromFile(
             fileInfo['path'] as String,
             albumName: fileInfo['albumName'] as String,
             artistName: fileInfo['artistName'] as String,
@@ -298,8 +302,14 @@ class LibraryScreenState extends State<LibraryScreen> {
             bitrate: song.bitrate,
             sampleRate: song.sampleRate,
             bitDepth: song.bitDepth,
+            channels: song.channels,
+            channelLayout: song.channelLayout,
+            codecDetails: song.codecDetails,
+            rawMetadata: song.rawMetadata,
+            metadataToolVersion: song.metadataToolVersion,
             fileSize: song.fileSize,
             format: song.format,
+            isEstimated: song.isEstimated, // CRITICAL: Preserve estimation flag
           );
         }).toList();
 
@@ -332,6 +342,78 @@ class LibraryScreenState extends State<LibraryScreen> {
 
     // Refresh top bar stats (connection quality, plays, GB downloaded)
     await _checkHealth();
+  }
+
+  /// Lazy-load full metadata (ID3 + FFprobe) for all songs in an album
+  /// Only called when album is opened and metadata is missing
+  Future<void> _lazyLoadMetadata(Album album) async {
+    // Check if already loaded
+    if (_albumsWithMetadata.contains(album.id)) {
+      return;
+    }
+
+    // Check if songs already have metadata
+    final firstSong = album.songs.isNotEmpty ? album.songs.first : null;
+    if (firstSong != null && firstSong.bitrate != null) {
+      // Already has metadata, mark as loaded
+      _albumsWithMetadata.add(album.id);
+      return;
+    }
+
+    setState(() {
+      _isLoadingMetadata = true;
+    });
+
+    try {
+      print('[Library] Lazy-loading metadata for album: ${album.title} (${album.songs.length} songs)');
+      final startTime = DateTime.now();
+
+      // Load full metadata for all songs in parallel (faster than sequential)
+      final updatedSongs = await Future.wait(
+        album.songs.map((song) async {
+          try {
+            return await Song.fromFileWithMetadata(
+              song.filePath,
+              albumName: song.album,
+              artistName: song.artist,
+              artworkPath: song.artworkPath,
+            );
+          } catch (e) {
+            print('[Library] ERROR loading metadata for ${song.title}: $e');
+            // Return original song if metadata loading fails
+            return song;
+          }
+        }),
+      );
+
+      final duration = DateTime.now().difference(startTime);
+      print('[Library] ✓ Loaded metadata for ${album.title} in ${duration.inMilliseconds}ms');
+
+      // Update the album in the albums list
+      final albumIndex = _albums.indexWhere((a) => a.id == album.id);
+      if (albumIndex != -1) {
+        setState(() {
+          _albums[albumIndex] = Album(
+            id: album.id,
+            name: album.name,
+            path: album.path,
+            artworkPath: album.artworkPath,
+            songs: updatedSongs,
+          );
+          // Update selected album if this is the currently displayed album
+          if (_selectedAlbum?.id == album.id) {
+            _selectedAlbum = _albums[albumIndex];
+          }
+          _albumsWithMetadata.add(album.id);
+        });
+      }
+    } catch (e) {
+      print('[Library] ERROR lazy-loading metadata: $e');
+    } finally {
+      setState(() {
+        _isLoadingMetadata = false;
+      });
+    }
   }
 
   @override
@@ -447,9 +529,40 @@ class LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildAlbumDetailScreen(Album album) {
+    // Trigger lazy loading of metadata if not already loaded
+    if (!_albumsWithMetadata.contains(album.id) && !_isLoadingMetadata) {
+      // Use addPostFrameCallback to avoid calling setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _lazyLoadMetadata(album);
+      });
+    }
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
+          // Show loading indicator while fetching metadata
+          if (_isLoadingMetadata)
+            SliverToBoxAdapter(
+              child: Container(
+                color: const Color(0xFF1E1E1E),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Loading audio quality details...',
+                      style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           SliverAppBar(
             backgroundColor: const Color(0xFF000000),
             leading: IconButton(
