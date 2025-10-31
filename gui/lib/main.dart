@@ -20,6 +20,7 @@ import 'screens/search_screen.dart';
 import 'screens/downloads_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/library_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 // App Color Palette (like Melo)
 class AppColors {
@@ -227,19 +228,7 @@ Future<void> _runApp() async {
     // Not critical - we'll fall back to estimation
   }
 
-  // Verify FFprobe for EXACT audio quality reading
-  try {
-    final metadataService = MetadataService();
-    final ffprobeAvailable = await metadataService.verifyFFprobe();
-    if (ffprobeAvailable) {
-      await errorHandler.logStartup('✅ FFprobe verified (EXACT audio quality enabled)');
-    } else {
-      await errorHandler.logStartup('⚠️  FFprobe not found (will estimate audio quality from file size)');
-    }
-  } catch (e, stackTrace) {
-    await errorHandler.logStartupError('⚠️  FFprobe verification failed (will estimate audio quality)', e, stackTrace);
-    // Not critical - we'll fall back to estimation
-  }
+  // Note: FFprobe verification moved to background (after UI is visible)
 
   await errorHandler.logStartup('═══════════════════════════════════════════════');
   await errorHandler.logStartup('🎵 TrustTune Starting Up');
@@ -270,6 +259,23 @@ Future<void> _runApp() async {
   await errorHandler.logStartup('Launching app UI...');
   runApp(const KarmaPlayerApp());
 
+  // Run non-critical initialization in background (after UI is visible)
+  Future.microtask(() async {
+    // Verify FFprobe for EXACT audio quality reading (can take ~500ms-2s)
+    try {
+      final metadataService = MetadataService();
+      final ffprobeAvailable = await metadataService.verifyFFprobe();
+      if (ffprobeAvailable) {
+        await errorHandler.logStartup('✅ FFprobe verified (EXACT audio quality enabled)');
+      } else {
+        await errorHandler.logStartup('⚠️  FFprobe not found (will estimate audio quality from file size)');
+      }
+    } catch (e, stackTrace) {
+      await errorHandler.logStartupError('⚠️  FFprobe verification failed (will estimate audio quality)', e, stackTrace);
+      // Not critical - we'll fall back to estimation
+    }
+  });
+
   // Start transmission daemon in background (non-blocking)
   await errorHandler.logStartup('═══════════════════════════════════════════════');
   await errorHandler.logStartup('Starting transmission daemon in background...');
@@ -290,8 +296,36 @@ Future<void> _runApp() async {
   });
 }
 
-class KarmaPlayerApp extends StatelessWidget {
+class KarmaPlayerApp extends StatefulWidget {
   const KarmaPlayerApp({super.key});
+
+  @override
+  State<KarmaPlayerApp> createState() => _KarmaPlayerAppState();
+}
+
+class _KarmaPlayerAppState extends State<KarmaPlayerApp> {
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFirstRun();
+  }
+
+  Future<void> _checkFirstRun() async {
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
+    
+    setState(() {
+      _showOnboarding = !onboardingComplete;
+    });
+  }
+
+  void _onOnboardingComplete() {
+    setState(() {
+      _showOnboarding = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +404,9 @@ class KarmaPlayerApp extends StatelessWidget {
         ),
       ),
       themeMode: ThemeMode.dark,
-      home: const MainScreen(),
+      home: _showOnboarding 
+        ? OnboardingScreen(onComplete: _onOnboardingComplete)
+        : const MainScreen(),
     );
   }
 }
