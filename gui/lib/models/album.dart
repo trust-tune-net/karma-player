@@ -15,15 +15,26 @@ class Album {
     required this.songs,
   });
 
+  /// Check if a string is a valid year (4-digit, 1900-2099)
+  bool _isYear(String text) {
+    final trimmed = text.trim();
+    if (trimmed.length != 4) return false;
+    final year = int.tryParse(trimmed);
+    return year != null && year >= 1900 && year <= 2099;
+  }
+
   String get artist {
     // First, try to get artist from song metadata (ID3 tags)
     // This is more accurate than folder name parsing
     if (songs.isNotEmpty) {
-      // Collect all artists from songs (excluding "Unknown Artist")
+      // Collect all artists from songs (excluding "Unknown Artist" and years)
       final artistCounts = <String, int>{};
       for (final song in songs) {
-        if (song.artist.isNotEmpty && song.artist != 'Unknown Artist') {
-          artistCounts[song.artist] = (artistCounts[song.artist] ?? 0) + 1;
+        final artist = song.artist.trim();
+        if (artist.isNotEmpty && 
+            artist != 'Unknown Artist' && 
+            !_isYear(artist)) {  // Filter out years
+          artistCounts[artist] = (artistCounts[artist] ?? 0) + 1;
         }
       }
       
@@ -36,12 +47,24 @@ class Album {
     }
     
     // Fall back to folder name parsing if no metadata available
-    // Format: "Artist - Album Title..."
+    // Handle formats: "Artist - Album", "Year - Album", "Artist - Album - Year"
     final parts = name.split(' - ');
     if (parts.length >= 2) {
-      return parts[0].trim();
+      final firstPart = parts[0].trim();
+      // If first part is a year, try alternative parsing or return Unknown Artist
+      if (_isYear(firstPart)) {
+        // Format: "Year - Album", can't extract artist from this
+        return 'Unknown Artist';
+      } else {
+        // Format: "Artist - Album" or "Artist - Album - Year"
+        return firstPart;
+      }
     }
-    return 'Unknown Artist';
+    // If no separator, check if entire name is a year
+    if (_isYear(name)) {
+      return 'Unknown Artist';
+    }
+    return name; // Single word name, use as-is
   }
 
   String get title {

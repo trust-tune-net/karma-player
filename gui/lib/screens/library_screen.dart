@@ -7,6 +7,7 @@ import '../models/song.dart';
 import '../models/album.dart';
 import '../services/transmission_client.dart';
 import '../services/analytics_service.dart';
+import '../services/metadata_service.dart';
 import '../main.dart'; // Already imports favoritesService
 
 class LibraryScreen extends StatefulWidget {
@@ -76,6 +77,14 @@ class LibraryScreenState extends State<LibraryScreen> {
     // appSettings.checkApiHealth() calls notifyListeners()
     // which automatically updates all StatsBadges via ListenableBuilder
     await appSettings.checkApiHealth();
+  }
+
+  /// Check if a string is a valid year (4-digit, 1900-2099)
+  bool _isYear(String text) {
+    final trimmed = text.trim();
+    if (trimmed.length != 4) return false;
+    final year = int.tryParse(trimmed);
+    return year != null && year >= 1900 && year <= 2099;
   }
 
   Future<void> _loadDownloads() async {
@@ -196,14 +205,35 @@ class LibraryScreenState extends State<LibraryScreen> {
 
             final albumName = path.basename(albumPath);
 
-            // Extract artist from album folder name (format: "Artist - Album")
+            // Extract artist from album folder name
+            // Handle formats: "Artist - Album", "Artist - Album - Year", "Year - Album", "Album - Year"
             String artistName = 'Unknown Artist';
             final nameParts = albumName.split(' - ');
             if (nameParts.length >= 2) {
-              artistName = nameParts[0].trim();
+              final firstPart = nameParts[0].trim();
+              // If first part is a year, this is "Year - Album" format, use Unknown Artist
+              // Metadata will be read from first song for accurate artist name
+              if (_isYear(firstPart)) {
+                artistName = 'Unknown Artist';
+              } else {
+                artistName = firstPart;
+                // Check if last part is a year (format: "Artist - Album - Year")
+                if (nameParts.length >= 3) {
+                  final lastPart = nameParts[nameParts.length - 1].trim();
+                  if (_isYear(lastPart)) {
+                    // Keep artist as first part, year is at the end
+                    // albumName will be middle parts
+                  }
+                }
+              }
             } else {
-              // If no " - " separator, use the folder name as artist
-              artistName = albumName;
+              // If no " - " separator, check if entire name is a year
+              if (_isYear(albumName)) {
+                artistName = 'Unknown Artist';
+              } else {
+                // Use folder name as artist only if it's not a year
+                artistName = albumName;
+              }
             }
 
             filesToProcess.add({
@@ -242,6 +272,8 @@ class LibraryScreenState extends State<LibraryScreen> {
 
       // Create Album objects with artwork
       final albums = <Album>[];
+      final metadataService = MetadataService();
+      
       for (final entry in albumMap.entries) {
         final albumPath = entry.key;
         final songs = entry.value;
@@ -253,6 +285,47 @@ class LibraryScreenState extends State<LibraryScreen> {
           }
           return a.title.compareTo(b.title);
         });
+
+        // Performance optimization: Read metadata from first song only for quick display
+        // This avoids reading all songs during scan (major performance improvement for huge libraries)
+        if (songs.isNotEmpty) {
+          try {
+            final albumMetadata = await metadataService.extractAlbumMetadata(songs.first.filePath);
+            if (albumMetadata.albumArtist != null && 
+                albumMetadata.albumArtist!.isNotEmpty &&
+                !_isYear(albumMetadata.albumArtist!)) {
+              
+              // Update the first song with correct artist from metadata
+              // This ensures Album.artist getter immediately returns correct value
+              final firstSong = songs.first;
+              songs[0] = Song(
+                id: firstSong.id,
+                title: firstSong.title,
+                artist: albumMetadata.albumArtist!, // Use metadata artist
+                album: albumMetadata.albumName ?? firstSong.album,
+                filePath: firstSong.filePath,
+                duration: firstSong.duration,
+                artworkPath: firstSong.artworkPath,
+                trackNumber: firstSong.trackNumber,
+                bitrate: firstSong.bitrate,
+                sampleRate: firstSong.sampleRate,
+                bitDepth: firstSong.bitDepth,
+                channels: firstSong.channels,
+                channelLayout: firstSong.channelLayout,
+                codecDetails: firstSong.codecDetails,
+                rawMetadata: firstSong.rawMetadata,
+                metadataToolVersion: firstSong.metadataToolVersion,
+                fileSize: firstSong.fileSize,
+                format: firstSong.format,
+                isEstimated: firstSong.isEstimated,
+              );
+            }
+          } catch (e) {
+            // Silently fail - metadata reading is optional during scan
+            // Will be read lazily when album is opened
+            print('[Library] Could not read quick metadata for ${path.basename(albumPath)}: $e');
+          }
+        }
 
         // Look for artwork in album folder
         String? artworkPath;
