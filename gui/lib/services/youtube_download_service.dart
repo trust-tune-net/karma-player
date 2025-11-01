@@ -31,6 +31,9 @@ class YouTubeDownloadService {
   // Track active stream subscriptions for cleanup (prevents SIGPIPE)
   final Map<String, List<StreamSubscription>> _activeSubscriptions = {};
 
+  // Cancellation lock to serialize cancellation operations (prevents race conditions)
+  Future<void>? _cancellationLock;
+
   /// Get the path to the yt-dlp binary
   /// 
   /// Resolves to bundled binary first, then falls back to system installation.
@@ -103,39 +106,12 @@ class YouTubeDownloadService {
   /// Returns the local file path when ready for playback.
   /// Downloads are cached by video ID to avoid duplicate downloads.
   Future<String?> downloadAudio(String videoId) async {
-    // Cancel any previous download if a new one is requested
-    if (_currentDownloadId != null && _currentDownloadId != videoId) {
-      print('[YouTube Download] ⏹️  Canceling previous download: $_currentDownloadId');
-      
-      // Cancel stream subscriptions first (prevents SIGPIPE)
-      final subscriptions = _activeSubscriptions[_currentDownloadId!];
-      if (subscriptions != null) {
-        for (final sub in subscriptions) {
-          await sub.cancel();
-        }
-        _activeSubscriptions.remove(_currentDownloadId);
-      }
-
-      // Small delay to ensure streams are fully closed
-      await Future.delayed(const Duration(milliseconds: 50));
-
-      // Now safe to kill the process
-      final prevProcess = _activeProcesses[_currentDownloadId!];
-      if (prevProcess != null) {
-        try {
-          prevProcess.kill();
-        } catch (e) {
-          print('[YouTube Download] Error killing process: $e (may already be dead)');
-          // Don't report to Glitchtip - expected behavior
-        }
-        _activeProcesses.remove(_currentDownloadId);
-      }
-      _activeDownloads.remove(_currentDownloadId);
+    // Wait for any ongoing cancellation to complete (prevents race conditions)
+    if (_cancellationLock != null) {
+      await _cancellationLock;
     }
 
-    _currentDownloadId = videoId;
-
-    // Check if already downloading this video
+    // Check if already downloading this video (BEFORE setting _currentDownloadId)
     if (_activeDownloads.containsKey(videoId)) {
       print('[YouTube Download] Already downloading $videoId, waiting...');
       return await _activeDownloads[videoId];
@@ -147,6 +123,64 @@ class YouTubeDownloadService {
       print('[YouTube Download] ✅ Using cached file: $cachedFile');
       return cachedFile;
     }
+
+    // Cancel any previous download if a new one is requested
+    // This must happen AFTER checking for duplicates to prevent race conditions
+    if (_currentDownloadId != null && _currentDownloadId != videoId) {
+      // Create cancellation lock to serialize cancellation operations
+      final completer = Completer<void>();
+      _cancellationLock = completer.future;
+      
+      try {
+        print('[YouTube Download] ⏹️  Canceling previous download: $_currentDownloadId');
+        
+        // Cancel stream subscriptions first (prevents SIGPIPE)
+        final subscriptions = _activeSubscriptions[_currentDownloadId!];
+        if (subscriptions != null) {
+          for (final sub in subscriptions) {
+            await sub.cancel();
+          }
+          _activeSubscriptions.remove(_currentDownloadId);
+        }
+
+        // Small delay to ensure streams are fully closed
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        // Now safe to kill the process
+        final prevProcess = _activeProcesses[_currentDownloadId!];
+        if (prevProcess != null) {
+          try {
+            prevProcess.kill();
+            
+            // Wait for process to actually terminate (prevents race condition)
+            // Give it up to 2 seconds to terminate gracefully
+            try {
+              await prevProcess.exitCode.timeout(
+                const Duration(seconds: 2),
+                onTimeout: () {
+                  print('[YouTube Download] Process did not terminate within timeout, continuing...');
+                  return -1; // Process still running, but we'll continue
+                },
+              );
+              print('[YouTube Download] ✅ Previous process terminated');
+            } catch (e) {
+              print('[YouTube Download] Error waiting for process termination: $e (continuing anyway)');
+            }
+          } catch (e) {
+            print('[YouTube Download] Error killing process: $e (may already be dead)');
+            // Don't report to Glitchtip - expected behavior
+          }
+          _activeProcesses.remove(_currentDownloadId);
+        }
+        _activeDownloads.remove(_currentDownloadId);
+      } finally {
+        _cancellationLock = null;
+        completer.complete();
+      }
+    }
+
+    // Set current download ID AFTER cancellation is complete
+    _currentDownloadId = videoId;
 
     // Start new download
     final downloadFuture = _downloadAudioInternal(videoId);

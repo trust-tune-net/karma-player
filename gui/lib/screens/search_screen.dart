@@ -302,13 +302,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         print('[YouTube Download]    Video ID: $sourceId');
         print('[YouTube Download]    Title: $title');
 
-        // Show downloading toast
+        // Show warning toast about beta phase and patience
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Downloading: $title'),
-            backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 3),
+            content: const Text('Please be patient - Beta phase. Stream should start shortly...'),
+            backgroundColor: Colors.amber,
+            duration: const Duration(seconds: 6),
           ),
         );
 
