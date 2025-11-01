@@ -16,7 +16,26 @@ class Album {
   });
 
   String get artist {
-    // Try to extract artist from folder name
+    // First, try to get artist from song metadata (ID3 tags)
+    // This is more accurate than folder name parsing
+    if (songs.isNotEmpty) {
+      // Collect all artists from songs (excluding "Unknown Artist")
+      final artistCounts = <String, int>{};
+      for (final song in songs) {
+        if (song.artist.isNotEmpty && song.artist != 'Unknown Artist') {
+          artistCounts[song.artist] = (artistCounts[song.artist] ?? 0) + 1;
+        }
+      }
+      
+      // If we have artists from metadata, use the most common one
+      if (artistCounts.isNotEmpty) {
+        final sortedArtists = artistCounts.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        return sortedArtists.first.key;
+      }
+    }
+    
+    // Fall back to folder name parsing if no metadata available
     // Format: "Artist - Album Title..."
     final parts = name.split(' - ');
     if (parts.length >= 2) {

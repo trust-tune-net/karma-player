@@ -19,6 +19,8 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => LibraryScreenState();
 }
 
+enum SortCriteria { title, artist, trackCount, year }
+
 class LibraryScreenState extends State<LibraryScreen> {
   List<Album> _albums = [];
   bool _isScanning = false;
@@ -32,6 +34,12 @@ class LibraryScreenState extends State<LibraryScreen> {
   // Lazy loading state
   bool _isLoadingMetadata = false;
   Set<String> _albumsWithMetadata = {}; // Track which albums have full metadata loaded
+  
+  // Sorting and search state
+  SortCriteria _sortCriteria = SortCriteria.title;
+  bool _sortAscending = true;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -47,12 +55,20 @@ class LibraryScreenState extends State<LibraryScreen> {
     });
     // Check internet health only once on startup
     _checkHealth();
+    
+    // Listen to search input changes
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim();
+      });
+    });
   }
 
   @override
   void dispose() {
     _downloadPollTimer?.cancel();
     _autoRefreshTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -431,6 +447,65 @@ class LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  /// Get filtered and sorted albums
+  List<Album> get _displayAlbums {
+    var albums = List<Album>.from(_albums);
+    
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      albums = albums.where((album) {
+        final title = album.title.toLowerCase();
+        final artist = album.artist.toLowerCase();
+        return title.contains(query) || artist.contains(query);
+      }).toList();
+    }
+    
+    // Apply sorting
+    albums.sort((a, b) {
+      int comparison = 0;
+      switch (_sortCriteria) {
+        case SortCriteria.title:
+          comparison = a.title.compareTo(b.title);
+          break;
+        case SortCriteria.artist:
+          comparison = a.artist.compareTo(b.artist);
+          break;
+        case SortCriteria.trackCount:
+          comparison = a.trackCount.compareTo(b.trackCount);
+          break;
+        case SortCriteria.year:
+          // Extract year from album name if present (format: "Album - YYYY" or "Artist - Album - YYYY")
+          final aYear = _extractYear(a.name);
+          final bYear = _extractYear(b.name);
+          if (aYear != null && bYear != null) {
+            comparison = aYear.compareTo(bYear);
+          } else if (aYear != null) {
+            comparison = -1; // Albums with year come first
+          } else if (bYear != null) {
+            comparison = 1;
+          } else {
+            comparison = a.title.compareTo(b.title); // Fallback to title
+          }
+          break;
+      }
+      return _sortAscending ? comparison : -comparison;
+    });
+    
+    return albums;
+  }
+  
+  /// Extract year from album name (looks for 4-digit year at the end)
+  int? _extractYear(String albumName) {
+    // Try to find a 4-digit year (1900-2099) in the name
+    final yearPattern = RegExp(r'\b(19|20)\d{2}\b');
+    final match = yearPattern.firstMatch(albumName);
+    if (match != null) {
+      return int.tryParse(match.group(0) ?? '');
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_selectedAlbum != null) {
@@ -482,6 +557,223 @@ class LibraryScreenState extends State<LibraryScreen> {
                 ],
               ),
             ),
+          // Search and sort controls
+          if (_albums.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+              child: Row(
+                children: [
+                  // Search bar
+                  Expanded(
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF333333),
+                          width: 1,
+                        ),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Search albums or artists...',
+                          hintStyle: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: const Color(0xFF666666),
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: Color(0xFF888888),
+                            size: 20,
+                          ),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(
+                                    Icons.clear,
+                                    color: Color(0xFF888888),
+                                    size: 18,
+                                  ),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Sort dropdown
+                  Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF333333),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Sort criteria dropdown
+                        PopupMenuButton<SortCriteria>(
+                          icon: Icon(
+                            Icons.sort,
+                            color: AppColors.purple,
+                            size: 18,
+                          ),
+                          offset: const Offset(0, 40),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          color: const Color(0xFF1E1E1E),
+                          onSelected: (criteria) {
+                            setState(() {
+                              _sortCriteria = criteria;
+                            });
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: SortCriteria.title,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _sortCriteria == SortCriteria.title
+                                        ? Icons.check
+                                        : Icons.check_box_outline_blank,
+                                    color: _sortCriteria == SortCriteria.title
+                                        ? AppColors.purple
+                                        : const Color(0xFF666666),
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Title',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: _sortCriteria == SortCriteria.title
+                                          ? AppColors.purple
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: SortCriteria.artist,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _sortCriteria == SortCriteria.artist
+                                        ? Icons.check
+                                        : Icons.check_box_outline_blank,
+                                    color: _sortCriteria == SortCriteria.artist
+                                        ? AppColors.purple
+                                        : const Color(0xFF666666),
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Artist',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: _sortCriteria == SortCriteria.artist
+                                          ? AppColors.purple
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: SortCriteria.year,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _sortCriteria == SortCriteria.year
+                                        ? Icons.check
+                                        : Icons.check_box_outline_blank,
+                                    color: _sortCriteria == SortCriteria.year
+                                        ? AppColors.purple
+                                        : const Color(0xFF666666),
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Year',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: _sortCriteria == SortCriteria.year
+                                          ? AppColors.purple
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: SortCriteria.trackCount,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _sortCriteria == SortCriteria.trackCount
+                                        ? Icons.check
+                                        : Icons.check_box_outline_blank,
+                                    color: _sortCriteria == SortCriteria.trackCount
+                                        ? AppColors.purple
+                                        : const Color(0xFF666666),
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Track Count',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: _sortCriteria == SortCriteria.trackCount
+                                          ? AppColors.purple
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 4),
+                        // Sort order toggle button
+                        IconButton(
+                          icon: Icon(
+                            _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                            color: AppColors.purple,
+                            size: 18,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _sortAscending = !_sortAscending;
+                            });
+                          },
+                          tooltip: _sortAscending ? 'Ascending' : 'Descending',
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: _albums.isEmpty
                 ? Center(
@@ -506,7 +798,30 @@ class LibraryScreenState extends State<LibraryScreen> {
                       ],
                     ),
                   )
-                : GridView.builder(
+                : _displayAlbums.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              size: 64,
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No albums match your search',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Try a different search term',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      )
+                    : GridView.builder(
                     padding: const EdgeInsets.all(24),
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 200, // Fixed maximum width (like Melo)
@@ -514,9 +829,9 @@ class LibraryScreenState extends State<LibraryScreen> {
                       crossAxisSpacing: 20,
                       mainAxisSpacing: 20,
                     ),
-                    itemCount: _albums.length,
+                    itemCount: _displayAlbums.length,
                     itemBuilder: (context, index) {
-                      final album = _albums[index];
+                      final album = _displayAlbums[index];
                       return _buildAlbumCard(album);
                     },
                   ),
