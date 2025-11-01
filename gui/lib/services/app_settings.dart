@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'analytics_service.dart';
 
 class AppSettings extends ChangeNotifier {
   static final AppSettings _instance = AppSettings._internal();
@@ -37,8 +38,18 @@ class AppSettings extends ChangeNotifier {
     completedTorrentIds = completedIds.map((id) {
       try {
         return int.parse(id);
-      } catch (e) {
+      } catch (e, stackTrace) {
         print('[AppSettings] Invalid torrent ID: $id');
+        // Report data corruption in SharedPreferences
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'app_settings_torrent_id_parse_error',
+          extras: {
+            'invalid_id': id,
+            'total_ids': completedIds.length,
+          },
+        );
         return null;
       }
     }).whereType<int>().toSet();
@@ -121,11 +132,24 @@ class AppSettings extends ChangeNotifier {
       lastHealthCheck = DateTime.now();
       notifyListeners(); // Notify all listeners that connection status changed
       return apiHealthy;
-    } catch (e) {
+    } catch (e, stackTrace) {
       apiHealthy = false;
       apiResponseTimeMs = 9999; // High value to indicate failure
       lastHealthCheck = DateTime.now();
       notifyListeners(); // Notify all listeners that connection failed
+      
+      // Report unexpected API health check failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'app_settings_api_health_check_error',
+        extras: {
+          'api_url': searchApiUrl,
+          'health_endpoint': '$searchApiUrl/health',
+          'was_healthy_before': apiHealthy,
+        },
+      );
+      
       return false;
     }
   }

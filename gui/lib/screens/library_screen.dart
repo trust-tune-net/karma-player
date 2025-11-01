@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import '../models/song.dart';
 import '../models/album.dart';
 import '../services/transmission_client.dart';
+import '../services/analytics_service.dart';
 import '../main.dart'; // Already imports favoritesService
 
 class LibraryScreen extends StatefulWidget {
@@ -332,12 +333,19 @@ class LibraryScreenState extends State<LibraryScreen> {
 
       // Update global album count so it's visible on all screens
       appSettings.updateAlbumCount(albums.length);
-    } catch (e) {
+    } catch (e, stackTrace) {
       setState(() {
         _statusMessage = 'Error scanning: $e';
         _isScanning = false;
       });
       appSettings.updateAlbumCount(0);
+      
+      // Report scan-level failures (file system errors, permission issues, etc.)
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'library_scan_error',
+      );
     }
 
     // Refresh top bar stats (connection quality, plays, GB downloaded)
@@ -407,8 +415,15 @@ class LibraryScreenState extends State<LibraryScreen> {
           _albumsWithMetadata.add(album.id);
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[Library] ERROR lazy-loading metadata: $e');
+      
+      // Report unexpected metadata loading failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'library_lazy_load_metadata_error',
+      );
     } finally {
       setState(() {
         _isLoadingMetadata = false;

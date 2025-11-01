@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'daemon_manager.dart';
 import 'app_settings.dart';
 import 'transmission_client.dart';
+import 'analytics_service.dart';
 
 enum DiagnosticStatus { success, warning, error, info }
 
@@ -105,7 +106,14 @@ class DiagnosticsService {
         message: 'OS: $os',
         details: 'Version: $version\nLocale: $locale',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report unexpected system info failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'diagnostics_system_info_error',
+      );
+      
       return DiagnosticResult(
         name: 'System Information',
         status: DiagnosticStatus.error,
@@ -124,7 +132,14 @@ class DiagnosticsService {
         message: 'v${packageInfo.version}',
         details: 'TrustTune GUI (Build ${packageInfo.buildNumber})',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report unexpected app version read failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'diagnostics_app_version_error',
+      );
+      
       return DiagnosticResult(
         name: 'App Version',
         status: DiagnosticStatus.error,
@@ -153,7 +168,14 @@ class DiagnosticsService {
           details: 'Please start Transmission daemon to use download features',
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report unexpected daemon check failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'diagnostics_daemon_check_error',
+      );
+      
       return DiagnosticResult(
         name: 'Transmission Daemon',
         status: DiagnosticStatus.error,
@@ -177,7 +199,17 @@ class DiagnosticsService {
         message: 'RPC connection successful',
         details: 'URL: ${appSettings.transmissionRpcUrl}\nActive torrents: ${torrents.length}',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report unexpected RPC check failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'diagnostics_rpc_check_error',
+        extras: {
+          'rpc_url': appSettings.transmissionRpcUrl,
+        },
+      );
+      
       return DiagnosticResult(
         name: 'Transmission RPC',
         status: DiagnosticStatus.error,
@@ -214,7 +246,17 @@ class DiagnosticsService {
           details: 'URL: ${appSettings.searchApiUrl}\nStatus: ${response.statusCode}\nBody: ${response.body}',
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report unexpected API health check failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'diagnostics_api_check_error',
+        extras: {
+          'api_url': appSettings.searchApiUrl,
+        },
+      );
+      
       return DiagnosticResult(
         name: 'Search API Health',
         status: DiagnosticStatus.error,
@@ -228,7 +270,7 @@ class DiagnosticsService {
     try {
       final url = '${appSettings.searchApiUrl}/api/search';
       final body = jsonEncode({
-        'query': 'test',
+        'query': 'pink floyd',
         'format_filter': null,
         'min_seeders': 1,
         'limit': 10,
@@ -279,7 +321,18 @@ class DiagnosticsService {
           details: 'Status: ${response.statusCode}\nBody: ${response.body}',
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Report unexpected test search failures
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'diagnostics_search_test_error',
+        extras: {
+          'api_url': appSettings.searchApiUrl,
+          'test_query': 'pink floyd',
+        },
+      );
+      
       return DiagnosticResult(
         name: 'Test Search',
         status: DiagnosticStatus.error,

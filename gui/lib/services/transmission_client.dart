@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/torrent.dart';
+import 'analytics_service.dart';
 
 /// Transmission RPC client for torrent management
 class TransmissionClient {
@@ -28,33 +29,113 @@ class TransmissionClient {
       if (_sessionId != null) 'X-Transmission-Session-Id': _sessionId!,
     };
 
-    final response = await http.post(
-      url,
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    try {
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(body),
+      );
 
-    // Handle CSRF token (409 response)
-    if (response.statusCode == 409) {
-      _sessionId = response.headers['x-transmission-session-id'];
-      if (_sessionId == null) {
-        throw Exception('Failed to get session ID from 409 response');
+      // Handle CSRF token (409 response) - expected behavior, don't report
+      if (response.statusCode == 409) {
+        _sessionId = response.headers['x-transmission-session-id'];
+        if (_sessionId == null) {
+          // This is a real error - failed to get session ID from expected 409 response
+          final error = Exception('Failed to get session ID from 409 response');
+          AnalyticsService().captureError(
+            error,
+            StackTrace.current,
+            context: 'transmission_session_id_missing',
+            extras: {
+              'method': method,
+              'base_url': baseUrl,
+              'has_session_id': _sessionId != null,
+            },
+          );
+          throw error;
+        }
+        // Retry with new session ID
+        return _rpcRequest(method, arguments: arguments);
       }
-      // Retry with new session ID
-      return _rpcRequest(method, arguments: arguments);
+
+      // Report non-200/409 status codes as errors
+      if (response.statusCode != 200) {
+        final error = Exception('RPC request failed: ${response.statusCode} ${response.body}');
+        AnalyticsService().captureError(
+          error,
+          StackTrace.current,
+          context: 'transmission_rpc_http_error',
+          extras: {
+            'method': method,
+            'base_url': baseUrl,
+            'status_code': response.statusCode,
+            'has_session_id': _sessionId != null,
+          },
+        );
+        throw error;
+      }
+
+      // Parse JSON response
+      late Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e, stackTrace) {
+        // JSON parsing failure
+        final error = Exception('Failed to parse RPC response: $e');
+        AnalyticsService().captureError(
+          error,
+          stackTrace,
+          context: 'transmission_rpc_json_parse_error',
+          extras: {
+            'method': method,
+            'base_url': baseUrl,
+            'response_body_preview': response.body.substring(0, response.body.length > 200 ? 200 : response.body.length),
+          },
+        );
+        throw error;
+      }
+
+      // Check if RPC returned an error
+      if (data['result'] != 'success') {
+        final error = Exception('RPC error: ${data['result']}');
+        AnalyticsService().captureError(
+          error,
+          StackTrace.current,
+          context: 'transmission_rpc_error',
+          extras: {
+            'method': method,
+            'base_url': baseUrl,
+            'rpc_result': data['result'],
+            'has_session_id': _sessionId != null,
+          },
+        );
+        throw error;
+      }
+
+      return data['arguments'] as Map<String, dynamic>? ?? {};
+    } on http.ClientException catch (e, stackTrace) {
+      // Catch HTTP exceptions (connection refused, timeouts, network errors)
+      // Don't report connection refused errors - they're expected when daemon isn't running
+      final errorStr = e.toString();
+      final isConnectionError = errorStr.contains('Connection refused') ||
+                                errorStr.contains('SocketException') ||
+                                errorStr.contains('Failed to connect');
+      
+      if (!isConnectionError) {
+        // Report unexpected network errors only
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'transmission_rpc_network_error',
+          extras: {
+            'method': method,
+            'base_url': baseUrl,
+            'has_session_id': _sessionId != null,
+          },
+        );
+      }
+      rethrow;
     }
-
-    if (response.statusCode != 200) {
-      throw Exception('RPC request failed: ${response.statusCode} ${response.body}');
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-    if (data['result'] != 'success') {
-      throw Exception('RPC error: ${data['result']}');
-    }
-
-    return data['arguments'] as Map<String, dynamic>? ?? {};
   }
 
   /// Get session information
