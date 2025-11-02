@@ -573,8 +573,17 @@ class YouTubeDownloadService {
           
           return null;
         }
+      } else if (exitCode < 0) {
+        // Signal-based termination (cancellation/kill) - don't report to GlitchTip
+        // Negative exit codes indicate the process was killed (SIGTERM, SIGKILL, etc.)
+        // This is expected when:
+        // - User clicks Cancel button
+        // - A new download cancels the previous one
+        // - Process is terminated externally
+        print('[YouTube Download] Process terminated (exit $exitCode) - likely user cancellation');
+        return null;
       } else {
-        // yt-dlp failed - capture detailed error for GlitchTip
+        // yt-dlp failed with actual error (exit code > 0) - capture detailed error for GlitchTip
         final stderrText = stderr.join('\n');
         final stdoutText = stdout.join('\n');
         
