@@ -138,9 +138,15 @@ class PlaybackService extends ChangeNotifier {
       _player!.setVolume(_volume * 100);
       _playerInitialized = true;
       print('[PLAYBACK] ✅ Player initialized successfully');
-      
+
       // Listen to audio device changes
       _audioDeviceService.addListener(_onAudioDeviceChanged);
+
+      // CRITICAL: Re-apply audio device after adding listener
+      // AudioDeviceService may have already loaded the device before we added the listener
+      // This ensures we use the correct device even if we missed the initial notifyListeners() call
+      print('[PLAYBACK] Re-applying audio device after listener setup...');
+      _applyAudioDevice();
     } catch (e, stackTrace) {
       _playerError = 'Failed to initialize audio player: $e';
       _playerInitialized = false;
@@ -248,6 +254,15 @@ class PlaybackService extends ChangeNotifier {
       if (_playerInitialized && _player != null) {
         print('[PLAYBACK] Opening media: ${song.filePath}');
         print('[PLAYBACK] Song title: ${song.title}');
+
+        // CRITICAL: Switch to macOS's current default device before playback
+        // This ensures audio plays through whatever device macOS is currently using
+        try {
+          await _audioDeviceService.switchToSystemDefault();
+        } catch (e) {
+          print('[PLAYBACK] ⚠️  Failed to switch to system default device: $e');
+          // Non-fatal - continue with playback
+        }
 
         try {
           // Pass HTTP headers if available (needed for YouTube streams)

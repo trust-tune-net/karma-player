@@ -595,6 +595,14 @@ class AudioDeviceService extends ChangeNotifier {
     if (_selectedDevice == null) {
       return null; // Use system default
     }
+
+    // CRITICAL: If device is "auto", return null so MediaKit uses its own default device selection
+    // Trying to resolve "auto" ourselves causes problems when multiple devices are present
+    if (_selectedDevice!.name == 'auto' || _selectedDevice!.name.toLowerCase() == 'auto') {
+      print('[AudioDevice] Device is "auto" - letting MediaKit handle device selection');
+      return null;
+    }
+
     return _selectedDevice;
   }
 
@@ -602,7 +610,7 @@ class AudioDeviceService extends ChangeNotifier {
   Future<void> _loadSavedDevice() async {
     try {
       final savedDeviceName = _appSettings.selectedAudioDeviceId;
-      if (savedDeviceName != null && savedDeviceName.isNotEmpty) {
+      if (savedDeviceName != null && savedDeviceName.isNotEmpty && savedDeviceName != 'auto') {
         try {
           final device = _availableDevices.firstWhere(
             (d) => d.name == savedDeviceName,
@@ -625,8 +633,10 @@ class AudioDeviceService extends ChangeNotifier {
           );
         }
       } else {
-        _selectedDevice = _systemDefaultDevice;
-        print('[AudioDevice] No saved device, using system default');
+        // No saved device or "auto" - use MediaKit's auto device selection
+        // DON'T try to resolve this ourselves - let MediaKit/MPV handle it
+        _selectedDevice = _systemDefaultDevice; // Usually "auto"
+        print('[AudioDevice] No saved device preference, using "auto" (MediaKit will choose)');
       }
       notifyListeners();
     } catch (e, stackTrace) {
@@ -703,6 +713,60 @@ class AudioDeviceService extends ChangeNotifier {
       print('[AudioDevice]    1. Connected and paired to your Mac');
       print('[AudioDevice]    2. Showing in System Settings > Sound');
       print('[AudioDevice]    3. Not in use exclusively by another application');
+    }
+  }
+
+  /// Force app to use whatever device macOS is currently using as default
+  /// This ensures audio plays through the device macOS has selected (e.g., newly plugged headphones)
+  Future<void> switchToSystemDefault() async {
+    if (!_platform.supportsNativeEnumeration) {
+      return; // Only on macOS
+    }
+
+    print('[AudioDevice] 🔄 Syncing with macOS default device...');
+
+    try {
+      // Query macOS for current default device
+      final macOSDefault = await _platform.getDefaultDevice();
+      if (macOSDefault == null) {
+        print('[AudioDevice] ⚠️  macOS returned no default device');
+        return;
+      }
+
+      print('[AudioDevice] macOS default device: ${macOSDefault.name}');
+
+      // Check if our current device matches macOS's default
+      if (_selectedDevice != null &&
+          _selectedDevice!.name != 'auto' &&
+          _selectedDevice!.description == macOSDefault.name) {
+        print('[AudioDevice] ✓ Already using macOS default device');
+        return;
+      }
+
+      // macOS default has changed - find matching MediaKit device
+      AudioDevice? matchedDevice;
+      try {
+        matchedDevice = _availableDevices.firstWhere(
+          (d) => d.description == macOSDefault.name,
+        );
+      } catch (e) {
+        // Device not found in MediaKit list - use "auto"
+        matchedDevice = _systemDefaultDevice;
+      }
+
+      if (matchedDevice == null) {
+        print('[AudioDevice] ⚠️  Could not find matching device, skipping sync');
+        return;
+      }
+
+      print('[AudioDevice] 🔀 Switching to macOS default: ${matchedDevice.description}');
+
+      // Update selected device (this will trigger notifyListeners via selectDevice)
+      await selectDevice(matchedDevice);
+
+    } catch (e) {
+      print('[AudioDevice] ⚠️  Error syncing with macOS default: $e');
+      // Non-fatal - continue with current device
     }
   }
 

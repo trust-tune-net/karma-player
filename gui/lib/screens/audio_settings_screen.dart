@@ -37,7 +37,32 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
     await Future.delayed(const Duration(milliseconds: 500));
 
     if (_audioService.platformDevices.isNotEmpty) {
-      _selectedPlatformDevice = _audioService.platformDevices.first;
+      // Sync with the actual selected device from AudioService
+      final selectedDevice = _audioService.selectedDevice;
+      if (selectedDevice != null && selectedDevice.name != 'auto') {
+        // Map MediaKit AudioDevice to PlatformAudioDevice by description
+        _selectedPlatformDevice = _audioService.platformDevices.firstWhere(
+          (d) => d.name == selectedDevice.description,
+          orElse: () => _audioService.platformDevices.first,
+        );
+      } else {
+        // If 'auto' or no device, query macOS for the actual default device
+        try {
+          final defaultPlatformDevice = await _audioService.platform.getDefaultDevice();
+          if (defaultPlatformDevice != null) {
+            _selectedPlatformDevice = _audioService.platformDevices.firstWhere(
+              (d) => d.id == defaultPlatformDevice.id,
+              orElse: () => _audioService.platformDevices.first,
+            );
+          } else {
+            _selectedPlatformDevice = _audioService.platformDevices.first;
+          }
+        } catch (e) {
+          print('[AudioSettings] Error getting default device: $e');
+          _selectedPlatformDevice = _audioService.platformDevices.first;
+        }
+      }
+
       await _loadExclusiveModeState(_selectedPlatformDevice!);
     }
   }
@@ -252,13 +277,21 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                     width: 1,
                   ),
                 ),
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: _selectedPlatformDevice?.id ?? devices.first.id,
-                  dropdownColor: const Color(0xFF1A1A1A),
-                  underline: const SizedBox(),
-                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF9D4EDD)),
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                child: Focus(
+                  // Prevent space key from opening dropdown
+                  onKeyEvent: (node, event) {
+                    if (event.logicalKey.keyLabel == ' ') {
+                      return KeyEventResult.skipRemainingHandlers;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: _selectedPlatformDevice?.id ?? devices.first.id,
+                    dropdownColor: const Color(0xFF1A1A1A),
+                    underline: const SizedBox(),
+                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF9D4EDD)),
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
                   items: devices.map((device) {
                     final deviceType = device.deviceType;
                     return DropdownMenuItem<String>(
@@ -291,14 +324,24 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                   }).toList(),
                   onChanged: (value) async {
                     if (value != null) {
-                      // Find the device object by ID
-                      final device = devices.firstWhere((d) => d.id == value);
+                      // Find the platform device object by ID
+                      final platformDevice = devices.firstWhere((d) => d.id == value);
                       setState(() {
-                        _selectedPlatformDevice = device;
+                        _selectedPlatformDevice = platformDevice;
                       });
-                      await _loadExclusiveModeState(device); // Reload for new device
+
+                      // Map to MediaKit AudioDevice and call selectDevice
+                      // MediaKit's description matches PlatformDevice's name
+                      final mediaKitDevice = _audioService.availableDevices.firstWhere(
+                        (d) => d.description == platformDevice.name,
+                        orElse: () => _audioService.availableDevices.first,
+                      );
+                      await _audioService.selectDevice(mediaKitDevice);
+
+                      await _loadExclusiveModeState(platformDevice); // Reload for new device
                     }
                   },
+                  ),
                 ),
               );
             },
@@ -669,20 +712,26 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       children: [
         Icon(icon, color: iconColor, size: 20),
         const SizedBox(width: 12),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
-            fontSize: 14,
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 14,
+            ),
           ),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
