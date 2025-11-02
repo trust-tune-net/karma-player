@@ -311,4 +311,102 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
       return null;
     }
   }
+
+  // MARK: - Phase 3: Advanced Device Metadata
+
+  @override
+  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId) async {
+    try {
+      final result = await platform.invokeMethod('getDeviceMetadata', {
+        'deviceId': deviceId,
+      });
+
+      if (result == null) {
+        print('[AudioDevicePlatformMacOS] No metadata for device $deviceId');
+        return null;
+      }
+
+      // Deep convert all nested maps to Map<String, dynamic>
+      final metadata = _deepConvertMap(result as Map);
+
+      // Log interesting metadata
+      if (metadata.containsKey('chipset')) {
+        print('[AudioDevicePlatformMacOS] USB DAC chipset: ${metadata['chipset']}');
+      }
+      if (metadata.containsKey('bluetoothCodec')) {
+        print('[AudioDevicePlatformMacOS] Bluetooth codec: ${metadata['bluetoothCodec']}');
+      }
+      if (metadata.containsKey('supportedSampleRates')) {
+        final rates = (metadata['supportedSampleRates'] as List).cast<double>();
+        print('[AudioDevicePlatformMacOS] Supported sample rates: ${rates.join(', ')} Hz');
+      }
+
+      return metadata;
+    } on PlatformException catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] PlatformException getting metadata: ${e.message}');
+
+      // This could be unexpected - report to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_get_metadata',
+        extras: {
+          'platform': 'macOS',
+          'code': e.code,
+          'deviceId': deviceId,
+        },
+      );
+
+      return null;
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Unexpected error getting metadata: $e');
+
+      // Unexpected error - report to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_get_metadata_unknown',
+        extras: {
+          'platform': 'macOS',
+          'deviceId': deviceId,
+        },
+      );
+
+      return null;
+    }
+  }
+
+  /// Deep convert Map<Object?, Object?> to Map<String, dynamic>
+  /// This is needed because Swift's [String: Any] comes through as Map<Object?, Object?>
+  Map<String, dynamic> _deepConvertMap(Map map) {
+    final result = <String, dynamic>{};
+
+    try {
+      map.forEach((key, value) {
+        final keyStr = key.toString();
+
+        if (value == null) {
+          result[keyStr] = null;
+        } else if (value is Map) {
+          // Recursively convert nested maps
+          result[keyStr] = _deepConvertMap(value);
+        } else if (value is List) {
+          // Convert lists (might contain maps)
+          result[keyStr] = value.map((item) {
+            if (item is Map) {
+              return _deepConvertMap(item);
+            }
+            return item;
+          }).toList();
+        } else {
+          result[keyStr] = value;
+        }
+      });
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Error in _deepConvertMap: $e');
+      print('[AudioDevicePlatformMacOS] Stack trace: $stackTrace');
+    }
+
+    return result;
+  }
 }

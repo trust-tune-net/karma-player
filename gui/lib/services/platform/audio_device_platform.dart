@@ -103,6 +103,16 @@ abstract class AudioDevicePlatform {
   /// Returns null if device not found or format unavailable
   Future<Map<String, dynamic>?> getDeviceFormat(String deviceId);
 
+  // Phase 3 - Advanced Device Metadata
+
+  /// Get comprehensive device metadata including:
+  /// - Supported sample rates
+  /// - USB DAC chipset (if applicable)
+  /// - Bluetooth codec (if applicable)
+  /// - Device capabilities
+  /// Returns null if device not found or metadata unavailable
+  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId);
+
   /// Check if platform supports native enumeration
   bool get supportsNativeEnumeration;
 }

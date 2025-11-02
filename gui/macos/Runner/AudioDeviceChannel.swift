@@ -53,6 +53,13 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
             } else {
                 result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId", details: nil))
             }
+        case "getDeviceMetadata":
+            if let args = call.arguments as? [String: Any],
+               let deviceUID = args["deviceId"] as? String {
+                result(AudioDeviceChannel.getDeviceMetadata(deviceUID: deviceUID))
+            } else {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId", details: nil))
+            }
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -326,13 +333,33 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
         )
 
         if status == noErr {
+            // Verify by reading back the Hog Mode value
+            var verifyHogPid: pid_t = -1
+            var verifyDataSize = UInt32(MemoryLayout<pid_t>.size)
+            let verifyStatus = AudioObjectGetPropertyData(
+                deviceId,
+                &propertyAddress,
+                0,
+                nil,
+                &verifyDataSize,
+                &verifyHogPid
+            )
+
+            let actuallyEnabled = (verifyStatus == noErr && verifyHogPid == getpid())
             let modeStr = enable ? "enabled" : "disabled"
-            print("[AudioDeviceChannel] ✓ Exclusive mode \(modeStr) for device \(deviceUID)")
+
+            if actuallyEnabled == enable {
+                print("[AudioDeviceChannel] ✓ Exclusive mode \(modeStr) for device \(deviceUID) (verified: PID=\(verifyHogPid))")
+            } else {
+                print("[AudioDeviceChannel] ⚠️  Exclusive mode set but verification mismatch (expected: \(enable), actual: \(actuallyEnabled), PID=\(verifyHogPid))")
+            }
+
             result([
                 "success": true,
-                "enabled": enable,
+                "enabled": actuallyEnabled,
                 "mode": "hog",
-                "deviceId": deviceUID
+                "deviceId": deviceUID,
+                "verified": actuallyEnabled == enable
             ])
         } else {
             // Check if device is already hogged by another process
@@ -467,5 +494,285 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
         }
 
         return nil
+    }
+
+    // MARK: - Phase 3: Advanced Device Metadata
+
+    static func getDeviceMetadata(deviceUID: String) -> [String: Any]? {
+        guard let deviceId = getDeviceIdFromUID(deviceUID: deviceUID) else {
+            print("[AudioDeviceChannel] Device not found: \(deviceUID)")
+            return nil
+        }
+
+        var metadata: [String: Any] = [:]
+
+        // Get supported sample rates
+        metadata["supportedSampleRates"] = getSupportedSampleRates(deviceId: deviceId)
+
+        // Get transport type and detect DAC chipset / Bluetooth codec
+        if let transportType = getTransportType(deviceId: deviceId) {
+            metadata["transportType"] = transportType
+
+            if transportType == "USB" {
+                // Try to detect USB DAC chipset
+                if let chipset = detectUSBChipset(deviceId: deviceId) {
+                    metadata["chipset"] = chipset
+                }
+            } else if transportType == "Bluetooth" {
+                // Try to detect Bluetooth codec
+                if let codec = detectBluetoothCodec(deviceId: deviceId) {
+                    metadata["bluetoothCodec"] = codec
+                }
+            }
+        }
+
+        // Get device capabilities
+        metadata["capabilities"] = getDeviceCapabilities(deviceId: deviceId)
+
+        print("[AudioDeviceChannel] Device metadata: \(metadata)")
+        return metadata
+    }
+
+    static func getSupportedSampleRates(deviceId: AudioDeviceID) -> [Double] {
+        var sampleRates: [Double] = []
+
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyAvailableNominalSampleRates,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize
+        )
+
+        guard status == noErr else {
+            print("[AudioDeviceChannel] Failed to get sample rates size")
+            return []
+        }
+
+        let count = Int(dataSize) / MemoryLayout<AudioValueRange>.size
+        var ranges = [AudioValueRange](repeating: AudioValueRange(), count: count)
+
+        status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &ranges
+        )
+
+        guard status == noErr else {
+            print("[AudioDeviceChannel] Failed to get sample rates")
+            return []
+        }
+
+        // Extract unique sample rates from ranges
+        for range in ranges {
+            if range.mMinimum == range.mMaximum {
+                sampleRates.append(range.mMinimum)
+            } else {
+                // Common sample rates in the range
+                let commonRates: [Double] = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000]
+                for rate in commonRates {
+                    if rate >= range.mMinimum && rate <= range.mMaximum {
+                        sampleRates.append(rate)
+                    }
+                }
+            }
+        }
+
+        return Array(Set(sampleRates)).sorted()
+    }
+
+    static func getTransportType(deviceId: AudioDeviceID) -> String? {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var transportType: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+
+        let status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &transportType
+        )
+
+        guard status == noErr else { return nil }
+
+        switch transportType {
+        case kAudioDeviceTransportTypeUSB:
+            return "USB"
+        case kAudioDeviceTransportTypeBluetooth:
+            return "Bluetooth"
+        case kAudioDeviceTransportTypeBuiltIn:
+            return "Built-in"
+        case kAudioDeviceTransportTypePCI:
+            return "PCI"
+        case kAudioDeviceTransportTypeFireWire:
+            return "FireWire"
+        case kAudioDeviceTransportTypeThunderbolt:
+            return "Thunderbolt"
+        case kAudioDeviceTransportTypeHDMI:
+            return "HDMI"
+        case kAudioDeviceTransportTypeDisplayPort:
+            return "DisplayPort"
+        case kAudioDeviceTransportTypeAirPlay:
+            return "AirPlay"
+        case kAudioDeviceTransportTypeVirtual:
+            return "Virtual"
+        default:
+            return "Unknown"
+        }
+    }
+
+    static func detectUSBChipset(deviceId: AudioDeviceID) -> String? {
+        // Try to get device name which sometimes contains chipset info
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceNameCFString,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(deviceId, &propertyAddress, 0, nil, &dataSize)
+
+        guard status == noErr, dataSize > 0 else { return nil }
+
+        // Allocate memory for CFString pointer
+        let deviceNamePtr = UnsafeMutablePointer<CFString?>.allocate(capacity: 1)
+        defer { deviceNamePtr.deallocate() }
+
+        dataSize = UInt32(MemoryLayout<CFString?>.size)
+        status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            deviceNamePtr
+        )
+
+        guard status == noErr, let deviceName = deviceNamePtr.pointee else { return nil }
+
+        let name = deviceName as String
+
+        // Common DAC chipset detection based on device name
+        if name.contains("ESS") || name.contains("Sabre") {
+            return "ESS Sabre"
+        } else if name.contains("AKM") || name.contains("AK4") {
+            return "AKM"
+        } else if name.contains("Burr-Brown") || name.contains("PCM") {
+            return "Burr-Brown/TI"
+        } else if name.contains("Cirrus") || name.contains("CS4") {
+            return "Cirrus Logic"
+        }
+
+        return nil
+    }
+
+    static func detectBluetoothCodec(deviceId: AudioDeviceID) -> String? {
+        // On macOS, Bluetooth codec detection is limited
+        // We can try to infer from device name or bitrate
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceNameCFString,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(deviceId, &propertyAddress, 0, nil, &dataSize)
+
+        guard status == noErr, dataSize > 0 else { return "AAC (default)" }
+
+        // Allocate memory for CFString pointer
+        let deviceNamePtr = UnsafeMutablePointer<CFString?>.allocate(capacity: 1)
+        defer { deviceNamePtr.deallocate() }
+
+        dataSize = UInt32(MemoryLayout<CFString?>.size)
+        status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            deviceNamePtr
+        )
+
+        guard status == noErr, let deviceName = deviceNamePtr.pointee else { return "AAC (default)" }
+
+        let name = deviceName as String
+
+        // Try to detect from name
+        if name.contains("aptX") {
+            return "aptX"
+        } else if name.contains("LDAC") {
+            return "LDAC"
+        }
+
+        // Default macOS Bluetooth codec
+        return "AAC"
+    }
+
+    static func getDeviceCapabilities(deviceId: AudioDeviceID) -> [String: Any] {
+        var capabilities: [String: Any] = [:]
+
+        // Get stream configuration (channels)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize
+        )
+
+        if status == noErr {
+            let bufferList = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
+            defer { bufferList.deallocate() }
+
+            status = AudioObjectGetPropertyData(
+                deviceId,
+                &propertyAddress,
+                0,
+                nil,
+                &dataSize,
+                bufferList
+            )
+
+            if status == noErr {
+                var totalChannels: UInt32 = 0
+                let buffers = UnsafeBufferPointer<AudioBuffer>(
+                    start: &bufferList.pointee.mBuffers,
+                    count: Int(bufferList.pointee.mNumberBuffers)
+                )
+
+                for buffer in buffers {
+                    totalChannels += buffer.mNumberChannels
+                }
+
+                capabilities["maxChannels"] = totalChannels
+            }
+        }
+
+        return capabilities
     }
 }

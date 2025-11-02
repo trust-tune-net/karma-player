@@ -18,41 +18,62 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   final AudioDeviceService _audioService = AudioDeviceService();
   final AppSettings _appSettings = AppSettings();
 
+  PlatformAudioDevice? _selectedPlatformDevice;
   bool _exclusiveModeEnabled = false;
   bool _exclusiveModeSupported = false;
   bool _loadingExclusiveMode = false;
   Map<String, dynamic>? _deviceFormat;
+  Map<String, dynamic>? _deviceMetadata;
+  bool _loadingMetadata = false;
 
   @override
   void initState() {
     super.initState();
-    _loadExclusiveModeState();
+    _initialize();
   }
 
-  Future<void> _loadExclusiveModeState() async {
+  Future<void> _initialize() async {
+    // Wait for platform devices to be available
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (_audioService.platformDevices.isNotEmpty) {
+      _selectedPlatformDevice = _audioService.platformDevices.first;
+      await _loadExclusiveModeState(_selectedPlatformDevice!);
+    }
+  }
+
+  Future<void> _loadExclusiveModeState(PlatformAudioDevice device) async {
     // Only check exclusive mode on macOS for now
     if (!Platform.isMacOS) return;
 
-    final selectedDevice = _audioService.selectedDevice;
-    if (selectedDevice == null) return;
+    setState(() {
+      _loadingMetadata = true;
+    });
+
+    // Use the platform device ID for CoreAudio methods
+    final deviceId = device.id;
 
     // Check if current device supports exclusive mode
-    final supported = await _audioService.platform.supportsExclusiveMode(selectedDevice.name);
+    final supported = await _audioService.platform.supportsExclusiveMode(deviceId);
 
     // Get current device format
-    final format = await _audioService.platform.getDeviceFormat(selectedDevice.name);
+    final format = await _audioService.platform.getDeviceFormat(deviceId);
+
+    // Get device metadata (Phase 3)
+    final metadata = await _audioService.platform.getDeviceMetadata(deviceId);
 
     if (mounted) {
       setState(() {
         _exclusiveModeSupported = supported;
         _deviceFormat = format;
+        _deviceMetadata = metadata;
+        _loadingMetadata = false;
       });
     }
   }
 
   Future<void> _toggleExclusiveMode(bool enable) async {
-    final selectedDevice = _audioService.selectedDevice;
-    if (selectedDevice == null) return;
+    if (_selectedPlatformDevice == null) return;
 
     setState(() {
       _loadingExclusiveMode = true;
@@ -60,7 +81,7 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
 
     try {
       final success = await _audioService.platform.enableExclusiveMode(
-        selectedDevice.name,
+        _selectedPlatformDevice!.id,
         enable,
       );
 
@@ -138,8 +159,10 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
           _buildDeviceFormatSection(),
           const SizedBox(height: 32),
 
-          // Phase 3 Placeholders (will be implemented later)
-          _buildMetadataPlaceholder(),
+          // Phase 3 - Advanced Metadata
+          if (Platform.isMacOS) ...[
+            _buildAdvancedMetadata(),
+          ],
         ],
       ),
     );
@@ -203,8 +226,21 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
           ListenableBuilder(
             listenable: _audioService,
             builder: (context, _) {
-              final selectedDevice = _audioService.selectedDevice;
-              final devices = _audioService.availableDevices;
+              final devices = _audioService.platformDevices;
+
+              if (devices.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A0A0A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'No audio devices found',
+                    style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                  ),
+                );
+              }
 
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -218,26 +254,26 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                 ),
                 child: DropdownButton<String>(
                   isExpanded: true,
-                  value: selectedDevice?.name ?? 'auto',
+                  value: _selectedPlatformDevice?.id ?? devices.first.id,
                   dropdownColor: const Color(0xFF1A1A1A),
                   underline: const SizedBox(),
                   icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF9D4EDD)),
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                   items: devices.map((device) {
-                    final deviceType = _audioService.getDeviceType(device);
+                    final deviceType = device.deviceType;
                     return DropdownMenuItem<String>(
-                      value: device.name,
+                      value: device.id,
                       child: Row(
                         children: [
                           _getDeviceIcon(deviceType),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              _audioService.getFriendlyName(device),
+                              device.name,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (deviceType == AudioDeviceType.bluetooth)
+                          if (device.isBluetooth)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
@@ -255,10 +291,12 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                   }).toList(),
                   onChanged: (value) async {
                     if (value != null) {
-                      // Find the device object by name
-                      final device = devices.firstWhere((d) => d.name == value);
-                      await _audioService.selectDevice(device);
-                      await _loadExclusiveModeState(); // Reload for new device
+                      // Find the device object by ID
+                      final device = devices.firstWhere((d) => d.id == value);
+                      setState(() {
+                        _selectedPlatformDevice = device;
+                      });
+                      await _loadExclusiveModeState(device); // Reload for new device
                     }
                   },
                 ),
@@ -466,7 +504,7 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
     );
   }
 
-  Widget _buildMetadataPlaceholder() {
+  Widget _buildAdvancedMetadata() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -492,22 +530,191 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (_loadingMetadata) ...[
+                const SizedBox(width: 12),
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            'Coming in Phase 3:\n'
-            '• USB DAC chipset detection (ESS, AKM, etc.)\n'
-            '• Bluetooth codec info (AAC, aptX, LDAC)\n'
-            '• Supported sample rates\n'
-            '• Device capabilities',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 14,
-              height: 1.8,
+
+          if (_deviceMetadata == null && !_loadingMetadata) ...[
+            Text(
+              'Select a device to view advanced metadata',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+              ),
             ),
-          ),
+          ] else if (_deviceMetadata != null) ...[
+            // USB DAC Chipset
+            if (_deviceMetadata!['chipset'] != null) ...[
+              _buildMetadataRow(
+                Icons.developer_board,
+                'DAC Chipset',
+                '${_deviceMetadata!['chipset']}',
+                const Color(0xFF9D4EDD),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Bluetooth Codec
+            if (_deviceMetadata!['bluetoothCodec'] != null) ...[
+              _buildMetadataRow(
+                Icons.bluetooth_audio,
+                'Bluetooth Codec',
+                '${_deviceMetadata!['bluetoothCodec']}',
+                const Color(0xFF0A84FF),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Transport Type
+            if (_deviceMetadata!['transportType'] != null) ...[
+              _buildMetadataRow(
+                Icons.cable,
+                'Connection',
+                '${_deviceMetadata!['transportType']}',
+                const Color(0xFF06D6A0),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Device Capabilities - Max Channels
+            if (_deviceMetadata!['capabilities'] != null) ...[
+              () {
+                try {
+                  final caps = _deviceMetadata!['capabilities'];
+                  if (caps != null && caps is Map) {
+                    final maxChannels = caps['maxChannels'];
+                    if (maxChannels != null) {
+                      return Column(
+                        children: [
+                          _buildMetadataRow(
+                            Icons.speaker_group,
+                            'Max Channels',
+                            '$maxChannels',
+                            const Color(0xFFFFB84D),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    }
+                  }
+                } catch (e) {
+                  print('[AudioSettings] Error accessing capabilities: $e');
+                }
+                return const SizedBox.shrink();
+              }(),
+            ],
+
+            // Supported Sample Rates
+            if (_deviceMetadata!['supportedSampleRates'] != null) ...[
+              () {
+                try {
+                  final rates = _deviceMetadata!['supportedSampleRates'];
+                  if (rates is List && rates.isNotEmpty) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Supported Sample Rates',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: rates
+                              .map((rate) {
+                                try {
+                                  final rateValue = rate is double ? rate : (rate is int ? rate.toDouble() : double.tryParse('$rate'));
+                                  if (rateValue != null) {
+                                    return _buildSampleRateChip(rateValue);
+                                  }
+                                } catch (e) {
+                                  print('[AudioSettings] Error parsing rate: $e');
+                                }
+                                return const SizedBox.shrink();
+                              })
+                              .where((widget) => widget is! SizedBox)
+                              .toList(),
+                        ),
+                      ],
+                    );
+                  }
+                } catch (e) {
+                  print('[AudioSettings] Error accessing sample rates: $e');
+                }
+                return const SizedBox.shrink();
+              }(),
+            ],
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildMetadataRow(IconData icon, String label, String value, Color iconColor) {
+    return Row(
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 14,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSampleRateChip(double sampleRate) {
+    // Highlight high-res rates (>48kHz)
+    final isHighRes = sampleRate > 48000;
+    final rateKhz = (sampleRate / 1000).toStringAsFixed(1);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isHighRes
+            ? const Color(0xFF9D4EDD).withOpacity(0.2)
+            : const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isHighRes
+              ? const Color(0xFF9D4EDD).withOpacity(0.5)
+              : const Color(0xFF3A3A3A),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        '${rateKhz}kHz',
+        style: TextStyle(
+          color: isHighRes ? const Color(0xFF9D4EDD) : Colors.white,
+          fontSize: 12,
+          fontWeight: isHighRes ? FontWeight.w600 : FontWeight.normal,
+        ),
       ),
     );
   }

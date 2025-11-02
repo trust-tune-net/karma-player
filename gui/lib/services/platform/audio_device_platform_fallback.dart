@@ -38,4 +38,10 @@ class AudioDevicePlatformFallback implements AudioDevicePlatform {
   Future<Map<String, dynamic>?> getDeviceFormat(String deviceId) async {
     return null; // No format info available on non-macOS platforms yet
   }
+
+  // Phase 3 - Advanced Device Metadata
+  @override
+  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId) async {
+    return null; // No metadata available on non-macOS platforms yet
+  }
 }
