@@ -31,6 +31,28 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
             } else {
                 result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId", details: nil))
             }
+        case "supportsExclusiveMode":
+            if let args = call.arguments as? [String: Any],
+               let deviceUID = args["deviceId"] as? String {
+                result(AudioDeviceChannel.supportsExclusiveMode(deviceUID: deviceUID))
+            } else {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId", details: nil))
+            }
+        case "enableExclusiveMode":
+            if let args = call.arguments as? [String: Any],
+               let deviceUID = args["deviceId"] as? String,
+               let enable = args["enable"] as? Bool {
+                AudioDeviceChannel.setExclusiveMode(deviceUID: deviceUID, enable: enable, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId or enable", details: nil))
+            }
+        case "getDeviceFormat":
+            if let args = call.arguments as? [String: Any],
+               let deviceUID = args["deviceId"] as? String {
+                result(AudioDeviceChannel.getDeviceFormat(deviceUID: deviceUID))
+            } else {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId", details: nil))
+            }
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -240,5 +262,210 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
         // Just return success - the actual device switching happens in Dart
         print("[AudioDeviceChannel] Device selection request: \(deviceId)")
         result(["success": true, "deviceId": deviceId])
+    }
+
+    // MARK: - Exclusive Mode (Integer Mode) Support
+
+    /// Check if a device supports exclusive mode (Integer Mode on macOS)
+    static func supportsExclusiveMode(deviceUID: String) -> [String: Any] {
+        guard let deviceId = getDeviceIdFromUID(deviceUID: deviceUID) else {
+            return ["supported": false, "reason": "Device not found"]
+        }
+
+        // All CoreAudio devices support Hog Mode, but some may not support Integer Mode
+        // For now, we'll return true for all devices and handle errors at runtime
+        print("[AudioDeviceChannel] Device \(deviceUID) supports exclusive mode")
+        return [
+            "supported": true,
+            "mode": "integer", // macOS uses Integer Mode
+            "deviceId": String(deviceId)
+        ]
+    }
+
+    /// Enable or disable exclusive mode (Hog Mode) for a device
+    static func setExclusiveMode(deviceUID: String, enable: Bool, result: @escaping FlutterResult) {
+        guard let deviceId = getDeviceIdFromUID(deviceUID: deviceUID) else {
+            result(FlutterError(
+                code: "DEVICE_NOT_FOUND",
+                message: "Audio device with UID \(deviceUID) not found",
+                details: nil
+            ))
+            return
+        }
+
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyHogMode,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // Check if property is settable
+        var isSettable: DarwinBoolean = false
+        var status = AudioObjectIsPropertySettable(deviceId, &propertyAddress, &isSettable)
+
+        guard status == noErr, isSettable.boolValue else {
+            result(FlutterError(
+                code: "NOT_SETTABLE",
+                message: "Device does not support exclusive mode (Hog Mode)",
+                details: ["deviceId": deviceUID]
+            ))
+            return
+        }
+
+        // Set Hog Mode
+        var hogPid: pid_t = enable ? getpid() : -1
+        var dataSize = UInt32(MemoryLayout<pid_t>.size)
+
+        status = AudioObjectSetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            dataSize,
+            &hogPid
+        )
+
+        if status == noErr {
+            let modeStr = enable ? "enabled" : "disabled"
+            print("[AudioDeviceChannel] ✓ Exclusive mode \(modeStr) for device \(deviceUID)")
+            result([
+                "success": true,
+                "enabled": enable,
+                "mode": "hog",
+                "deviceId": deviceUID
+            ])
+        } else {
+            // Check if device is already hogged by another process
+            if status == kAudioHardwareIllegalOperationError || status == kAudioHardwareBadDeviceError {
+                result(FlutterError(
+                    code: "DEVICE_IN_USE",
+                    message: "Device is already in exclusive use by another application",
+                    details: ["deviceId": deviceUID, "osStatus": Int(status)]
+                ))
+            } else {
+                result(FlutterError(
+                    code: "EXCLUSIVE_MODE_FAILED",
+                    message: "Failed to set exclusive mode",
+                    details: ["deviceId": deviceUID, "osStatus": Int(status)]
+                ))
+            }
+        }
+    }
+
+    /// Get current audio format (sample rate, bit depth) for a device
+    static func getDeviceFormat(deviceUID: String) -> [String: Any]? {
+        guard let deviceId = getDeviceIdFromUID(deviceUID: deviceUID) else {
+            print("[AudioDeviceChannel] Device \(deviceUID) not found")
+            return nil
+        }
+
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamFormat,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: 0
+        )
+
+        var streamFormat = AudioStreamBasicDescription()
+        var dataSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+
+        let status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &streamFormat
+        )
+
+        guard status == noErr else {
+            print("[AudioDeviceChannel] Failed to get stream format for device \(deviceUID): \(status)")
+            return nil
+        }
+
+        // Get nominal sample rate (what the device claims to support)
+        var nominalSampleRate: Float64 = 0
+        propertyAddress.mSelector = kAudioDevicePropertyNominalSampleRate
+        dataSize = UInt32(MemoryLayout<Float64>.size)
+
+        AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &nominalSampleRate
+        )
+
+        let formatInfo: [String: Any] = [
+            "deviceId": deviceUID,
+            "sampleRate": streamFormat.mSampleRate,
+            "nominalSampleRate": nominalSampleRate,
+            "channels": Int(streamFormat.mChannelsPerFrame),
+            "bitDepth": Int(streamFormat.mBitsPerChannel),
+            "formatID": streamFormat.mFormatID,
+            "isFloat": (streamFormat.mFormatFlags & kAudioFormatFlagIsFloat) != 0,
+            "isInteger": (streamFormat.mFormatFlags & kAudioFormatFlagIsSignedInteger) != 0,
+        ]
+
+        print("[AudioDeviceChannel] Device format: \(Int(nominalSampleRate))Hz, \(streamFormat.mBitsPerChannel)bit, \(streamFormat.mChannelsPerFrame)ch")
+        return formatInfo
+    }
+
+    // MARK: - Helper Methods
+
+    /// Get AudioDeviceID from device UID string
+    private static func getDeviceIdFromUID(deviceUID: String) -> AudioDeviceID? {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize
+        )
+
+        guard status == noErr else { return nil }
+
+        let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var audioDevices = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &audioDevices
+        )
+
+        guard status == noErr else { return nil }
+
+        // Find device with matching UID
+        for deviceId in audioDevices {
+            propertyAddress.mSelector = kAudioDevicePropertyDeviceUID
+            var deviceUIDCF: CFString = "" as CFString
+            var uidSize = UInt32(MemoryLayout<CFString>.size)
+
+            status = AudioObjectGetPropertyData(
+                deviceId,
+                &propertyAddress,
+                0,
+                nil,
+                &uidSize,
+                &deviceUIDCF
+            )
+
+            if status == noErr, deviceUIDCF as String == deviceUID {
+                return deviceId
+            }
+        }
+
+        return nil
     }
 }

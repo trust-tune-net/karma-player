@@ -161,4 +161,154 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
       return false;
     }
   }
+
+  // MARK: - Exclusive Mode Support (Phase 2)
+
+  @override
+  Future<bool> supportsExclusiveMode(String deviceId) async {
+    try {
+      final result = await platform.invokeMethod('supportsExclusiveMode', {
+        'deviceId': deviceId,
+      });
+
+      final supported = result['supported'] as bool? ?? false;
+      final mode = result['mode'] as String? ?? 'unknown';
+
+      if (supported) {
+        print('[AudioDevicePlatformMacOS] Device $deviceId supports exclusive mode ($mode)');
+      } else {
+        print('[AudioDevicePlatformMacOS] Device $deviceId does not support exclusive mode');
+      }
+
+      return supported;
+    } catch (e) {
+      print('[AudioDevicePlatformMacOS] Error checking exclusive mode support: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> enableExclusiveMode(String deviceId, bool enable) async {
+    try {
+      final result = await platform.invokeMethod('enableExclusiveMode', {
+        'deviceId': deviceId,
+        'enable': enable,
+      });
+
+      final success = result['success'] as bool? ?? false;
+      final modeStr = enable ? 'enabled' : 'disabled';
+
+      if (success) {
+        print('[AudioDevicePlatformMacOS] ✓ Exclusive mode $modeStr for device $deviceId');
+      } else {
+        print('[AudioDevicePlatformMacOS] ✗ Failed to ${enable ? 'enable' : 'disable'} exclusive mode');
+      }
+
+      return success;
+    } on PlatformException catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] PlatformException: ${e.code} - ${e.message}');
+
+      // Check for expected errors
+      if (e.code == 'DEVICE_IN_USE') {
+        // Expected error - device is being used exclusively by another app
+        // Log only, don't send to GlitchTip
+        ErrorHandler().logExpectedError(
+          'audio_device_exclusive_mode_in_use',
+          e,
+          stackTrace: stackTrace,
+          extras: {
+            'code': e.code,
+            'deviceId': deviceId,
+            'action': enable ? 'enable' : 'disable',
+          },
+        );
+      } else {
+        // Unexpected error - report to GlitchTip
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'audio_device_platform_exclusive_mode',
+          extras: {
+            'platform': 'macOS',
+            'code': e.code,
+            'deviceId': deviceId,
+            'enable': enable,
+            'message': e.message,
+          },
+        );
+      }
+
+      return false;
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Unexpected error setting exclusive mode: $e');
+
+      // Unexpected error - report to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_exclusive_mode_unknown',
+        extras: {
+          'platform': 'macOS',
+          'deviceId': deviceId,
+          'enable': enable,
+        },
+      );
+
+      return false;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getDeviceFormat(String deviceId) async {
+    try {
+      final result = await platform.invokeMethod('getDeviceFormat', {
+        'deviceId': deviceId,
+      });
+
+      if (result == null) {
+        print('[AudioDevicePlatformMacOS] No format info for device $deviceId');
+        return null;
+      }
+
+      final format = Map<String, dynamic>.from(result);
+      final sampleRate = format['nominalSampleRate'] ?? format['sampleRate'];
+      final bitDepth = format['bitDepth'];
+      final channels = format['channels'];
+
+      print('[AudioDevicePlatformMacOS] Device format: ${sampleRate}Hz, ${bitDepth}bit, ${channels}ch');
+
+      return format;
+    } on PlatformException catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] PlatformException getting format: ${e.message}');
+
+      // This could be unexpected - report to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_get_format',
+        extras: {
+          'platform': 'macOS',
+          'code': e.code,
+          'deviceId': deviceId,
+        },
+      );
+
+      return null;
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Unexpected error getting format: $e');
+
+      // Unexpected error - report to GlitchTip
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_get_format_unknown',
+        extras: {
+          'platform': 'macOS',
+          'deviceId': deviceId,
+        },
+      );
+
+      return null;
+    }
+  }
 }

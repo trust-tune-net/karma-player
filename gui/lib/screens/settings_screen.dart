@@ -8,6 +8,7 @@ import '../widgets/diagnostics_dialog.dart';
 import '../services/analytics_service.dart';
 import '../services/audio_device_service.dart';
 import '../services/platform/audio_device_platform.dart';
+import 'audio_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -550,21 +551,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _getDeviceIcon(deviceType),
                   color: Theme.of(context).colorScheme.primary,
                 ),
-                title: const Text('Audio Output Device'),
+                title: const Text('Audio Settings'),
                 subtitle: Text(
-                  deviceName,
-                  style: const TextStyle(color: Colors.white),
+                  '$deviceName • Tap for audiophile settings',
+                  style: const TextStyle(color: Colors.white70),
                 ),
                 trailing: Icon(
-                  Icons.arrow_drop_down,
+                  Icons.arrow_forward_ios,
                   color: Theme.of(context).colorScheme.primary,
+                  size: 16,
                 ),
                 onTap: () {
-                  if (usesPlatformDevices) {
-                    _showPlatformAudioDeviceDropdown(context, platformDevices, selectedDevice);
-                  } else {
-                    _showAudioDeviceDropdown(context, devices, selectedDevice);
-                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AudioSettingsScreen(),
+                    ),
+                  );
                 },
               );
             },

@@ -90,6 +90,19 @@ abstract class AudioDevicePlatform {
   /// Set the audio output device (if supported by platform)
   Future<bool> setAudioDevice(String deviceId);
 
+  // Exclusive Mode Support (Phase 2 - Audiophile Features)
+
+  /// Check if a device supports exclusive mode (Integer Mode/WASAPI Exclusive)
+  Future<bool> supportsExclusiveMode(String deviceId);
+
+  /// Enable or disable exclusive mode for a device
+  /// Returns true if successful, false otherwise
+  Future<bool> enableExclusiveMode(String deviceId, bool enable);
+
+  /// Get current audio format (sample rate, bit depth, channels) for a device
+  /// Returns null if device not found or format unavailable
+  Future<Map<String, dynamic>?> getDeviceFormat(String deviceId);
+
   /// Check if platform supports native enumeration
   bool get supportsNativeEnumeration;
 }

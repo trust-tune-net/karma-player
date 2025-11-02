@@ -249,6 +249,9 @@ class AudioDeviceService extends ChangeNotifier {
   bool get hasPlatformDevices => _platformDevices.isNotEmpty;
   bool get supportsNativeEnumeration => _platform.supportsNativeEnumeration;
 
+  // Platform API access (for AudioSettingsScreen Phase 2 features)
+  AudioDevicePlatform get platform => _platform;
+
   /// Get device type for UI display
   AudioDeviceType getDeviceType(AudioDevice device) {
     return _detectDeviceType(device);

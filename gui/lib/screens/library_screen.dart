@@ -637,7 +637,9 @@ class LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     if (_selectedAlbum != null) {
-      return _buildAlbumDetailScreen(_selectedAlbum!);
+      return Scaffold(
+        body: _buildAlbumDetailScreen(_selectedAlbum!),
+      );
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -995,9 +997,8 @@ class LibraryScreenState extends State<LibraryScreen> {
       });
     }
 
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
+    return CustomScrollView(
+      slivers: [
           // Show loading indicator while fetching metadata
           if (_isLoadingMetadata)
             SliverToBoxAdapter(
@@ -1171,7 +1172,6 @@ class LibraryScreenState extends State<LibraryScreen> {
           ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
         ],
-      ),
     );
   }
 }

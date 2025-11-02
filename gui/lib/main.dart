@@ -22,6 +22,7 @@ import 'screens/downloads_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/audio_settings_screen.dart';
 
 // App Color Palette (like Melo)
 class AppColors {
@@ -683,7 +684,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     children: [
                       // Logo/App Name - Banksy Style
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
+                        padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -800,6 +801,12 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         label: 'Now Playing',
                         index: 3,
                       ),
+                      _buildNavItem(
+                        icon: Icons.graphic_eq_outlined,
+                        selectedIcon: Icons.graphic_eq,
+                        label: 'Audio Settings',
+                        index: 4,
+                      ),
 
                       const Spacer(),
 
@@ -808,7 +815,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         icon: Icons.settings_outlined,
                         selectedIcon: Icons.settings,
                         label: 'Settings',
-                        index: 4,
+                        index: 5,
                       ),
 
                       const SizedBox(height: 16), // Minimal space for player bar
@@ -831,6 +838,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           ),
                           const DownloadsScreen(),
                           NowPlayingScreen(playbackService: _playbackService),
+                          const AudioSettingsScreen(),
                           const SettingsScreen(),
                         ],
                       );

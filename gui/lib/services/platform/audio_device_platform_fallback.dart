@@ -22,4 +22,20 @@ class AudioDevicePlatformFallback implements AudioDevicePlatform {
   Future<bool> setAudioDevice(String deviceId) async {
     return false;
   }
+
+  // Exclusive Mode Support - Not supported on this platform
+  @override
+  Future<bool> supportsExclusiveMode(String deviceId) async {
+    return false; // No exclusive mode support on non-macOS platforms yet
+  }
+
+  @override
+  Future<bool> enableExclusiveMode(String deviceId, bool enable) async {
+    return false; // No exclusive mode support on non-macOS platforms yet
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getDeviceFormat(String deviceId) async {
+    return null; // No format info available on non-macOS platforms yet
+  }
 }
