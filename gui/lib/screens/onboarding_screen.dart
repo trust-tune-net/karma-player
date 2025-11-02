@@ -210,56 +210,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildPageContent(_OnboardingPage page) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Large icon
-          Text(
-            page.icon,
-            style: const TextStyle(fontSize: 96),
-          ),
-          const SizedBox(height: 32),
-
-          // Title
-          Text(
-            page.title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFFFFFFFF),
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Subtitle
-          if (page.subtitle.isNotEmpty) ...[
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Large icon
             Text(
-              page.subtitle,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFFA855F7),
-              ),
+              page.icon,
+              style: const TextStyle(fontSize: 96),
             ),
             const SizedBox(height: 24),
-          ],
 
-          // Description
-          Text(
-            page.description,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: const Color(0xFFAAAAAA),
-              height: 1.6,
+            // Title
+            Text(
+              page.title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFFFFFFFF),
+                height: 1.2,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+
+            // Subtitle
+            if (page.subtitle.isNotEmpty) ...[
+              Text(
+                page.subtitle,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFA855F7),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Description
+            Text(
+              page.description,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                color: const Color(0xFFAAAAAA),
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
