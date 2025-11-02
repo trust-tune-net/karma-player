@@ -94,167 +94,194 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
               ),
             ],
           ),
-          child: Row(
+          child: Stack(
             children: [
-              // Icon with pulsing animation
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          const Color(0xFFA855F7).withOpacity(0.3 + (_pulseController.value * 0.2)),
-                          const Color(0xFFA855F7).withOpacity(0.1),
+              // Main content row
+              Row(
+                children: [
+                  // Icon with pulsing animation
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      return Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFFA855F7).withOpacity(0.3 + (_pulseController.value * 0.2)),
+                              const Color(0xFFA855F7).withOpacity(0.1),
+                            ],
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.download_rounded,
+                          size: 24,
+                          color: Color(0xFFA855F7),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  // Content
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 50), // Space for Cancel button
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                        // Title
+                        Text(
+                          widget.title,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (widget.artist != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.artist!,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                              color: const Color(0xFF888888),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.download_rounded,
-                      size: 24,
-                      color: Color(0xFFA855F7),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 16),
-              // Content
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-
-                    // Title
-                    Text(
-                      widget.title,
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (widget.artist != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.artist!,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: const Color(0xFF888888),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-
-                    // Progress bar
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          height: 6,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(3),
-                            color: const Color(0xFF2A2A2E),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              backgroundColor: Colors.transparent,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                const Color(0xFFA855F7),
-                              ),
-                            ),
-                          ),
-                        ),
                         const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        // Beta phase badge - gorgeous yellow badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.amber.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 12,
+                                color: Colors.amber.withOpacity(0.9),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Beta phase - Takes a while to begin, please be patient',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.amber.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Progress bar
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Downloading...',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFFAAAAAA),
+                            Container(
+                              height: 6,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(3),
+                                color: const Color(0xFF2A2A2E),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: progress,
+                                  backgroundColor: Colors.transparent,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    const Color(0xFFA855F7),
+                                  ),
+                                ),
                               ),
                             ),
-                            Text(
-                              '$progressPercent%',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFFA855F7),
-                              ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Downloading...',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFFAAAAAA),
+                                  ),
+                                ),
+                                Text(
+                                  '$progressPercent%',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFFA855F7),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        // Beta phase message in yellow
-                        Text(
-                          'Beta phase - Takes a while to begin, please be patient',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.yellow,
-                          ),
-                        ),
                       ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Cancel button and dismiss button
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Dismiss button (X)
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    color: const Color(0xFF888888),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: dismiss,
-                    tooltip: 'Dismiss',
                   ),
-                  if (widget.onCancel != null) ...[
-                    const SizedBox(height: 8),
-                    // Cancel download button
-                    TextButton(
-                      onPressed: widget.onCancel,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          side: BorderSide(
-                            color: const Color(0xFF888888).withOpacity(0.5),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFAAAAAA),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
+              // X button in top right corner
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: const Color(0xFF888888),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: dismiss,
+                  tooltip: 'Dismiss',
+                ),
+              ),
+              // Cancel button positioned at the bottom, below progress bar
+              if (widget.onCancel != null)
+                Positioned(
+                  bottom: 0, // At the very bottom of the container
+                  right: 0,
+                  child: TextButton(
+                    onPressed: widget.onCancel,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: const Color(0xFF888888).withOpacity(0.5),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFFAAAAAA),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -262,4 +289,3 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
     );
   }
 }
-
