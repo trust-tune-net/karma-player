@@ -312,61 +312,74 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           return; // Don't show dialog again if already downloading
         }
 
-        // Track progress for dialog updates
+        // Track progress for toast updates
         double downloadProgress = 0.0;
-        BuildContext? dialogContext;
-        void Function(VoidCallback)? setDialogState;
+        OverlayEntry? toastOverlay;
+        void Function(VoidCallback)? setToastState;
         bool isCanceled = false;
 
-        // Show beautiful progress dialog with StatefulBuilder for real-time updates
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContextParam) {
-            dialogContext = dialogContextParam;
-            return StatefulBuilder(
-              builder: (context, setState) {
-                // Capture setState so progress callback can call it
-                setDialogState = setState;
-                
-                return YouTubeDownloadProgressDialog(
-                  title: title,
-                  artist: source['artist'],
-                  progress: downloadProgress,
-                  onCancel: () async {
-                    // Cancel the download
-                    isCanceled = true;
-                    await _youtubeDownloadService.cancelDownload(sourceId);
-                    
-                    // Close dialog
-                    if (mounted && dialogContext != null) {
-                      Navigator.of(dialogContext!).pop();
-                    }
-                    
-                    // Show cancel message
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Download canceled'),
-                          backgroundColor: Colors.orange,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                );
-              },
-            );
-          },
-        );
+        // Create overlay entry for non-blocking toast
+        void createToast() {
+          final overlay = Overlay.of(context);
+          if (overlay == null) return;
+
+          toastOverlay = OverlayEntry(
+            builder: (context) => Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  // Capture setState so progress callback can call it
+                  setToastState = setState;
+                  
+                  return YouTubeDownloadProgressToast(
+                    title: title,
+                    artist: source['artist'],
+                    progress: downloadProgress,
+                    onCancel: () async {
+                      // Cancel the download
+                      isCanceled = true;
+                      await _youtubeDownloadService.cancelDownload(sourceId);
+                      
+                      // Dismiss toast
+                      toastOverlay?.remove();
+                      toastOverlay = null;
+                      
+                      // Show cancel message
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Download canceled'),
+                            backgroundColor: Colors.orange,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    onDismiss: () {
+                      toastOverlay?.remove();
+                      toastOverlay = null;
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+
+          overlay.insert(toastOverlay!);
+        }
+
+        // Show non-blocking toast
+        createToast();
 
         try {
-          // Update progress callback that triggers dialog rebuild
+          // Update progress callback that triggers toast rebuild
           void updateProgress(double progress) {
             if (isCanceled) return; // Don't update if canceled
             downloadProgress = progress;
-            if (mounted && setDialogState != null) {
-              setDialogState?.call(() {});
+            if (mounted && setToastState != null) {
+              setToastState?.call(() {});
             }
           }
 
@@ -385,9 +398,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             return;
           }
 
-          // Close progress dialog
-          if (mounted && dialogContext != null) {
-            Navigator.of(dialogContext!).pop();
+          // Dismiss toast on completion
+          if (mounted && toastOverlay != null) {
+            toastOverlay!.remove();
+            toastOverlay = null;
           }
 
           if (filePath == null || filePath.isEmpty) {
@@ -425,9 +439,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             rethrow;
           }
         } catch (e) {
-          // Close dialog if still open on error (unless it was canceled)
-          if (!isCanceled && mounted && dialogContext != null) {
-            Navigator.of(dialogContext!).pop();
+          // Dismiss toast if still open on error (unless it was canceled)
+          if (!isCanceled && mounted && toastOverlay != null) {
+            toastOverlay!.remove();
+            toastOverlay = null;
           }
           
           // Only rethrow if not canceled (cancellation is expected)
