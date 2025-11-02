@@ -28,8 +28,10 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
 
   // Register audio device channel
-  audio_device::AudioDeviceChannel::RegisterWithRegistrar(
-      flutter_controller_->engine()->GetRegistrarForPlugin("AudioDeviceChannel"));
+  auto registrar_manager = flutter_controller_->engine()->GetRegistrarManager();
+  auto registrar = registrar_manager->GetRegistrar<flutter::PluginRegistrarWindows>(
+      "AudioDeviceChannel");
+  audio_device::AudioDeviceChannel::RegisterWithRegistrar(registrar);
 
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 

@@ -34,15 +34,15 @@ void AudioDeviceChannel::RegisterWithRegistrar(
       registrar->messenger(), kChannelName,
       &flutter::StandardMethodCodec::GetInstance());
 
-  auto plugin = std::make_unique<AudioDeviceChannel>();
+  // Keep plugin alive for the lifetime of the application
+  auto plugin = std::make_shared<AudioDeviceChannel>();
 
   channel->SetMethodCallHandler(
-      [plugin_pointer = plugin.get()](const auto& call, auto result) {
-        plugin_pointer->HandleMethodCall(call, std::move(result));
+      [plugin](const auto& call, auto result) {
+        plugin->HandleMethodCall(call, std::move(result));
       });
 
   std::cout << "[AudioDeviceChannel] Registered method channel" << std::endl;
-  registrar->AddPlugin(std::move(plugin));
 }
 
 AudioDeviceChannel::AudioDeviceChannel() {
