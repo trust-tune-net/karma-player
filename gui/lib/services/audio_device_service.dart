@@ -7,6 +7,8 @@ import 'analytics_service.dart';
 import 'error_handler.dart';
 import 'platform/audio_device_platform.dart';
 import 'platform/audio_device_platform_macos.dart';
+import 'platform/audio_device_platform_windows.dart';
+import 'platform/audio_device_platform_linux.dart';
 import 'platform/audio_device_platform_fallback.dart';
 
 // AudioDeviceType is now exported from platform/audio_device_platform.dart
@@ -213,6 +215,10 @@ class AudioDeviceService extends ChangeNotifier {
     // Initialize platform-specific implementation
     if (Platform.isMacOS) {
       _platform = AudioDevicePlatformMacOS();
+    } else if (Platform.isWindows) {
+      _platform = AudioDevicePlatformWindows();
+    } else if (Platform.isLinux) {
+      _platform = AudioDevicePlatformLinux();
     } else {
       _platform = AudioDevicePlatformFallback();
     }
@@ -716,56 +722,63 @@ class AudioDeviceService extends ChangeNotifier {
     }
   }
 
-  /// Force app to use whatever device macOS is currently using as default
-  /// This ensures audio plays through the device macOS has selected (e.g., newly plugged headphones)
+  /// Force app to use whatever device the OS is currently using as default
+  /// This ensures audio plays through the device the OS has selected (e.g., newly plugged headphones)
+  ///
+  /// Works cross-platform:
+  /// - macOS: Uses CoreAudio to query system default
+  /// - Windows: Uses WASAPI to query default audio endpoint
+  /// - Linux: Uses PulseAudio/PipeWire to query default sink
   Future<void> switchToSystemDefault() async {
+    print('[AudioDevice] 🔄 Switching to system default device...');
+
     if (!_platform.supportsNativeEnumeration) {
-      return; // Only on macOS
+      print('[AudioDevice] ⚠️  Platform does not support native device enumeration');
+      print('[AudioDevice] This platform needs native implementation (see TODO)');
+      return;
     }
 
-    print('[AudioDevice] 🔄 Syncing with macOS default device...');
-
     try {
-      // Query macOS for current default device
-      final macOSDefault = await _platform.getDefaultDevice();
-      if (macOSDefault == null) {
-        print('[AudioDevice] ⚠️  macOS returned no default device');
+      // Query OS for current default device via platform channel
+      final platformDefault = await _platform.getDefaultDevice();
+      if (platformDefault == null) {
+        print('[AudioDevice] ⚠️  Platform returned no default device');
         return;
       }
 
-      print('[AudioDevice] macOS default device: ${macOSDefault.name}');
+      print('[AudioDevice] Platform default: ${platformDefault.name}');
 
-      // Check if our current device matches macOS's default
+      // Check if we're already using it
       if (_selectedDevice != null &&
           _selectedDevice!.name != 'auto' &&
-          _selectedDevice!.description == macOSDefault.name) {
-        print('[AudioDevice] ✓ Already using macOS default device');
+          _selectedDevice!.description == platformDefault.name) {
+        print('[AudioDevice] ✓ Already using platform default device');
         return;
       }
 
-      // macOS default has changed - find matching MediaKit device
-      AudioDevice? matchedDevice;
+      // Find matching MediaKit device
+      AudioDevice? targetDevice;
       try {
-        matchedDevice = _availableDevices.firstWhere(
-          (d) => d.description == macOSDefault.name,
+        targetDevice = _availableDevices.firstWhere(
+          (d) => d.description == platformDefault.name,
         );
       } catch (e) {
-        // Device not found in MediaKit list - use "auto"
-        matchedDevice = _systemDefaultDevice;
+        print('[AudioDevice] ⚠️  Platform default "${platformDefault.name}" not found in MediaKit list');
+        print('[AudioDevice] Available devices: ${_availableDevices.map((d) => d.description).join(', ')}');
+        // Fall back to "auto" mode
+        targetDevice = _systemDefaultDevice;
       }
 
-      if (matchedDevice == null) {
-        print('[AudioDevice] ⚠️  Could not find matching device, skipping sync');
+      if (targetDevice == null) {
+        print('[AudioDevice] ⚠️  Could not determine device to switch to');
         return;
       }
 
-      print('[AudioDevice] 🔀 Switching to macOS default: ${matchedDevice.description}');
-
-      // Update selected device (this will trigger notifyListeners via selectDevice)
-      await selectDevice(matchedDevice);
+      print('[AudioDevice] 🔀 Switching to: ${targetDevice.description}');
+      await selectDevice(targetDevice);
 
     } catch (e) {
-      print('[AudioDevice] ⚠️  Error syncing with macOS default: $e');
+      print('[AudioDevice] ⚠️  Error switching to system default: $e');
       // Non-fatal - continue with current device
     }
   }
