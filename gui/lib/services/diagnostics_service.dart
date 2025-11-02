@@ -200,16 +200,7 @@ class DiagnosticsService {
         details: 'URL: ${appSettings.transmissionRpcUrl}\nActive torrents: ${torrents.length}',
       );
     } catch (e, stackTrace) {
-      // Report unexpected RPC check failures
-      AnalyticsService().captureError(
-        e,
-        stackTrace,
-        context: 'diagnostics_rpc_check_error',
-        extras: {
-          'rpc_url': appSettings.transmissionRpcUrl,
-        },
-      );
-      
+      // Diagnostics are user-initiated tests - don't report to Glitchtip
       return DiagnosticResult(
         name: 'Transmission RPC',
         status: DiagnosticStatus.error,
@@ -247,16 +238,7 @@ class DiagnosticsService {
         );
       }
     } catch (e, stackTrace) {
-      // Report unexpected API health check failures
-      AnalyticsService().captureError(
-        e,
-        stackTrace,
-        context: 'diagnostics_api_check_error',
-        extras: {
-          'api_url': appSettings.searchApiUrl,
-        },
-      );
-      
+      // Diagnostics are user-initiated tests - don't report to Glitchtip
       return DiagnosticResult(
         name: 'Search API Health',
         status: DiagnosticStatus.error,
@@ -281,7 +263,7 @@ class DiagnosticsService {
         headers: {'Content-Type': 'application/json'},
         body: body,
       ).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 90),
         onTimeout: () => throw TimeoutException('Search request timed out'),
       );
 
@@ -295,9 +277,11 @@ class DiagnosticsService {
         var validMagnets = 0;
         if (results.isNotEmpty) {
           for (var result in results) {
-            if (result['torrent'] != null &&
-                result['torrent']['magnet_link'] != null &&
-                result['torrent']['magnet_link'].toString().isNotEmpty) {
+            final source = result['source'] ?? result['torrent'];
+            final magnetLink = source?['magnet_link'] ?? source?['url'];
+            if (magnetLink != null && 
+                magnetLink.toString().trim().isNotEmpty &&
+                magnetLink.toString().startsWith('magnet:')) {
               validMagnets++;
             }
           }
@@ -311,7 +295,7 @@ class DiagnosticsService {
           message: hasValidResults
               ? 'Search working correctly'
               : 'Search returned results but no valid magnet links',
-          details: 'Query: "test"\nTotal found: $totalFound\nResults returned: ${results.length}\nWith valid magnets: $validMagnets\nSearch time: ${searchTime}ms',
+          details: 'Query: "pink floyd"\nTotal found: $totalFound\nResults returned: ${results.length}\nWith valid magnets: $validMagnets\nSearch time: ${searchTime}ms',
         );
       } else {
         return DiagnosticResult(
@@ -322,17 +306,7 @@ class DiagnosticsService {
         );
       }
     } catch (e, stackTrace) {
-      // Report unexpected test search failures
-      AnalyticsService().captureError(
-        e,
-        stackTrace,
-        context: 'diagnostics_search_test_error',
-        extras: {
-          'api_url': appSettings.searchApiUrl,
-          'test_query': 'pink floyd',
-        },
-      );
-      
+      // Diagnostics are user-initiated tests - don't report to Glitchtip
       return DiagnosticResult(
         name: 'Test Search',
         status: DiagnosticStatus.error,

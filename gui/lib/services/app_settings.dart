@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'analytics_service.dart';
 
 class AppSettings extends ChangeNotifier {
@@ -23,6 +25,10 @@ class AppSettings extends ChangeNotifier {
   bool apiHealthy = false;
   DateTime? lastHealthCheck;
   int apiResponseTimeMs = 0; // API response time in milliseconds
+  
+  // Toast throttling for network errors
+  DateTime? lastNetworkErrorToastTime;
+  int networkErrorToastCount = 0;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -138,20 +144,57 @@ class AppSettings extends ChangeNotifier {
       lastHealthCheck = DateTime.now();
       notifyListeners(); // Notify all listeners that connection failed
       
-      // Report unexpected API health check failures
-      AnalyticsService().captureError(
-        e,
-        stackTrace,
-        context: 'app_settings_api_health_check_error',
-        extras: {
-          'api_url': searchApiUrl,
-          'health_endpoint': '$searchApiUrl/health',
-          'was_healthy_before': apiHealthy,
-        },
-      );
+      // Categorize error types
+      final isNetworkError = e is TimeoutException || 
+                            e.toString().contains('SocketException') ||
+                            e.toString().contains('ClientException') ||
+                            e.toString().contains('Failed host lookup');
+      
+      if (isNetworkError) {
+        // Log locally only (not to Glitchtip)
+        debugPrint('[AppSettings] Network connectivity issue: ${e.runtimeType} - $e');
+      } else {
+        // Unexpected error - report to Glitchtip
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'app_settings_api_health_check_unexpected_error',
+          extras: {
+            'api_url': searchApiUrl,
+            'health_endpoint': '$searchApiUrl/health',
+            'error_type': e.runtimeType.toString(),
+          },
+        );
+      }
       
       return false;
     }
+  }
+
+  /// Check if we should show a network error toast (max 2 per day)
+  bool shouldShowNetworkErrorToast() {
+    final now = DateTime.now();
+    
+    // Reset counter if it's a new day
+    if (lastNetworkErrorToastTime == null ||
+        !_isSameDay(lastNetworkErrorToastTime!, now)) {
+      networkErrorToastCount = 0;
+      lastNetworkErrorToastTime = now;
+      return true;
+    }
+    
+    // Allow max 2 toasts per day
+    if (networkErrorToastCount < 2) {
+      networkErrorToastCount++;
+      lastNetworkErrorToastTime = now;
+      return true;
+    }
+    
+    return false;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   String get connectionQuality {

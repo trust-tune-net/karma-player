@@ -74,9 +74,28 @@ class LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _checkHealth() async {
-    // appSettings.checkApiHealth() calls notifyListeners()
-    // which automatically updates all StatsBadges via ListenableBuilder
-    await appSettings.checkApiHealth();
+    final wasHealthy = appSettings.apiHealthy;
+    final isHealthy = await appSettings.checkApiHealth();
+    
+    // Show toast if connection dropped AND throttle allows it
+    if (wasHealthy && !isHealthy && mounted && appSettings.shouldShowNetworkErrorToast()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.cloud_off, color: Colors.orange, size: 18),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Network connectivity issue - working offline'),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF2A2A2E),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   /// Check if a string is a valid year (4-digit, 1900-2099)
