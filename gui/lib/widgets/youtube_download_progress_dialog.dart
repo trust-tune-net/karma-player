@@ -76,8 +76,8 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
       child: Material(
         color: Colors.transparent,
         child: Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(20),
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: const Color(0xFF1C1C1E),
             borderRadius: BorderRadius.circular(16),
@@ -99,142 +99,155 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
               // Main content row
               Row(
                 children: [
-                  // Icon with pulsing animation
+                  // Icon with pulsing animation and glow
                   AnimatedBuilder(
                     animation: _pulseController,
                     builder: (context, child) {
+                      // Calculate glow intensity based on pulse value (enhanced)
+                      final glowIntensity = 0.5 + (_pulseController.value * 0.4);
+                      final glowBlur = 12.0 + (_pulseController.value * 10.0);
+                      
                       return Container(
-                        width: 48,
-                        height: 48,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              const Color(0xFFA855F7).withOpacity(0.3 + (_pulseController.value * 0.2)),
-                              const Color(0xFFA855F7).withOpacity(0.1),
+                              const Color(0xFFA855F7).withOpacity(0.1 + (_pulseController.value * 0.1)),
+                              const Color(0xFFA855F7).withOpacity(0.05),
                             ],
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFA855F7).withOpacity(glowIntensity),
+                              blurRadius: glowBlur,
+                              spreadRadius: 3,
+                            ),
+                          ],
                         ),
                         child: const Icon(
                           Icons.download_rounded,
-                          size: 24,
+                          size: 18,
                           color: Color(0xFFA855F7),
                         ),
                       );
                     },
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   // Content
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 50), // Space for Cancel button
+                      padding: const EdgeInsets.only(bottom: 32), // Space for Cancel button
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                        // Title
-                        Text(
-                          widget.title,
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (widget.artist != null) ...[
-                          const SizedBox(height: 2),
+                          // Title
                           Text(
-                            widget.artist!,
+                            widget.title,
                             style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: const Color(0xFF888888),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                        const SizedBox(height: 8),
-                        // Beta phase badge - gorgeous yellow badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.amber.withOpacity(0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                size: 12,
-                                color: Colors.amber.withOpacity(0.9),
+                          if (widget.artist != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.artist!,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: const Color(0xFF888888),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Beta phase - Takes a while to begin, please be patient',
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.amber.withOpacity(0.9),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          // Progress bar
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(3),
+                                  color: const Color(0xFF2A2A2E),
                                 ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.transparent,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      const Color(0xFFA855F7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Downloading...',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: const Color(0xFFAAAAAA),
+                                    ),
+                                  ),
+                                  Text(
+                                    '$progressPercent%',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFFA855F7),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        // Progress bar
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              height: 6,
+                          const SizedBox(height: 4),
+                          // Beta phase badge - centered at bottom
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(3),
-                                color: const Color(0xFF2A2A2E),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
-                                child: LinearProgressIndicator(
-                                  value: progress,
-                                  backgroundColor: Colors.transparent,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    const Color(0xFFA855F7),
-                                  ),
+                                color: Colors.amber.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Colors.amber.withOpacity(0.3),
+                                  width: 1,
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Downloading...',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFFAAAAAA),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 10,
+                                    color: Colors.amber.withOpacity(0.9),
                                   ),
-                                ),
-                                Text(
-                                  '$progressPercent%',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFFA855F7),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Beta phase - Takes a while to begin, please be patient',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.amber.withOpacity(0.9),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
