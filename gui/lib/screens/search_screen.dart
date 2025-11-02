@@ -18,8 +18,9 @@ enum SourceFilter { all, torrents, streaming }
 
 class SearchScreen extends StatefulWidget {
   final void Function(Song song, {List<Song>? queue, bool? isShuffled})? onSongTap;
+  final VoidCallback? onLibraryRefresh;
 
-  const SearchScreen({super.key, this.onSongTap});
+  const SearchScreen({super.key, this.onSongTap, this.onLibraryRefresh});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -312,8 +313,14 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           ),
         );
 
-        // Download audio using yt-dlp
-        final filePath = await _youtubeDownloadService.downloadAudio(sourceId);
+        // Download audio using yt-dlp with callback to refresh library
+        // Pass title (and artist if available) to avoid metadata extraction
+        final filePath = await _youtubeDownloadService.downloadAudio(
+          sourceId,
+          title: title,
+          artist: source['artist'], // Pass artist if available in source
+          onDownloadComplete: widget.onLibraryRefresh,
+        );
 
         if (filePath == null || filePath.isEmpty) {
           throw Exception('Failed to download YouTube audio');

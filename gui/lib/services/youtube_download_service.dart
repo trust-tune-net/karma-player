@@ -1,18 +1,22 @@
 // YouTube Download Service - yt-dlp Approach
 //
-// Downloads YouTube Music audio to temp files for playback.
+// Downloads YouTube Music audio to ~/Music folder with user-friendly filenames.
 // Uses yt-dlp to handle all YouTube complexity (signatures, auth, etc.)
 //
 // Flow:
 // 1. User clicks play on YouTube result
-// 2. Service downloads audio to temp directory using yt-dlp
-// 3. Returns local file path
-// 4. media_kit plays the local file (100% reliable)
+// 2. Service extracts metadata (title, artist) from YouTube
+// 3. Downloads audio to ~/Music with filename: "Artist - Title.ext"
+// 4. Library automatically picks up files from ~/Music
+// 5. Returns local file path for playback
+// 6. media_kit plays the local file (100% reliable)
 //
 // Cross-platform: Works on macOS, Windows, and Linux
 
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'analytics_service.dart';
@@ -20,6 +24,12 @@ import 'analytics_service.dart';
 class YouTubeDownloadService {
   // Cache directory for YouTube downloads (platform-specific)
   String? _cacheDir;
+
+  // Track video ID -> filename mapping for cache lookup
+  final Map<String, String> _videoIdToFilename = {};
+  
+  // Cache extracted metadata to avoid re-fetching on retries
+  final Map<String, Map<String, String>> _videoIdToMetadata = {};
 
   // Track active downloads to avoid duplicates
   final Map<String, Future<String?>> _activeDownloads = {};
@@ -91,13 +101,35 @@ class YouTubeDownloadService {
 
   /// Get platform-specific cache directory
   ///
-  /// - macOS/Linux: /tmp
-  /// - Windows: C:\Users\...\AppData\Local\Temp
+  /// Downloads to ~/Music folder so library automatically picks them up
+  /// - macOS/Linux: ~/Music
+  /// - Windows: C:\Users\...\Music
   Future<String> _getCacheDir() async {
     if (_cacheDir != null) return _cacheDir!;
 
-    final tempDir = await getTemporaryDirectory();
-    _cacheDir = tempDir.path;
+    // Get home directory (cross-platform)
+    final homeDir = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+    if (homeDir == null) {
+      // Fallback to temp if home not found (shouldn't happen)
+      final tempDir = await getTemporaryDirectory();
+      _cacheDir = tempDir.path;
+      return _cacheDir!;
+    }
+
+    // Use ~/Music folder
+    final musicDir = path.join(homeDir, 'Music');
+    _cacheDir = musicDir;
+
+    // Ensure directory exists
+    try {
+      await Directory(musicDir).create(recursive: true);
+    } catch (e) {
+      print('[YouTube Download] Warning: Could not create Music directory: $e');
+      // Fallback to temp if Music folder can't be created
+      final tempDir = await getTemporaryDirectory();
+      _cacheDir = tempDir.path;
+    }
+
     return _cacheDir!;
   }
 
@@ -105,7 +137,15 @@ class YouTubeDownloadService {
   ///
   /// Returns the local file path when ready for playback.
   /// Downloads are cached by video ID to avoid duplicate downloads.
-  Future<String?> downloadAudio(String videoId) async {
+  /// 
+  /// [title] and [artist] optional - if provided, will be used for filename instead of extracting metadata
+  /// [onDownloadComplete] optional callback called after successful download
+  Future<String?> downloadAudio(
+    String videoId, {
+    String? title,
+    String? artist,
+    VoidCallback? onDownloadComplete,
+  }) async {
     // Wait for any ongoing cancellation to complete (prevents race conditions)
     if (_cancellationLock != null) {
       await _cancellationLock;
@@ -182,8 +222,13 @@ class YouTubeDownloadService {
     // Set current download ID AFTER cancellation is complete
     _currentDownloadId = videoId;
 
-    // Start new download
-    final downloadFuture = _downloadAudioInternal(videoId);
+    // Start new download (callback passed to internal method to be called after rename completes)
+    final downloadFuture = _downloadAudioInternal(
+      videoId,
+      title: title,
+      artist: artist,
+      onDownloadComplete: onDownloadComplete,
+    );
     _activeDownloads[videoId] = downloadFuture;
 
     try {
@@ -208,7 +253,13 @@ class YouTubeDownloadService {
   }
 
   /// Internal download logic with retry support
-  Future<String?> _downloadAudioInternal(String videoId, {int retryCount = 0}) async {
+  Future<String?> _downloadAudioInternal(
+    String videoId, {
+    String? title,
+    String? artist,
+    int retryCount = 0,
+    VoidCallback? onDownloadComplete,
+  }) async {
     const maxRetries = 2;
     const retryDelayMs = 2000; // 2 seconds
     
@@ -220,15 +271,69 @@ class YouTubeDownloadService {
         data: {
           'video_id': videoId,
           'retry_count': retryCount,
+          'has_title': title != null,
+          'has_artist': artist != null,
         },
       );
       
       final cacheDir = await _getCacheDir();
       final url = 'https://music.youtube.com/watch?v=$videoId';
-      final outputTemplate = path.join(cacheDir, 'youtube_%(id)s.%(ext)s');
+
+      // Use provided metadata if available, otherwise extract it
+      Map<String, String>? metadata;
+      
+      if (title != null && title.isNotEmpty) {
+        // Use provided title and artist (or extract artist from title if needed)
+        String? finalTitle = title;
+        String? finalArtist = artist;
+        
+        // If no artist provided, try to parse from title (format: "Artist - Title")
+        if (finalArtist == null || finalArtist.isEmpty) {
+          final titleParts = finalTitle.split(' - ');
+          if (titleParts.length >= 2) {
+            finalArtist = titleParts[0].trim();
+            finalTitle = titleParts.sublist(1).join(' - ').trim();
+          } else {
+            finalArtist = 'Unknown Artist';
+          }
+        }
+        
+        metadata = {
+          'title': finalTitle,
+          'artist': finalArtist,
+        };
+        
+        // Cache it for retries
+        _videoIdToMetadata[videoId] = metadata;
+        
+        print('[YouTube Download] Using metadata from search results: "$finalTitle" by "$finalArtist"');
+      } else {
+        // No metadata provided - try to use cached or extract it
+        metadata = _videoIdToMetadata[videoId];
+        
+        // Extract metadata if not cached (first attempt or cache lost)
+        if (metadata == null) {
+          print('[YouTube Download] No metadata provided, extracting from YouTube...');
+          metadata = await _extractMetadata(videoId);
+          // Cache it for retries
+          if (metadata != null) {
+            _videoIdToMetadata[videoId] = metadata;
+          }
+        }
+      }
+
+      // If we have metadata, download to temp first, then rename to user-friendly name
+      // This is more reliable than trying to specify exact filename in yt-dlp
+      final useTempDownload = metadata != null;
+      final outputTemplate = useTempDownload
+          ? path.join(cacheDir, 'youtube_${videoId}_temp.%(ext)s')
+          : path.join(cacheDir, 'youtube_%(id)s.%(ext)s');
 
       print('[YouTube Download] Starting download: $videoId (attempt ${retryCount + 1})');
       print('[YouTube Download]    URL: $url');
+      if (metadata != null) {
+        print('[YouTube Download]    Target: ${metadata['artist']} - ${metadata['title']}');
+      }
 
       // Log yt-dlp execution
       AnalyticsService().addBreadcrumb(
@@ -238,6 +343,7 @@ class YouTubeDownloadService {
           'video_id': videoId,
           'yt_dlp_path': ytDlpPath,
           'url': url,
+          'has_metadata': metadata != null,
         },
       );
       
@@ -375,12 +481,51 @@ class YouTubeDownloadService {
 
       if (exitCode == 0) {
         // Download successful, find the file
-        final filePath = await _findDownloadedFile(videoId);
+        String? filePath = await _findDownloadedFile(videoId);
+        
+        // If we downloaded to temp and have metadata, rename to user-friendly name
+        if (filePath != null && metadata != null && useTempDownload) {
+          final tempFile = File(filePath);
+          final ext = path.extension(filePath).replaceFirst('.', '');
+          final finalFilename = await _generateFilename(videoId, metadata['title'], metadata['artist'], ext);
+          final finalPath = path.join(cacheDir, finalFilename);
+          
+          try {
+            // Check if final file already exists (shouldn't happen due to duplicate handling, but be safe)
+            if (await File(finalPath).exists()) {
+              // Delete existing file (shouldn't happen, but handle it)
+              await File(finalPath).delete();
+            }
+            
+            await tempFile.rename(finalPath);
+            filePath = finalPath;
+            _videoIdToFilename[videoId] = finalFilename;
+            print('[YouTube Download] ✅ Renamed to: $finalFilename');
+          } catch (e) {
+            print('[YouTube Download] ⚠️  Warning: Could not rename file, keeping temp name: $e');
+            // Keep using temp filename, but try to clean it up later
+            // The file will still work for playback
+          }
+        }
+        
         if (filePath != null) {
           final fileSize = await File(filePath).length();
+          final fileName = path.basename(filePath);
           print('[YouTube Download] ✅ Download complete');
           print('[YouTube Download]    File: $filePath');
           print('[YouTube Download]    Size: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
+          
+          // Log filename format info
+          if (fileName.startsWith('youtube_') && !fileName.contains(' - ')) {
+            print('[YouTube Download]    Note: Using video ID filename (metadata extraction failed or timed out)');
+          }
+          
+          // Call completion callback after all file operations are done
+          if (onDownloadComplete != null) {
+            print('[YouTube Download] Triggering library refresh...');
+            onDownloadComplete();
+          }
+          
           return filePath;
         } else {
           // File not found after successful download - report this anomaly
@@ -448,7 +593,13 @@ class YouTubeDownloadService {
       if (retryCount < maxRetries && _shouldRetry(e)) {
         print('[YouTube Download] 🔄 Retry ${retryCount + 1}/$maxRetries after ${retryDelayMs}ms...');
         await Future.delayed(Duration(milliseconds: retryDelayMs));
-        return _downloadAudioInternal(videoId, retryCount: retryCount + 1);
+        return _downloadAudioInternal(
+          videoId,
+          title: title,
+          artist: artist,
+          retryCount: retryCount + 1,
+          onDownloadComplete: onDownloadComplete,
+        );
       }
       
       // Max retries reached or non-retryable error
@@ -481,6 +632,116 @@ class YouTubeDownloadService {
            errorStr.contains('connection') ||
            errorStr.contains('429') || // Rate limit
            errorStr.contains('503'); // Service unavailable
+  }
+
+  /// Sanitize filename to remove invalid filesystem characters
+  String _sanitizeFilename(String filename) {
+    // Remove or replace invalid characters: / \ : * ? " < > |
+    final invalidChars = RegExp(r'[/\\:*?"<>|]');
+    String sanitized = filename.replaceAll(invalidChars, '_');
+    
+    // Remove leading/trailing dots and spaces (Windows doesn't like these)
+    sanitized = sanitized.trim().replaceAll(RegExp(r'^\.+|\.+$'), '');
+    
+    // Limit length to platform max (250 to be safe, leave room for extension)
+    if (sanitized.length > 250) {
+      sanitized = sanitized.substring(0, 250);
+    }
+    
+    return sanitized;
+  }
+
+  /// Extract metadata from YouTube video using yt-dlp
+  /// Returns map with 'title', 'artist', 'uploader', or null if extraction fails
+  /// Timeout errors are not reported to GlitchTip (expected in slow network conditions)
+  Future<Map<String, String>?> _extractMetadata(String videoId) async {
+    try {
+      final url = 'https://music.youtube.com/watch?v=$videoId';
+      
+      print('[YouTube Download] Extracting metadata for $videoId...');
+      
+      // Run yt-dlp with --dump-json to get full metadata
+      // Increased timeout to 20 seconds for slow connections
+      final result = await Process.run(
+        ytDlpPath,
+        [
+          '--dump-json',
+          '--no-playlist',
+          '--no-warnings',
+          url,
+        ],
+      ).timeout(const Duration(seconds: 20));
+
+      if (result.exitCode != 0) {
+        print('[YouTube Download] ⚠️  Metadata extraction failed: ${result.stderr}');
+        return null;
+      }
+
+      // Parse JSON output
+      final jsonData = jsonDecode(result.stdout.toString()) as Map<String, dynamic>;
+      
+      final title = jsonData['title'] as String? ?? '';
+      final artist = jsonData['artist'] as String? ?? 
+                     jsonData['uploader'] as String? ?? 
+                     jsonData['channel'] as String? ?? 
+                     'Unknown Artist';
+      
+      if (title.isEmpty) {
+        print('[YouTube Download] ⚠️  No title found in metadata');
+        return null;
+      }
+
+      print('[YouTube Download] ✅ Metadata extracted: "$title" by "$artist"');
+      
+      return {
+        'title': title,
+        'artist': artist,
+      };
+    } on TimeoutException catch (e) {
+      // Timeout is expected in slow network conditions - don't report as error
+      print('[YouTube Download] ⏱️  Metadata extraction timed out (this is normal on slow networks)');
+      return null;
+    } catch (e, stackTrace) {
+      // Only report unexpected errors (not timeouts)
+      if (e is! TimeoutException) {
+        print('[YouTube Download] ❌ Unexpected error extracting metadata: $e');
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'youtube_metadata_extraction',
+          extras: {
+            'video_id': videoId,
+          },
+        );
+      }
+      return null;
+    }
+  }
+
+  /// Generate user-friendly filename: Artist - Title.ext
+  /// Falls back to youtube_VIDEO_ID.ext if metadata unavailable
+  Future<String> _generateFilename(String videoId, String? title, String? artist, String ext) async {
+    if (title != null && title.isNotEmpty && artist != null && artist.isNotEmpty) {
+      final sanitizedTitle = _sanitizeFilename(title);
+      final sanitizedArtist = _sanitizeFilename(artist);
+      final filename = '$sanitizedArtist - $sanitizedTitle.$ext';
+      
+      // Check for duplicates and append number if needed
+      final cacheDir = await _getCacheDir();
+      var finalFilename = filename;
+      int counter = 1;
+      
+      while (await File(path.join(cacheDir, finalFilename)).exists()) {
+        final baseName = '$sanitizedArtist - $sanitizedTitle';
+        finalFilename = '$baseName ($counter).$ext';
+        counter++;
+      }
+      
+      return finalFilename;
+    }
+    
+    // Fallback to video ID format
+    return 'youtube_$videoId.$ext';
   }
 
   /// Verify yt-dlp binary is working
@@ -541,18 +802,49 @@ class YouTubeDownloadService {
   }
 
   /// Check if file is already cached
+  /// Checks both user-friendly filename and old youtube_VIDEO_ID.ext pattern
   Future<String?> _getCachedFile(String videoId) async {
     final cacheDir = await _getCacheDir();
 
-    // Check for common extensions
-    final extensions = ['webm', 'opus', 'm4a', 'mp3', 'ogg'];
+    // First, check if we have a cached user-friendly filename
+    if (_videoIdToFilename.containsKey(videoId)) {
+      final cachedFilename = _videoIdToFilename[videoId]!;
+      final filePath = path.join(cacheDir, cachedFilename);
+      final file = File(filePath);
+      if (await file.exists()) {
+        final size = await file.length();
+        if (size > 0) {
+          return filePath;
+        }
+      }
+      // Cached filename doesn't exist, remove from cache
+      _videoIdToFilename.remove(videoId);
+    }
+
+    // Also check for user-friendly filenames by scanning (in case cache was lost)
+    // This is slower but handles cases where app was restarted
+    try {
+      final dir = Directory(cacheDir);
+      await for (final entity in dir.list()) {
+        if (entity is File) {
+          final name = path.basenameWithoutExtension(entity.path);
+          // Check if filename contains video ID (unlikely but possible)
+          // Skip this check for performance - rely on video ID pattern instead
+        }
+      }
+    } catch (e) {
+      // Ignore scanning errors
+    }
+
+    // Fallback: Check for old youtube_VIDEO_ID.ext pattern (backward compatibility)
+    final extensions = ['webm', 'opus', 'm4a', 'mp3', 'ogg', 'm4a'];
 
     for (final ext in extensions) {
       final filePath = path.join(cacheDir, 'youtube_$videoId.$ext');
       final file = File(filePath);
       if (await file.exists()) {
         final size = await file.length();
-        if (size > 0) {  // Make sure file is not empty
+        if (size > 0) {
           return filePath;
         }
       }
@@ -562,10 +854,21 @@ class YouTubeDownloadService {
   }
 
   /// Find the downloaded file (yt-dlp may use different extensions)
+  /// Checks both user-friendly filenames and old youtube_VIDEO_ID.ext pattern
   Future<String?> _findDownloadedFile(String videoId) async {
     final cacheDir = await _getCacheDir();
     final dir = Directory(cacheDir);
     
+    // First check cached user-friendly filename
+    if (_videoIdToFilename.containsKey(videoId)) {
+      final cachedFilename = _videoIdToFilename[videoId]!;
+      final filePath = path.join(cacheDir, cachedFilename);
+      if (await File(filePath).exists()) {
+        return filePath;
+      }
+    }
+
+    // Check for temp download file (youtube_VIDEO_ID_temp.ext)
     List<FileSystemEntity> files;
     try {
       files = await dir.list().toList();
@@ -586,7 +889,11 @@ class YouTubeDownloadService {
     for (final file in files) {
       if (file is File) {
         final name = path.basename(file.path);
-        // Match: youtube_VIDEO_ID.EXT
+        // Match: youtube_VIDEO_ID_temp.EXT (temp download)
+        if (name.startsWith('youtube_${videoId}_temp.')) {
+          return file.path;
+        }
+        // Match: youtube_VIDEO_ID.EXT (old pattern, backward compatibility)
         if (name.startsWith('youtube_$videoId.')) {
           return file.path;
         }
@@ -597,6 +904,8 @@ class YouTubeDownloadService {
   }
 
   /// Clean up old cached files
+  /// Only cleans temp files (youtube_*_temp.*), not user-friendly named files
+  /// User-friendly files in ~/Music should be managed by the user
   Future<void> cleanOldFiles({Duration maxAge = const Duration(hours: 24)}) async {
     try {
       final cacheDir = await _getCacheDir();
@@ -609,7 +918,9 @@ class YouTubeDownloadService {
       for (final file in files) {
         if (file is File) {
           final name = path.basename(file.path);
-          if (name.startsWith('youtube_')) {
+          // Only clean up temp files and old youtube_VIDEO_ID.ext pattern files
+          // Don't delete user-friendly named files (Artist - Title.ext)
+          if (name.startsWith('youtube_') && (name.contains('_temp.') || !name.contains(' - '))) {
             final stat = await file.stat();
             final age = now.difference(stat.modified);
 
@@ -623,7 +934,7 @@ class YouTubeDownloadService {
       }
 
       if (deletedCount > 0) {
-        print('[YouTube Download] Cleaned up $deletedCount old file(s)');
+        print('[YouTube Download] Cleaned up $deletedCount old temp file(s)');
       }
     } catch (e, stackTrace) {
       print('[YouTube Download] Error cleaning cache: $e');

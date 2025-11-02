@@ -805,7 +805,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         index: _selectedIndex,
                         children: [
                           LibraryScreen(key: _libraryKey, onSongTap: _playSong, currentSong: _playbackService.currentSong),
-                          SearchScreen(onSongTap: _playSong),
+                          SearchScreen(
+                            onSongTap: _playSong,
+                            onLibraryRefresh: () => _libraryKey.currentState?.refreshLibrary(),
+                          ),
                           const DownloadsScreen(),
                           NowPlayingScreen(playbackService: _playbackService),
                           const SettingsScreen(),

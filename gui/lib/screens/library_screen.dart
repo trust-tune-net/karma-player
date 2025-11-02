@@ -163,6 +163,11 @@ class LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  /// Public method to trigger library refresh (can be called from other screens)
+  void refreshLibrary() {
+    _scanMusicFolder();
+  }
+
   Future<void> _scanMusicFolder() async {
     setState(() {
       _isScanning = true;
@@ -195,7 +200,8 @@ class LibraryScreenState extends State<LibraryScreen> {
 
       // Group songs by album folder
       final Map<String, List<Song>> albumMap = {};
-      final supportedExtensions = ['.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg'];
+      // Include .webm and .opus for YouTube downloads
+      final supportedExtensions = ['.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg', '.webm', '.opus'];
       final artworkNames = ['folder.jpg', 'folder.png', 'cover.jpg', 'cover.png', 'artwork.jpg'];
 
       // Regex patterns for disc folders (case-insensitive)
@@ -214,6 +220,36 @@ class LibraryScreenState extends State<LibraryScreen> {
             var albumPath = path.dirname(entity.path);
             var folderName = path.basename(albumPath);
 
+            // Special handling: If file is directly in Music folder, treat it as single-song album
+            // Use the filename (without extension) as the album name
+            if (albumPath == musicDir.path) {
+              // File is in root Music folder - use filename as album name
+              final fileNameWithoutExt = path.basenameWithoutExtension(entity.path);
+              albumPath = entity.path; // Use file path as album path (unique per file)
+              final albumName = fileNameWithoutExt;
+              
+              // Extract artist from filename (format: "Artist - Title")
+              String artistName = 'Unknown Artist';
+              final nameParts = albumName.split(' - ');
+              if (nameParts.length >= 2) {
+                final firstPart = nameParts[0].trim();
+                if (!_isYear(firstPart)) {
+                  artistName = firstPart;
+                }
+              } else if (!_isYear(albumName)) {
+                artistName = albumName;
+              }
+
+              filesToProcess.add({
+                'path': entity.path,
+                'albumPath': albumPath,
+                'albumName': albumName,
+                'artistName': artistName,
+              });
+              continue; // Skip normal folder-based processing
+            }
+
+            // Normal folder-based processing for files in subfolders
             // Check if this is a disc folder (Disc 1, CD 2, etc.)
             bool isDiscFolder = discPatterns.any((pattern) => pattern.hasMatch(folderName));
 
