@@ -139,11 +139,13 @@ class YouTubeDownloadService {
   /// Downloads are cached by video ID to avoid duplicate downloads.
   /// 
   /// [title] and [artist] optional - if provided, will be used for filename instead of extracting metadata
+  /// [onProgress] optional callback for download progress (0.0 to 1.0)
   /// [onDownloadComplete] optional callback called after successful download
   Future<String?> downloadAudio(
     String videoId, {
     String? title,
     String? artist,
+    void Function(double progress)? onProgress,
     VoidCallback? onDownloadComplete,
   }) async {
     // Wait for any ongoing cancellation to complete (prevents race conditions)
@@ -227,6 +229,7 @@ class YouTubeDownloadService {
       videoId,
       title: title,
       artist: artist,
+      onProgress: onProgress,
       onDownloadComplete: onDownloadComplete,
     );
     _activeDownloads[videoId] = downloadFuture;
@@ -258,6 +261,7 @@ class YouTubeDownloadService {
     String? title,
     String? artist,
     int retryCount = 0,
+    void Function(double progress)? onProgress,
     VoidCallback? onDownloadComplete,
   }) async {
     const maxRetries = 2;
@@ -377,13 +381,24 @@ class YouTubeDownloadService {
             final line = String.fromCharCodes(data).trim();
             stdout.add(line);
 
-            // Log progress
+            // Log progress and report to callback
             if (line.contains('[download]')) {
               // Extract percentage if available
               final match = RegExp(r'\[download\]\s+(\d+\.\d+)%').firstMatch(line);
               if (match != null) {
-                final percent = match.group(1);
-                print('[YouTube Download] Progress: $percent%');
+                final percentStr = match.group(1);
+                if (percentStr != null) {
+                  final percent = double.tryParse(percentStr);
+                  if (percent != null) {
+                    final progress = percent / 100.0; // Convert to 0.0-1.0
+                    print('[YouTube Download] Progress: ${percent.toStringAsFixed(1)}%');
+                    
+                    // Report progress to callback
+                    if (onProgress != null) {
+                      onProgress(progress);
+                    }
+                  }
+                }
               }
             }
           } catch (e) {
@@ -598,6 +613,7 @@ class YouTubeDownloadService {
           title: title,
           artist: artist,
           retryCount: retryCount + 1,
+          onProgress: onProgress,
           onDownloadComplete: onDownloadComplete,
         );
       }
@@ -949,6 +965,69 @@ class YouTubeDownloadService {
         },
       );
     }
+  }
+
+  /// Cancel an active download for a specific video ID
+  Future<void> cancelDownload(String videoId) async {
+    if (!_activeDownloads.containsKey(videoId)) {
+      print('[YouTube Download] No active download to cancel for $videoId');
+      return;
+    }
+
+    print('[YouTube Download] ⏹️  Canceling download: $videoId');
+    
+    // Wait for any ongoing cancellation to complete
+    if (_cancellationLock != null) {
+      await _cancellationLock;
+    }
+
+    // Create cancellation lock
+    final completer = Completer<void>();
+    _cancellationLock = completer.future;
+
+    try {
+      // Cancel stream subscriptions first (prevents SIGPIPE)
+      final subscriptions = _activeSubscriptions[videoId];
+      if (subscriptions != null) {
+        for (final sub in subscriptions) {
+          await sub.cancel();
+        }
+        _activeSubscriptions.remove(videoId);
+      }
+
+      // Small delay to ensure streams are fully closed
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Kill the process
+      final process = _activeProcesses[videoId];
+      if (process != null) {
+        try {
+          process.kill();
+          print('[YouTube Download] ✅ Process killed for $videoId');
+        } catch (e) {
+          print('[YouTube Download] Error killing process: $e (may already be dead)');
+        }
+        _activeProcesses.remove(videoId);
+      }
+
+      // Remove from active downloads
+      _activeDownloads.remove(videoId);
+
+      // Clear current download ID if it matches
+      if (_currentDownloadId == videoId) {
+        _currentDownloadId = null;
+      }
+
+      print('[YouTube Download] ✅ Download canceled for $videoId');
+    } finally {
+      _cancellationLock = null;
+      completer.complete();
+    }
+  }
+
+  /// Check if a download is currently in progress for the given video ID
+  bool isDownloading(String videoId) {
+    return _activeDownloads.containsKey(videoId);
   }
 
   /// Delete a specific cached file

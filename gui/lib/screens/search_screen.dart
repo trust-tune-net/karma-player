@@ -12,6 +12,7 @@ import '../services/transmission_client.dart';
 import '../services/playback_service.dart';
 import '../services/youtube_download_service.dart';
 import '../services/analytics_service.dart';
+import '../widgets/youtube_download_progress_dialog.dart';
 import '../main.dart';
 
 enum SourceFilter { all, torrents, streaming }
@@ -303,58 +304,136 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         print('[YouTube Download]    Video ID: $sourceId');
         print('[YouTube Download]    Title: $title');
 
-        // Show warning toast about beta phase and patience
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please be patient - Beta phase. Stream should start shortly...'),
-            backgroundColor: Colors.amber,
-            duration: const Duration(seconds: 6),
-          ),
-        );
 
-        // Download audio using yt-dlp with callback to refresh library
-        // Pass title (and artist if available) to avoid metadata extraction
-        final filePath = await _youtubeDownloadService.downloadAudio(
-          sourceId,
-          title: title,
-          artist: source['artist'], // Pass artist if available in source
-          onDownloadComplete: widget.onLibraryRefresh,
-        );
-
-        if (filePath == null || filePath.isEmpty) {
-          throw Exception('Failed to download YouTube audio');
+        // Check if already downloading this video
+        if (_youtubeDownloadService.isDownloading(sourceId)) {
+          print('[YouTube Download] Already downloading $sourceId, skipping...');
+          return; // Don't show dialog again if already downloading
         }
 
-        print('[YouTube Download] ✅ Ready for playback');
-        print('[YouTube Download]    File: $filePath');
+        // Track progress for dialog updates
+        double downloadProgress = 0.0;
+        BuildContext? dialogContext;
+        void Function(VoidCallback)? setDialogState;
+        bool isCanceled = false;
 
-        // Create a Song object with local file path
-        final downloadedSong = Song(
-          id: sourceId,
-          title: title,
-          artist: 'YouTube Music',
-          filePath: filePath,  // Local file path
-          format: 'WEBM',
-          bitrate: null,
+        // Show beautiful progress dialog with StatefulBuilder for real-time updates
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContextParam) {
+            dialogContext = dialogContextParam;
+            return StatefulBuilder(
+              builder: (context, setState) {
+                // Capture setState so progress callback can call it
+                setDialogState = setState;
+                
+                return YouTubeDownloadProgressDialog(
+                  title: title,
+                  artist: source['artist'],
+                  progress: downloadProgress,
+                  onCancel: () async {
+                    // Cancel the download
+                    isCanceled = true;
+                    await _youtubeDownloadService.cancelDownload(sourceId);
+                    
+                    // Close dialog
+                    if (mounted && dialogContext != null) {
+                      Navigator.of(dialogContext!).pop();
+                    }
+                    
+                    // Show cancel message
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Download canceled'),
+                          backgroundColor: Colors.orange,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                );
+              },
+            );
+          },
         );
 
-        // Play using shared playback service
         try {
-          widget.onSongTap?.call(downloadedSong);
-        } catch (e, stackTrace) {
-          print('[YouTube Download] Error calling onSongTap: $e');
-          AnalyticsService().captureError(
-            e,
-            stackTrace,
-            context: 'youtube_play_callback',
-            extras: {
-              'video_id': sourceId,
-              'title': title,
-            },
+          // Update progress callback that triggers dialog rebuild
+          void updateProgress(double progress) {
+            if (isCanceled) return; // Don't update if canceled
+            downloadProgress = progress;
+            if (mounted && setDialogState != null) {
+              setDialogState?.call(() {});
+            }
+          }
+
+          // Download audio using yt-dlp with callback to refresh library
+          // Pass title (and artist if available) to avoid metadata extraction
+          final filePath = await _youtubeDownloadService.downloadAudio(
+            sourceId,
+            title: title,
+            artist: source['artist'], // Pass artist if available in source
+            onProgress: updateProgress,
+            onDownloadComplete: widget.onLibraryRefresh,
           );
-          // Rethrow to be caught by outer handler
-          rethrow;
+
+          // Check if canceled before proceeding
+          if (isCanceled) {
+            return;
+          }
+
+          // Close progress dialog
+          if (mounted && dialogContext != null) {
+            Navigator.of(dialogContext!).pop();
+          }
+
+          if (filePath == null || filePath.isEmpty) {
+            throw Exception('Failed to download YouTube audio');
+          }
+
+          print('[YouTube Download] ✅ Ready for playback');
+          print('[YouTube Download]    File: $filePath');
+
+          // Create a Song object with local file path
+          final downloadedSong = Song(
+            id: sourceId,
+            title: title,
+            artist: 'YouTube Music',
+            filePath: filePath,  // Local file path
+            format: 'WEBM',
+            bitrate: null,
+          );
+
+          // Play using shared playback service
+          try {
+            widget.onSongTap?.call(downloadedSong);
+          } catch (e, stackTrace) {
+            print('[YouTube Download] Error calling onSongTap: $e');
+            AnalyticsService().captureError(
+              e,
+              stackTrace,
+              context: 'youtube_play_callback',
+              extras: {
+                'video_id': sourceId,
+                'title': title,
+              },
+            );
+            // Rethrow to be caught by outer handler
+            rethrow;
+          }
+        } catch (e) {
+          // Close dialog if still open on error (unless it was canceled)
+          if (!isCanceled && mounted && dialogContext != null) {
+            Navigator.of(dialogContext!).pop();
+          }
+          
+          // Only rethrow if not canceled (cancellation is expected)
+          if (!isCanceled) {
+            rethrow;
+          }
         }
 
         if (!mounted) return;
