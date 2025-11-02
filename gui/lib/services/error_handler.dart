@@ -208,6 +208,34 @@ class ErrorHandler {
     await _logError('STARTUP ERROR', error ?? message, stack, message);
   }
 
+  /// Log an expected/normal error (does NOT report to GlitchTip)
+  /// Use for errors that are part of normal operation:
+  /// - Device disconnections
+  /// - Missing optional resources
+  /// - User-initiated actions that fail gracefully
+  /// - Platform-specific limitations
+  Future<void> logExpectedError(
+    String context,
+    Object error, {
+    StackTrace? stackTrace,
+    Map<String, dynamic>? extras,
+  }) async {
+    final buffer = StringBuffer();
+    buffer.writeln('[EXPECTED ERROR] Context: $context');
+    buffer.writeln('[EXPECTED ERROR] Error: $error');
+    if (extras != null && extras.isNotEmpty) {
+      buffer.writeln('[EXPECTED ERROR] Extras: $extras');
+    }
+    if (stackTrace != null) {
+      buffer.writeln('[EXPECTED ERROR] Stack trace:\n$stackTrace');
+    }
+
+    print(buffer.toString());
+    await _logError('EXPECTED ERROR', error, stackTrace, context);
+    // NOTE: Do NOT call AnalyticsService().captureError() here
+    // These are expected errors that don't need reporting
+  }
+
   /// Get all log files for debugging
   Future<List<File>> getLogFiles() async {
     try {

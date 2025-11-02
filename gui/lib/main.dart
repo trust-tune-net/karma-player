@@ -15,6 +15,7 @@ import 'services/playback_service.dart';
 import 'services/error_handler.dart';
 import 'services/analytics_service.dart';
 import 'services/metadata_service.dart';
+import 'services/audio_device_service.dart';
 import 'screens/now_playing_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/downloads_screen.dart';
@@ -226,6 +227,25 @@ Future<void> _runApp() async {
   } catch (e, stackTrace) {
     await errorHandler.logStartupError('⚠️  MetadataService initialization failed (will use file size estimation)', e, stackTrace);
     // Not critical - we'll fall back to estimation
+  }
+
+  // Initialize AudioDeviceService for audio output selection
+  try {
+    await AudioDeviceService().initialize();
+    await errorHandler.logStartup('✅ AudioDeviceService initialized (cross-platform audio device selection enabled)');
+  } catch (e, stackTrace) {
+    await errorHandler.logStartupError('⚠️  AudioDeviceService initialization failed (audio device selection may not work)', e, stackTrace);
+    // This is a critical service failure - report to GlitchTip
+    AnalyticsService().captureError(
+      e,
+      stackTrace,
+      context: 'audio_device_service_init',
+      extras: {
+        'platform': Platform.operatingSystem,
+        'critical': true,
+      },
+    );
+    // Not critical for app startup - app will continue without device selection
   }
 
   // Note: FFprobe verification moved to background (after UI is visible)

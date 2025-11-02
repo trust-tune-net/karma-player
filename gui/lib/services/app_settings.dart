@@ -14,6 +14,7 @@ class AppSettings extends ChangeNotifier {
   String searchApiUrl = defaultSearchApiUrl;
   String transmissionRpcUrl = 'http://localhost:9091';
   String? customDownloadDir;
+  String? selectedAudioDeviceId;
 
   // Statistics
   int totalPlays = 0;
@@ -38,6 +39,7 @@ class AppSettings extends ChangeNotifier {
     totalPlays = prefs.getInt('total_plays') ?? 0;
     totalDownloadedBytes = prefs.getInt('total_downloaded_bytes') ?? 0;
     albumCount = prefs.getInt('album_count') ?? 0;
+    selectedAudioDeviceId = prefs.getString('selected_audio_device_id');
 
     // Load completed torrent IDs
     final completedIds = prefs.getStringList('completed_torrent_ids') ?? [];
@@ -77,6 +79,17 @@ class AppSettings extends ChangeNotifier {
     customDownloadDir = dir;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('custom_download_dir', dir);
+  }
+
+  Future<void> saveSelectedAudioDevice(String deviceName) async {
+    selectedAudioDeviceId = deviceName.isEmpty ? null : deviceName;
+    final prefs = await SharedPreferences.getInstance();
+    if (selectedAudioDeviceId != null) {
+      await prefs.setString('selected_audio_device_id', selectedAudioDeviceId!);
+    } else {
+      await prefs.remove('selected_audio_device_id');
+    }
+    notifyListeners();
   }
 
   Future<void> incrementPlays() async {

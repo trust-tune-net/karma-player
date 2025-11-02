@@ -5,7 +5,7 @@ import FlutterMacOS
 class AppDelegate: FlutterAppDelegate {
   override func applicationDidFinishLaunching(_ notification: Notification) {
     // CRITICAL FIX: Ignore SIGPIPE at the OS signal level
-    // 
+    //
     // This prevents the app from being terminated when writing to closed pipes,
     // which commonly happens when:
     // 1. macOS closes stdout/stderr when app is backgrounded
@@ -19,7 +19,7 @@ class AppDelegate: FlutterAppDelegate {
     // This is standard practice used by Chrome, Firefox, VS Code, and all major macOS apps.
     // See: https://man7.org/linux/man-pages/man2/signal.2.html
     signal(SIGPIPE, SIG_IGN)
-    
+
     super.applicationDidFinishLaunching(notification)
   }
   

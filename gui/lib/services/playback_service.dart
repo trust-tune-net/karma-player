@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import '../models/song.dart';
 import 'analytics_service.dart';
+import 'audio_device_service.dart';
+import 'error_handler.dart';
 
 enum RepeatMode { off, all, one }
 
@@ -37,6 +40,9 @@ class PlaybackService extends ChangeNotifier {
   StreamSubscription? _durationSubscription;
   StreamSubscription? _completedSubscription;
 
+  // Audio device service reference
+  final AudioDeviceService _audioDeviceService = AudioDeviceService();
+
   // Getters
   Player? get player => _player;
   bool get isPlayerInitialized => _playerInitialized;
@@ -59,6 +65,9 @@ class PlaybackService extends ChangeNotifier {
     try {
       print('[PLAYBACK] Initializing MediaKit Player...');
       _player = Player();
+
+      // Apply audio device selection if available
+      _applyAudioDevice();
 
       // Listen to playback state changes
       _playingSubscription = _player!.stream.playing.listen(
@@ -129,6 +138,9 @@ class PlaybackService extends ChangeNotifier {
       _player!.setVolume(_volume * 100);
       _playerInitialized = true;
       print('[PLAYBACK] ✅ Player initialized successfully');
+      
+      // Listen to audio device changes
+      _audioDeviceService.addListener(_onAudioDeviceChanged);
     } catch (e, stackTrace) {
       _playerError = 'Failed to initialize audio player: $e';
       _playerInitialized = false;
@@ -406,6 +418,75 @@ class PlaybackService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Apply the selected audio device to the player
+  void _applyAudioDevice() {
+    if (_player == null || !_playerInitialized) return;
+    
+    AudioDevice? device;
+    try {
+      device = _audioDeviceService.getDeviceForPlayer();
+      if (device != null) {
+        print('[PLAYBACK] Setting audio device to: ${device.name}');
+        
+        // MediaKit's Player.setAudioDevice() expects an AudioDevice object
+        _player!.setAudioDevice(device);
+        print('[PLAYBACK] ✓ Audio device set successfully');
+      } else {
+        print('[PLAYBACK] Using system default audio device');
+      }
+    } catch (e, stackTrace) {
+      print('[PLAYBACK] ❌ Error setting audio device: $e');
+      
+      // Check if this is a platform-specific limitation (expected)
+      final errorString = e.toString().toLowerCase();
+      final isPlatformLimitation = errorString.contains('not supported') ||
+          errorString.contains('not available') ||
+          errorString.contains('platform');
+      
+      if (isPlatformLimitation) {
+        // Log as expected - some platforms may not support device switching at runtime
+        ErrorHandler().logExpectedError(
+          'playback_set_audio_device_platform_limitation',
+          e,
+          stackTrace: stackTrace,
+          extras: {
+            'platform': Platform.operatingSystem,
+            'device_name': device?.name ?? 'unknown',
+          },
+        );
+      } else {
+        // Unexpected error - API violation, memory issue, etc. - report to GlitchTip
+        AnalyticsService().captureError(
+          e,
+          stackTrace,
+          context: 'playback_set_audio_device',
+          extras: {
+            'platform': Platform.operatingSystem,
+            'device_name': device?.name ?? 'unknown',
+          },
+        );
+      }
+    }
+  }
+
+  /// Handle audio device changes
+  void _onAudioDeviceChanged() {
+    if (_playerInitialized && _player != null) {
+      print('[PLAYBACK] Audio device changed, applying new device...');
+      _applyAudioDevice();
+      
+      // If currently playing, we may need to reopen media for device change to take effect
+      // However, this can cause playback interruption, so we'll let it apply on next track
+      // or user can manually pause/resume if needed
+    }
+  }
+
+  /// Change the audio device (called from UI)
+  Future<void> changeAudioDevice(AudioDevice device) async {
+    await _audioDeviceService.selectDevice(device);
+    // Device change will trigger _onAudioDeviceChanged via listener
+  }
+
   // Queue management
   void toggleShuffle() {
     _isShuffle = !_isShuffle;
@@ -487,6 +568,9 @@ class PlaybackService extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Remove audio device listener
+    _audioDeviceService.removeListener(_onAudioDeviceChanged);
+    
     // Cancel all stream subscriptions FIRST (prevents EXC_BAD_ACCESS)
     _playingSubscription?.cancel();
     _positionSubscription?.cancel();
