@@ -140,7 +140,7 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
                   // Content
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 32), // Space for Cancel button
+                      padding: const EdgeInsets.only(bottom: 32, right: 24), // Space for Cancel button and close button
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,12 +243,15 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
                                     color: Colors.amber.withOpacity(0.9),
                                   ),
                                   const SizedBox(width: 5),
-                                  Text(
-                                    'Beta phase - Takes a while to begin, please be patient',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.amber.withOpacity(0.9),
+                                  Flexible(
+                                    child: Text(
+                                      'Beta - May take a while to start',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.amber.withOpacity(0.9),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],

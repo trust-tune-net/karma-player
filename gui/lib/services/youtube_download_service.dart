@@ -431,16 +431,23 @@ class YouTubeDownloadService {
         '-f', 'bestaudio',
         '--extract-audio',
         '--audio-format', 'm4a',
-        '--embed-metadata',
-        '--add-metadata',
-        '--embed-thumbnail',
-        '--convert-thumbnails', 'jpg',
       ];
 
-      // Add ffmpeg location if available
+      // Add metadata embedding flags ONLY if ffmpeg is available
+      // These require ffmpeg/ffprobe for thumbnail conversion and embedding
       final ffmpegLoc = ffmpegPath;
       if (ffmpegLoc != null) {
-        args.addAll(['--ffmpeg-location', ffmpegLoc]);
+        args.addAll([
+          '--embed-metadata',
+          '--add-metadata',
+          '--embed-thumbnail',
+          '--convert-thumbnails', 'jpg',
+          '--ffmpeg-location', ffmpegLoc,
+        ]);
+        print('[YouTube Download] Using ffmpeg for metadata embedding: $ffmpegLoc');
+      } else {
+        print('[YouTube Download] WARNING: ffmpeg not found - downloading without metadata embedding');
+        print('[YouTube Download] Install ffmpeg for album artwork and metadata tags');
       }
 
       // Add remaining arguments
