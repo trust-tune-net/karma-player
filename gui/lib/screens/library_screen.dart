@@ -42,6 +42,10 @@ class LibraryScreenState extends State<LibraryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // Format filter state
+  Set<String> _selectedFormats = {};
+  bool get _hasActiveFormatFilter => _selectedFormats.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -588,7 +592,14 @@ class LibraryScreenState extends State<LibraryScreen> {
         return title.contains(query) || artist.contains(query);
       }).toList();
     }
-    
+
+    // Apply format filter
+    if (_selectedFormats.isNotEmpty) {
+      albums = albums.where((album) {
+        return album.format != null && _selectedFormats.contains(album.format);
+      }).toList();
+    }
+
     // Apply sorting
     albums.sort((a, b) {
       int comparison = 0;
@@ -632,6 +643,29 @@ class LibraryScreenState extends State<LibraryScreen> {
       return int.tryParse(match.group(0) ?? '');
     }
     return null;
+  }
+
+  /// Get all unique formats from the album list
+  Set<String> _getAllFormats() {
+    return _albums
+        .where((album) => album.format != null)
+        .map((album) => album.format!)
+        .toSet();
+  }
+
+  /// Get count of albums for a specific format
+  int _getFormatCount(String format) {
+    return _albums.where((album) => album.format == format).length;
+  }
+
+  /// Get color for a format badge (lossless = purple, lossy = gray)
+  Color _getFormatColor(String format) {
+    // Lossless formats
+    const losslessFormats = ['FLAC', 'ALAC', 'APE', 'WAV', 'DSD', 'AIFF'];
+    if (losslessFormats.contains(format.toUpperCase())) {
+      return const Color(0xFFA855F7); // Purple for lossless
+    }
+    return const Color(0xFF999999); // Gray for lossy
   }
 
   @override
@@ -902,6 +936,97 @@ class LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          // Format filter chips
+          if (_albums.isNotEmpty && _getAllFormats().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 12.0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Clear filters button (only shown when filters are active)
+                    if (_hasActiveFormatFilter)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: OutlinedButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedFormats.clear();
+                            });
+                          },
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E1E1E),
+                            side: const BorderSide(
+                              color: Color(0xFF333333),
+                              width: 1,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            'Clear filters',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF888888),
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Format filter chips
+                    ..._getAllFormats().map((format) {
+                      final count = _getFormatCount(format);
+                      final isSelected = _selectedFormats.contains(format);
+                      final formatColor = _getFormatColor(format);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: FilterChip(
+                          label: Text(
+                            '$format ($count)',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? Colors.white : formatColor,
+                            ),
+                          ),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedFormats.add(format);
+                              } else {
+                                _selectedFormats.remove(format);
+                              }
+                            });
+                          },
+                          backgroundColor: isSelected
+                              ? formatColor.withOpacity(0.2)
+                              : const Color(0xFF1E1E1E),
+                          selectedColor: formatColor.withOpacity(0.3),
+                          side: BorderSide(
+                            color: isSelected
+                                ? formatColor.withOpacity(0.8)
+                                : const Color(0xFF333333),
+                            width: 1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          showCheckmark: false,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      );
+                    }),
+                  ],
+                ),
               ),
             ),
           Expanded(
