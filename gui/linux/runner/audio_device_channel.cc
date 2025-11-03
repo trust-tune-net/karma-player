@@ -128,11 +128,11 @@ static void sink_info_callback(pa_context* context, const pa_sink_info* info, in
   else if (is_builtin) transport_type = "builtin";
 
   fl_value_set_string_take(device_map, "transportType", fl_value_new_string(transport_type.c_str()));
-  fl_value_set_take(device_map, "isBluetooth", fl_value_new_bool(is_bluetooth));
-  fl_value_set_take(device_map, "isUSB", fl_value_new_bool(is_usb));
-  fl_value_set_take(device_map, "isBuiltIn", fl_value_new_bool(is_builtin));
-  fl_value_set_take(device_map, "isAirPlay", fl_value_new_bool(false));
-  fl_value_set_take(device_map, "isOutput", fl_value_new_bool(true));
+  fl_value_set(device_map, fl_value_new_string("isBluetooth"), fl_value_new_bool(is_bluetooth));
+  fl_value_set(device_map, fl_value_new_string("isUSB"), fl_value_new_bool(is_usb));
+  fl_value_set(device_map, fl_value_new_string("isBuiltIn"), fl_value_new_bool(is_builtin));
+  fl_value_set(device_map, fl_value_new_string("isAirPlay"), fl_value_new_bool(false));
+  fl_value_set(device_map, fl_value_new_string("isOutput"), fl_value_new_bool(true));
 
   g_audio_context.devices.push_back(device_map);
 }
@@ -148,7 +148,7 @@ static void server_info_callback(pa_context* context, const pa_server_info* info
           fl_value_set_string_take(device_map, "id", fl_value_new_string(sink_info->name));
           fl_value_set_string_take(device_map, "deviceId", fl_value_new_string(sink_info->name));
           fl_value_set_string_take(device_map, "name", fl_value_new_string(sink_info->description ? sink_info->description : sink_info->name));
-          fl_value_set_take(device_map, "isOutput", fl_value_new_bool(true));
+          fl_value_set(device_map, fl_value_new_string("isOutput"), fl_value_new_bool(true));
           g_audio_context.default_device = device_map;
         }
         if (eol >= 0) {
@@ -222,7 +222,7 @@ static FlValue* set_audio_device(const char* device_id) {
   std::cout << "[AudioDeviceChannel] Note: Device selection handled by MediaKit/MPV" << std::endl;
 
   FlValue* response = fl_value_new_map();
-  fl_value_set_take(response, "success", fl_value_new_bool(true));
+  fl_value_set(response, fl_value_new_string("success"), fl_value_new_bool(true));
   return response;
 }
 
@@ -253,13 +253,13 @@ static FlMethodResponse* handle_method_call(FlMethodCall* method_call) {
   else if (strcmp(method, kSupportsExclusiveModeMethod) == 0) {
     // PulseAudio doesn't have exclusive mode like WASAPI
     FlValue* response = fl_value_new_map();
-    fl_value_set_take(response, "supported", fl_value_new_bool(false));
+    fl_value_set(response, fl_value_new_string("supported"), fl_value_new_bool(false));
     return FL_METHOD_RESPONSE(fl_method_success_response_new(response));
   }
   else if (strcmp(method, kEnableExclusiveModeMethod) == 0) {
     // Not supported
     FlValue* response = fl_value_new_map();
-    fl_value_set_take(response, "success", fl_value_new_bool(false));
+    fl_value_set(response, fl_value_new_string("success"), fl_value_new_bool(false));
     return FL_METHOD_RESPONSE(fl_method_success_response_new(response));
   }
   else if (strcmp(method, kGetDeviceFormatMethod) == 0) {
@@ -278,7 +278,10 @@ static FlMethodResponse* handle_method_call(FlMethodCall* method_call) {
 
 // Register the audio device channel
 void audio_device_channel_register(FlPluginRegistry* registry) {
-  FlBinaryMessenger* messenger = fl_plugin_registry_get_messenger(registry);
+  // Get a registrar for our custom channel
+  g_autoptr(FlPluginRegistrar) registrar =
+      fl_plugin_registry_get_registrar_for_plugin(registry, "AudioDeviceChannel");
+  FlBinaryMessenger* messenger = fl_plugin_registrar_get_messenger(registrar);
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
