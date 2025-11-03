@@ -1122,6 +1122,10 @@ class LibraryScreenState extends State<LibraryScreen> {
       });
     }
 
+    // Check if we should use disc grouping (albums with >20 songs)
+    final useDiscGrouping = album.songs.length > 20;
+    final discGroups = useDiscGrouping ? _groupSongsByDisc(album.songs) : null;
+
     return CustomScrollView(
       slivers: [
           // Show loading indicator while fetching metadata
@@ -1280,24 +1284,160 @@ class LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
           ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final song = album.songs[index];
-                final isPlaying = widget.currentSong?.id == song.id;
+          // Render tracks with or without disc grouping
+          if (useDiscGrouping && discGroups != null)
+            ..._buildDiscGroupedTrackList(album, discGroups)
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final song = album.songs[index];
+                  final isPlaying = widget.currentSong?.id == song.id;
 
-                return _TrackListItem(
-                  song: song,
-                  isPlaying: isPlaying,
-                  onTap: () => widget.onSongTap(song, queue: album.songs),
-                );
-              },
-              childCount: album.songs.length,
+                  return _TrackListItem(
+                    song: song,
+                    isPlaying: isPlaying,
+                    onTap: () => widget.onSongTap(song, queue: album.songs),
+                  );
+                },
+                childCount: album.songs.length,
+              ),
             ),
-          ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
         ],
     );
+  }
+
+  /// Groups songs by their immediate parent folder (disc folder)
+  /// Returns a map of folder name to list of songs
+  Map<String, List<Song>> _groupSongsByDisc(List<Song> songs) {
+    final Map<String, List<Song>> groups = {};
+
+    for (final song in songs) {
+      // Extract the immediate parent folder from the file path
+      final parentDir = path.dirname(song.filePath);
+      final folderName = path.basename(parentDir);
+
+      if (!groups.containsKey(folderName)) {
+        groups[folderName] = [];
+      }
+      groups[folderName]!.add(song);
+    }
+
+    // Sort groups by folder name (so CD 1, CD 2, etc. appear in order)
+    final sortedGroups = Map.fromEntries(
+      groups.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
+    );
+
+    return sortedGroups;
+  }
+
+  /// Converts folder name to a nice disc label
+  /// Examples: "CD 1" → "Disc 1", "Disc 02" → "Disc 2", "cd3" → "Disc 3"
+  String _getDiscLabel(String folderName) {
+    // Try to extract number from common patterns
+    final patterns = [
+      RegExp(r'cd\s*(\d+)', caseSensitive: false),
+      RegExp(r'disc\s*(\d+)', caseSensitive: false),
+      RegExp(r'disk\s*(\d+)', caseSensitive: false),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(folderName);
+      if (match != null) {
+        final discNumber = int.tryParse(match.group(1) ?? '');
+        if (discNumber != null) {
+          return 'Disc $discNumber';
+        }
+      }
+    }
+
+    // Fallback: use folder name as-is
+    return folderName;
+  }
+
+  /// Builds sliver widgets for disc-grouped track lists
+  List<Widget> _buildDiscGroupedTrackList(Album album, Map<String, List<Song>> discGroups) {
+    final List<Widget> slivers = [];
+
+    for (final entry in discGroups.entries) {
+      final folderName = entry.key;
+      final songs = entry.value;
+      final discLabel = _getDiscLabel(folderName);
+
+      // Add disc header
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              border: Border(
+                top: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.album,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  discLabel,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '(${songs.length} tracks)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.white.withOpacity(0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Add tracks for this disc
+      slivers.add(
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final song = songs[index];
+              final isPlaying = widget.currentSong?.id == song.id;
+
+              return _TrackListItem(
+                song: song,
+                isPlaying: isPlaying,
+                onTap: () => widget.onSongTap(song, queue: album.songs),
+              );
+            },
+            childCount: songs.length,
+          ),
+        ),
+      );
+
+      // Add spacing between discs (except after last disc)
+      if (entry != discGroups.entries.last) {
+        slivers.add(
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 8),
+          ),
+        );
+      }
+    }
+
+    return slivers;
   }
 }
 
