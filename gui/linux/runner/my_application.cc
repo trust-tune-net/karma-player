@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "audio_device_channel.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -46,11 +47,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "trusttune_gui");
+    gtk_header_bar_set_title(header_bar, "KarmaPlayer");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "trusttune_gui");
+    gtk_window_set_title(window, "KarmaPlayer");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -72,6 +73,9 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  // Register audio device channel
+  audio_device_channel_register(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
