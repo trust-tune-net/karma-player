@@ -399,12 +399,12 @@ jobs:
 
           # Create ZIP from the Release directory
           cd Release
-          7z a -tzip ../../../../../../KarmaPlayer-Windows.zip *
+          7z a -tzip ../../../../../KarmaPlayer-Windows.zip *
 
-          cd ../../../../../..
           echo ""
           echo "✅ Created KarmaPlayer-Windows.zip"
-          ls -lh gui/KarmaPlayer-Windows.zip
+          cd ../../../../../
+          ls -lh KarmaPlayer-Windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
