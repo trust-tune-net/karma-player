@@ -384,83 +384,27 @@ jobs:
       - name: Create ZIP
         shell: bash
         run: |
-          RELEASE_DIR="gui/build/windows/x64/runner/Release"
-          BUILD_DIR="gui/build/windows/x64/runner"
-
-          echo "📂 Source directories:"
-          echo "  Release: $RELEASE_DIR"
-          echo "  Build: $BUILD_DIR"
+          # Simple approach: just zip the entire Release folder
+          # This includes everything: exe, DLLs, data folder, and bundled binaries
+          cd gui/build/windows/x64/runner
 
           # Verify Release directory exists
-          if [ ! -d "$RELEASE_DIR" ]; then
+          if [ ! -d "Release" ]; then
             echo "❌ Release directory not found!"
             exit 1
           fi
 
-          # Create a clean distribution directory
-          mkdir -p gui/windows-dist
+          echo "📦 Contents of Release folder:"
+          ls -lah Release/
 
-          echo "📦 Copying application files..."
+          # Create ZIP from the Release directory
+          cd Release
+          7z a -tzip ../../../../../../KarmaPlayer-Windows.zip *
 
-          # Copy the executable from Release folder
-          cp -v "$RELEASE_DIR/KarmaPlayer.exe" gui/windows-dist/
-
-          # Copy ALL DLLs from Release folder (Flutter runtime DLLs)
-          echo "📚 Copying Flutter DLLs from Release..."
-          cp -v "$RELEASE_DIR"/*.dll gui/windows-dist/ 2>/dev/null || echo "⚠️  No DLLs in Release folder"
-
-          # Copy data folder (contains flutter_assets and ICU data) - CRITICAL
-          if [ -d "$BUILD_DIR/data" ]; then
-            echo "📂 Copying Flutter data folder..."
-            cp -rv "$BUILD_DIR/data" gui/windows-dist/
-          else
-            echo "❌ data folder not found!"
-            exit 1
-          fi
-
-          # Copy bundled binaries (transmission, yt-dlp, ffprobe) from Release folder
-          echo "📥 Copying bundled binaries..."
-
-          if [ -f "$RELEASE_DIR/transmission-daemon.exe" ]; then
-            cp -v "$RELEASE_DIR"/transmission-*.exe gui/windows-dist/
-            cp -v "$RELEASE_DIR"/transmission-*.dll gui/windows-dist/
-            echo "✅ Transmission bundled"
-          else
-            echo "⚠️  transmission-daemon.exe not found in Release"
-          fi
-
-          if [ -f "$RELEASE_DIR/yt-dlp.exe" ]; then
-            cp -v "$RELEASE_DIR/yt-dlp.exe" gui/windows-dist/
-            echo "✅ yt-dlp bundled"
-          else
-            echo "⚠️  yt-dlp.exe not found in Release"
-          fi
-
-          if [ -f "$RELEASE_DIR/ffprobe.exe" ]; then
-            cp -v "$RELEASE_DIR/ffprobe.exe" gui/windows-dist/
-            echo "✅ ffprobe bundled"
-          else
-            echo "⚠️  ffprobe.exe not found in Release"
-          fi
-
-          echo ""
-          echo "📦 Final Windows distribution contents:"
-          ls -lah gui/windows-dist/
-          echo ""
-          echo "📂 Data folder check:"
-          ls -la gui/windows-dist/data/ || echo "❌ No data folder!"
-          echo ""
-          echo "💾 Total size:"
-          du -sh gui/windows-dist/
-
-          # Create ZIP from the distribution directory
-          cd gui/windows-dist
-          7z a -tzip ../KarmaPlayer-Windows.zip *
-
+          cd ../../../../../..
           echo ""
           echo "✅ Created KarmaPlayer-Windows.zip"
-          cd ..
-          ls -lh KarmaPlayer-Windows.zip
+          ls -lh gui/KarmaPlayer-Windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
