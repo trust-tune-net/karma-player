@@ -408,9 +408,20 @@ flutter::EncodableValue AudioDeviceChannel::GetDeviceMetadata(
     metadata[flutter::EncodableValue("format")] = format;
   }
 
-  // Get transport type
-  std::string transport = GetDeviceProperty(device, PKEY_AudioEndpoint_PhysicalSpeakers);
-  metadata[flutter::EncodableValue("transportType")] = flutter::EncodableValue(transport);
+  // Transport type is determined in DeviceToMap by analyzing device ID
+  // Re-determine it here using the same logic
+  bool is_bluetooth = device_id.find("Bluetooth") != std::string::npos ||
+                      device_id.find("BT") != std::string::npos;
+  bool is_usb = device_id.find("USB") != std::string::npos;
+  bool is_builtin = device_id.find("IntegratedSpeaker") != std::string::npos ||
+                    device_id.find("BuiltIn") != std::string::npos;
+
+  std::string transport_type = "other";
+  if (is_bluetooth) transport_type = "bluetooth";
+  else if (is_usb) transport_type = "usb";
+  else if (is_builtin) transport_type = "builtin";
+
+  metadata[flutter::EncodableValue("transportType")] = flutter::EncodableValue(transport_type);
 
   // Note: USB DAC chipset and Bluetooth codec detection would require additional Windows APIs
   // and device-specific queries. This is a placeholder for Phase 3 enhancement.
