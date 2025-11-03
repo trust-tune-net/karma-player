@@ -2,7 +2,6 @@
 #define RUNNER_AUDIO_DEVICE_CHANNEL_H_
 
 #include <flutter/method_channel.h>
-#include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
 #include <memory>
@@ -17,7 +16,7 @@ namespace audio_device {
 
 class AudioDeviceChannel {
  public:
-  static void RegisterWithRegistrar(flutter::PluginRegistrarWindows* registrar);
+  static void Register(flutter::BinaryMessenger* messenger);
 
   AudioDeviceChannel();
   virtual ~AudioDeviceChannel();

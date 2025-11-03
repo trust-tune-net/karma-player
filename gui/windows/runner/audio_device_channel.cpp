@@ -28,10 +28,9 @@ static constexpr char kEnableExclusiveModeMethod[] = "enableExclusiveMode";
 static constexpr char kGetDeviceFormatMethod[] = "getDeviceFormat";
 static constexpr char kGetDeviceMetadataMethod[] = "getDeviceMetadata";
 
-void AudioDeviceChannel::RegisterWithRegistrar(
-    flutter::PluginRegistrarWindows* registrar) {
+void AudioDeviceChannel::Register(flutter::BinaryMessenger* messenger) {
   auto channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-      registrar->messenger(), kChannelName,
+      messenger, kChannelName,
       &flutter::StandardMethodCodec::GetInstance());
 
   // Keep plugin alive for the lifetime of the application
