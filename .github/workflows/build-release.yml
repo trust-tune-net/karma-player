@@ -382,10 +382,38 @@ jobs:
           fi
 
       - name: Create ZIP
+        shell: bash
         run: |
-          cd gui/build/windows/x64/runner
-          Compress-Archive -Path Release -DestinationPath KarmaPlayer-Windows.zip
-          Move-Item KarmaPlayer-Windows.zip ../../../../KarmaPlayer-Windows.zip
+          BUILD_DIR="gui/build/windows/x64/runner"
+
+          # Create a clean distribution directory
+          mkdir -p gui/windows-dist
+
+          # Copy the executable from Release folder
+          cp "$BUILD_DIR/Release/KarmaPlayer.exe" gui/windows-dist/
+
+          # Copy all DLLs and dependencies from runner directory
+          cp "$BUILD_DIR"/*.dll gui/windows-dist/ 2>/dev/null || true
+
+          # Copy data folder (contains flutter_assets and ICU data)
+          if [ -d "$BUILD_DIR/data" ]; then
+            cp -r "$BUILD_DIR/data" gui/windows-dist/
+          fi
+
+          # Copy bundled binaries (transmission, yt-dlp, ffprobe)
+          cp "$BUILD_DIR"/transmission-*.exe gui/windows-dist/ 2>/dev/null || true
+          cp "$BUILD_DIR"/transmission-*.dll gui/windows-dist/ 2>/dev/null || true
+          cp "$BUILD_DIR"/yt-dlp.exe gui/windows-dist/ 2>/dev/null || true
+          cp "$BUILD_DIR"/ffprobe.exe gui/windows-dist/ 2>/dev/null || true
+
+          echo "📦 Windows distribution contents:"
+          ls -la gui/windows-dist/
+
+          # Create ZIP from the distribution directory
+          cd gui/windows-dist
+          7z a -tzip ../KarmaPlayer-Windows.zip *
+
+          echo "✅ Created KarmaPlayer-Windows.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
