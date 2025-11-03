@@ -46,6 +46,10 @@ class LibraryScreenState extends State<LibraryScreen> {
   Set<String> _selectedFormats = {};
   bool get _hasActiveFormatFilter => _selectedFormats.isNotEmpty;
 
+  // Album detail track filter state
+  final TextEditingController _albumTrackFilterController = TextEditingController();
+  String _albumTrackFilter = '';
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +71,13 @@ class LibraryScreenState extends State<LibraryScreen> {
         _searchQuery = _searchController.text.trim();
       });
     });
+
+    // Listen to album track filter changes
+    _albumTrackFilterController.addListener(() {
+      setState(() {
+        _albumTrackFilter = _albumTrackFilterController.text.trim().toLowerCase();
+      });
+    });
   }
 
   @override
@@ -74,6 +85,7 @@ class LibraryScreenState extends State<LibraryScreen> {
     _downloadPollTimer?.cancel();
     _autoRefreshTimer?.cancel();
     _searchController.dispose();
+    _albumTrackFilterController.dispose();
     super.dispose();
   }
 
@@ -1122,9 +1134,12 @@ class LibraryScreenState extends State<LibraryScreen> {
       });
     }
 
-    // Check if we should use disc grouping (albums with >20 songs)
-    final useDiscGrouping = album.songs.length > 20;
-    final discGroups = useDiscGrouping ? _groupSongsByDisc(album.songs) : null;
+    // Check if album actually has multiple disc folders
+    final discGroups = _groupSongsByDisc(album.songs);
+    final hasMultipleDiscs = discGroups.length > 1;
+
+    // Show filter for albums with many songs (>20)
+    final showFilter = album.songs.length > 20;
 
     return CustomScrollView(
       slivers: [
@@ -1158,6 +1173,8 @@ class LibraryScreenState extends State<LibraryScreen> {
               onPressed: () {
                 setState(() {
                   _selectedAlbum = null;
+                  // Clear album track filter when leaving detail view
+                  _albumTrackFilterController.clear();
                 });
               },
             ),
@@ -1280,18 +1297,61 @@ class LibraryScreenState extends State<LibraryScreen> {
                         ),
                   ),
                   const SizedBox(height: 12),
+                  // Show filter input for albums with many songs
+                  if (showFilter) ...[
+                    TextField(
+                      controller: _albumTrackFilterController,
+                      decoration: InputDecoration(
+                        hintText: 'Filter tracks...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: _albumTrackFilter.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _albumTrackFilterController.clear();
+                                },
+                                tooltip: 'Clear filter',
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFF1E1E1E),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      style: GoogleFonts.inter(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ],
               ),
             ),
           ),
           // Render tracks with or without disc grouping
-          if (useDiscGrouping && discGroups != null)
-            ..._buildDiscGroupedTrackList(album, discGroups)
+          if (hasMultipleDiscs)
+            ..._buildDiscGroupedTrackList(album, discGroups, _albumTrackFilter)
           else
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final song = album.songs[index];
+                  // Apply filter
+                  final filteredSongs = _albumTrackFilter.isEmpty
+                      ? album.songs
+                      : album.songs.where((song) {
+                          final title = song.title.toLowerCase();
+                          final artist = song.artist.toLowerCase();
+                          final album = song.album?.toLowerCase() ?? '';
+                          final query = _albumTrackFilter;
+                          return title.contains(query) ||
+                                 artist.contains(query) ||
+                                 album.contains(query);
+                        }).toList();
+
+                  if (index >= filteredSongs.length) return null;
+
+                  final song = filteredSongs[index];
                   final isPlaying = widget.currentSong?.id == song.id;
 
                   return _TrackListItem(
@@ -1300,7 +1360,17 @@ class LibraryScreenState extends State<LibraryScreen> {
                     onTap: () => widget.onSongTap(song, queue: album.songs),
                   );
                 },
-                childCount: album.songs.length,
+                childCount: _albumTrackFilter.isEmpty
+                    ? album.songs.length
+                    : album.songs.where((song) {
+                        final title = song.title.toLowerCase();
+                        final artist = song.artist.toLowerCase();
+                        final albumName = song.album?.toLowerCase() ?? '';
+                        final query = _albumTrackFilter;
+                        return title.contains(query) ||
+                               artist.contains(query) ||
+                               albumName.contains(query);
+                      }).length,
               ),
             ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
@@ -1357,12 +1427,28 @@ class LibraryScreenState extends State<LibraryScreen> {
   }
 
   /// Builds sliver widgets for disc-grouped track lists
-  List<Widget> _buildDiscGroupedTrackList(Album album, Map<String, List<Song>> discGroups) {
+  List<Widget> _buildDiscGroupedTrackList(Album album, Map<String, List<Song>> discGroups, String filter) {
     final List<Widget> slivers = [];
 
     for (final entry in discGroups.entries) {
       final folderName = entry.key;
-      final songs = entry.value;
+      var songs = entry.value;
+
+      // Apply filter if present
+      if (filter.isNotEmpty) {
+        songs = songs.where((song) {
+          final title = song.title.toLowerCase();
+          final artist = song.artist.toLowerCase();
+          final albumName = song.album?.toLowerCase() ?? '';
+          return title.contains(filter) ||
+                 artist.contains(filter) ||
+                 albumName.contains(filter);
+        }).toList();
+      }
+
+      // Skip disc if no songs match filter
+      if (songs.isEmpty) continue;
+
       final discLabel = _getDiscLabel(folderName);
 
       // Add disc header
