@@ -21,6 +21,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'analytics_service.dart';
 
+// Callback for progress updates (0.0 to 1.0)
+typedef ProgressCallback = void Function(double progress);
+
+// Callback for status updates during download phases
+typedef StatusCallback = void Function(String status);
+
 class YouTubeDownloadService {
   // Cache directory for YouTube downloads (platform-specific)
   String? _cacheDir;
@@ -137,15 +143,17 @@ class YouTubeDownloadService {
   ///
   /// Returns the local file path when ready for playback.
   /// Downloads are cached by video ID to avoid duplicate downloads.
-  /// 
+  ///
   /// [title] and [artist] optional - if provided, will be used for filename instead of extracting metadata
   /// [onProgress] optional callback for download progress (0.0 to 1.0)
+  /// [onStatus] optional callback for status updates during download phases
   /// [onDownloadComplete] optional callback called after successful download
   Future<String?> downloadAudio(
     String videoId, {
     String? title,
     String? artist,
-    void Function(double progress)? onProgress,
+    ProgressCallback? onProgress,
+    StatusCallback? onStatus,
     VoidCallback? onDownloadComplete,
   }) async {
     // Wait for any ongoing cancellation to complete (prevents race conditions)
@@ -230,6 +238,7 @@ class YouTubeDownloadService {
       title: title,
       artist: artist,
       onProgress: onProgress,
+      onStatus: onStatus,
       onDownloadComplete: onDownloadComplete,
     );
     _activeDownloads[videoId] = downloadFuture;
@@ -261,7 +270,8 @@ class YouTubeDownloadService {
     String? title,
     String? artist,
     int retryCount = 0,
-    void Function(double progress)? onProgress,
+    ProgressCallback? onProgress,
+    StatusCallback? onStatus,
     VoidCallback? onDownloadComplete,
   }) async {
     const maxRetries = 2;
@@ -355,6 +365,7 @@ class YouTubeDownloadService {
       // -f bestaudio: Get best audio quality
       // --no-playlist: Don't download playlists
       // --newline: Progress on separate lines (easier to parse)
+      // --progress: Force progress bar (better visibility)
       // --no-warnings: Reduce output noise
       final process = await Process.start(
         ytDlpPath,  // Use full path instead of relying on system PATH
@@ -362,6 +373,7 @@ class YouTubeDownloadService {
           '-f', 'bestaudio',
           '--no-playlist',
           '--newline',
+          '--progress',
           '--no-warnings',
           '-o', outputTemplate,
           url,
@@ -381,8 +393,21 @@ class YouTubeDownloadService {
             final line = String.fromCharCodes(data).trim();
             stdout.add(line);
 
-            // Log progress and report to callback
-            if (line.contains('[download]')) {
+            // Parse and report different download phases
+            if (line.contains('[youtube]')) {
+              // Phase 1: Connecting to YouTube
+              onStatus?.call('Connecting to YouTube...');
+            } else if (line.contains('[info]') && line.toLowerCase().contains('extract')) {
+              // Phase 2: Extracting video information
+              onStatus?.call('Extracting video info...');
+            } else if (line.contains('[info]')) {
+              // Phase 2: Resolving format/quality
+              onStatus?.call('Resolving best quality...');
+            } else if (line.contains('[download] Destination:')) {
+              // Phase 3: Starting download
+              onStatus?.call('Starting download...');
+            } else if (line.contains('[download]')) {
+              // Phase 4: Actual download with progress
               // Extract percentage if available
               final match = RegExp(r'\[download\]\s+(\d+\.\d+)%').firstMatch(line);
               if (match != null) {
@@ -392,11 +417,10 @@ class YouTubeDownloadService {
                   if (percent != null) {
                     final progress = percent / 100.0; // Convert to 0.0-1.0
                     print('[YouTube Download] Progress: ${percent.toStringAsFixed(1)}%');
-                    
-                    // Report progress to callback
-                    if (onProgress != null) {
-                      onProgress(progress);
-                    }
+
+                    // Report progress and status
+                    onProgress?.call(progress);
+                    onStatus?.call('Downloading...');
                   }
                 }
               }
@@ -623,6 +647,7 @@ class YouTubeDownloadService {
           artist: artist,
           retryCount: retryCount + 1,
           onProgress: onProgress,
+          onStatus: onStatus,
           onDownloadComplete: onDownloadComplete,
         );
       }

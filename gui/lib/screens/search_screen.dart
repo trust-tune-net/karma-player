@@ -312,8 +312,9 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           return; // Don't show dialog again if already downloading
         }
 
-        // Track progress for toast updates
+        // Track progress and status for toast updates
         double downloadProgress = 0.0;
+        String? downloadStatus;
         OverlayEntry? toastOverlay;
         void Function(VoidCallback)? setToastState;
         bool isCanceled = false;
@@ -332,11 +333,12 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                 builder: (context, setState) {
                   // Capture setState so progress callback can call it
                   setToastState = setState;
-                  
+
                   return YouTubeDownloadProgressToast(
                     title: title,
                     artist: source['artist'],
                     progress: downloadProgress,
+                    status: downloadStatus,
                     onCancel: () async {
                       // Cancel the download
                       isCanceled = true;
@@ -383,6 +385,15 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             }
           }
 
+          // Update status callback that triggers toast rebuild
+          void updateStatus(String status) {
+            if (isCanceled) return; // Don't update if canceled
+            downloadStatus = status;
+            if (mounted && setToastState != null) {
+              setToastState?.call(() {});
+            }
+          }
+
           // Download audio using yt-dlp with callback to refresh library
           // Pass title (and artist if available) to avoid metadata extraction
           final filePath = await _youtubeDownloadService.downloadAudio(
@@ -390,6 +401,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             title: title,
             artist: source['artist'], // Pass artist if available in source
             onProgress: updateProgress,
+            onStatus: updateStatus,
             onDownloadComplete: widget.onLibraryRefresh,
           );
 

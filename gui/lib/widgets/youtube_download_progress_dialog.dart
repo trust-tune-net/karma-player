@@ -6,6 +6,7 @@ class YouTubeDownloadProgressToast extends StatefulWidget {
   final String title;
   final String? artist;
   final double progress;
+  final String? status;
   final VoidCallback? onCancel;
   final VoidCallback? onDismiss;
 
@@ -14,6 +15,7 @@ class YouTubeDownloadProgressToast extends StatefulWidget {
     required this.title,
     this.artist,
     this.progress = 0.0,
+    this.status,
     this.onCancel,
     this.onDismiss,
   });
@@ -181,7 +183,7 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(3),
                                   child: LinearProgressIndicator(
-                                    value: progress,
+                                    value: progress > 0 ? progress : null, // null = indeterminate
                                     backgroundColor: Colors.transparent,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       const Color(0xFFA855F7),
@@ -193,22 +195,28 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Downloading...',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFFAAAAAA),
+                                  Expanded(
+                                    child: Text(
+                                      widget.status ?? 'Downloading...',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFFAAAAAA),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  Text(
-                                    '$progressPercent%',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFFA855F7),
+                                  if (progress > 0) ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '$progressPercent%',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFFA855F7),
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ],
