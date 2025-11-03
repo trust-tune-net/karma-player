@@ -255,13 +255,26 @@ class PlaybackService extends ChangeNotifier {
         print('[PLAYBACK] Opening media: ${song.filePath}');
         print('[PLAYBACK] Song title: ${song.title}');
 
-        // CRITICAL: Switch to macOS's current default device before playback
-        // This ensures audio plays through whatever device macOS is currently using
-        try {
-          await _audioDeviceService.switchToSystemDefault();
-        } catch (e) {
-          print('[PLAYBACK] ⚠️  Failed to switch to system default device: $e');
-          // Non-fatal - continue with playback
+        // Check if user has explicitly selected a device (not "auto")
+        final hasExplicitDevice = _audioDeviceService.selectedDevice != null &&
+            _audioDeviceService.selectedDevice!.name != 'auto';
+
+        if (!hasExplicitDevice) {
+          // Only switch to system default if user hasn't explicitly selected a device
+          // This ensures audio plays through whatever device the OS is currently using
+          print('[PLAYBACK] No explicit device selected, switching to system default');
+          try {
+            await _audioDeviceService.switchToSystemDefault();
+          } catch (e) {
+            print('[PLAYBACK] ⚠️  Failed to switch to system default device: $e');
+            // Non-fatal - continue with playback
+          }
+        } else {
+          // User has explicitly selected a device - honor that choice
+          // This is critical for exclusive mode (hog mode) to work correctly
+          print('[PLAYBACK] Using explicitly selected device: ${_audioDeviceService.selectedDevice!.description}');
+          // Ensure the user's selected device is applied to the player
+          _applyAudioDevice();
         }
 
         try {
