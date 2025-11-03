@@ -1,5 +1,5 @@
-name: karma_player
-description: "KarmaPlayer - AI-powered music discovery and playback"
+name: karmaplayer_mobile
+description: "KarmaPlayer Mobile - Audiophile music companion app"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,10 +16,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.10.12+1
+version: 1.0.0+1
 
 environment:
-  sdk: '>=3.5.0 <4.0.0'
+  sdk: ^3.9.2
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -34,44 +34,6 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-
-  # Networking
-  web_socket_channel: ^3.0.1
-  http: ^1.2.1
-
-  # State Management
-  flutter_riverpod: ^2.6.1
-
-  # Navigation
-  go_router: ^14.6.2
-
-  # Audio Player (like Spotube) - using audio-only libs for better compatibility
-  media_kit: ^1.1.11
-  media_kit_libs_audio: ^1.0.2
-  media_kit_libs_windows_audio: ^1.0.2
-  media_kit_libs_macos_audio: ^1.0.2
-  media_kit_libs_linux: ^1.0.1
-
-  # File System
-  path_provider: ^2.1.5
-  path: ^1.9.0
-  file_picker: ^8.1.4
-
-  # Settings Storage
-  shared_preferences: ^2.3.4
-
-  # App Info (for dynamic version reading)
-  package_info_plus: ^8.0.0
-
-  # UI Enhancements
-  google_fonts: ^6.2.1  # Already included - will use Inter font
-  flutter_slidable: ^3.1.1
-
-  # Crash Reporting (Privacy-first, OSS-compatible)
-  sentry_flutter: ^8.11.0  # Works with self-hosted GlitchTip
-
-  # Metadata Extraction (ID3 tags, audio format details)
-  metadata_god: ^1.1.0  # Read ID3/FLAC tags and audio quality metadata
 
 dev_dependencies:
   flutter_test:
