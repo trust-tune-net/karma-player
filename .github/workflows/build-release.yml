@@ -470,23 +470,24 @@ jobs:
       - name: Download and bundle FFprobe (Linux)
         run: |
           echo "📥 Downloading FFprobe for Linux..."
-          
-          # Download FFprobe static binary from John Van Sickle (trusted Linux FFmpeg builds)
+
+          # Download FFprobe static binary from BtbN/FFmpeg-Builds (GitHub mirror, more reliable)
           # This provides EXACT audio quality reading for audiophile-grade accuracy
           mkdir -p gui/linux-binaries/bin
-          
+
           # Download and extract FFmpeg static build (includes FFprobe)
-          curl -L -o ffmpeg-release.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
-          tar -xJf ffmpeg-release.tar.xz
-          
+          # Using BtbN builds which are reliable and hosted on GitHub
+          curl -L -o ffmpeg-linux.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          tar -xJf ffmpeg-linux.tar.xz
+
           # Find and move ffprobe binary (it's in a versioned directory)
-          find . -name ffprobe -type f -executable -exec mv {} gui/linux-binaries/bin/ffprobe \;
+          find . -name ffprobe -type f -executable -exec cp {} gui/linux-binaries/bin/ffprobe \;
           chmod +x gui/linux-binaries/bin/ffprobe
-          
+
           # Verify download
           ls -lh gui/linux-binaries/bin/ffprobe
           gui/linux-binaries/bin/ffprobe -version | head -n 1
-          
+
           # Clean up
           rm -rf ffmpeg-*
           
