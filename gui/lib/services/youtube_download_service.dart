@@ -105,6 +105,58 @@ class YouTubeDownloadService {
     return bundledPath;
   }
 
+  /// Get the path to the ffmpeg binary
+  ///
+  /// Resolves to bundled binary first, then falls back to system installation.
+  /// Required for thumbnail embedding in YouTube downloads.
+  String? get ffmpegPath {
+    String bundledPath;
+
+    if (Platform.isMacOS) {
+      // macOS: binary should be in app bundle Resources (same as yt-dlp)
+      final executable = Platform.resolvedExecutable;
+      final contentsDir = path.dirname(path.dirname(executable));
+      bundledPath = path.join(contentsDir, 'Resources', 'bin', 'ffmpeg');
+    } else if (Platform.isWindows) {
+      // Windows: binary is next to executable
+      final executable = Platform.resolvedExecutable;
+      final appDir = path.dirname(executable);
+      bundledPath = path.join(appDir, 'ffmpeg.exe');
+    } else {
+      // Linux: binary is in app directory
+      final executable = Platform.resolvedExecutable;
+      final appDir = path.dirname(executable);
+      bundledPath = path.join(appDir, 'bin', 'ffmpeg');
+    }
+
+    // Check if bundled binary exists
+    if (File(bundledPath).existsSync()) {
+      return bundledPath;
+    }
+
+    // Fallback to system ffmpeg (mainly for debug mode without bundled binary)
+    if (Platform.isMacOS) {
+      // Try Homebrew locations
+      final brewPaths = [
+        '/opt/homebrew/bin/ffmpeg',  // Apple Silicon
+        '/usr/local/bin/ffmpeg',     // Intel Mac
+      ];
+      for (final brewPath in brewPaths) {
+        if (File(brewPath).existsSync()) {
+          return brewPath;
+        }
+      }
+    } else if (Platform.isLinux) {
+      const systemPath = '/usr/bin/ffmpeg';
+      if (File(systemPath).existsSync()) {
+        return systemPath;
+      }
+    }
+
+    // Return null if ffmpeg not found (thumbnail embedding will be skipped)
+    return null;
+  }
+
   /// Get platform-specific cache directory
   ///
   /// Downloads to ~/Music folder so library automatically picks them up
@@ -363,21 +415,47 @@ class YouTubeDownloadService {
       
       // Run yt-dlp to download audio
       // -f bestaudio: Get best audio quality
+      // --embed-metadata: Embed metadata from YouTube into file
+      // --add-metadata: Add metadata tags to downloaded file
+      // --embed-thumbnail: Embed thumbnail image as cover art
+      // --convert-thumbnails jpg: Convert thumbnail to JPEG format
+      // --ffmpeg-location: Tell yt-dlp where to find ffmpeg for thumbnail processing
       // --no-playlist: Don't download playlists
       // --newline: Progress on separate lines (easier to parse)
       // --progress: Force progress bar (better visibility)
       // --no-warnings: Reduce output noise
+
+      // Build arguments list
+      // Use M4A format instead of WEBM because M4A supports embedded thumbnails
+      final args = [
+        '-f', 'bestaudio',
+        '--extract-audio',
+        '--audio-format', 'm4a',
+        '--embed-metadata',
+        '--add-metadata',
+        '--embed-thumbnail',
+        '--convert-thumbnails', 'jpg',
+      ];
+
+      // Add ffmpeg location if available
+      final ffmpegLoc = ffmpegPath;
+      if (ffmpegLoc != null) {
+        args.addAll(['--ffmpeg-location', ffmpegLoc]);
+      }
+
+      // Add remaining arguments
+      args.addAll([
+        '--no-playlist',
+        '--newline',
+        '--progress',
+        '--no-warnings',
+        '-o', outputTemplate,
+        url,
+      ]);
+
       final process = await Process.start(
         ytDlpPath,  // Use full path instead of relying on system PATH
-        [
-          '-f', 'bestaudio',
-          '--no-playlist',
-          '--newline',
-          '--progress',
-          '--no-warnings',
-          '-o', outputTemplate,
-          url,
-        ],
+        args,
       );
 
       // Store process for potential cancellation
@@ -522,28 +600,37 @@ class YouTubeDownloadService {
         // Download successful, find the file
         String? filePath = await _findDownloadedFile(videoId);
         
-        // If we downloaded to temp and have metadata, rename to user-friendly name
+        // If we downloaded to temp and have metadata, move to organized subfolder
         if (filePath != null && metadata != null && useTempDownload) {
           final tempFile = File(filePath);
           final ext = path.extension(filePath).replaceFirst('.', '');
-          final finalFilename = await _generateFilename(videoId, metadata['title'], metadata['artist'], ext);
-          final finalPath = path.join(cacheDir, finalFilename);
-          
+
+          // Create subfolder: Artist - Album/
+          final artist = metadata['artist'] ?? 'Unknown Artist';
+          final album = metadata['album'] ?? metadata['title'] ?? 'Unknown Album';
+          final folderName = _sanitizeFilename('$artist - $album');
+          final albumDir = path.join(cacheDir, folderName);
+
+          // Create directory if it doesn't exist
+          await Directory(albumDir).create(recursive: true);
+
+          // Generate clean filename (without artist/album since folder has that)
+          final title = metadata['title'] ?? 'Unknown';
+          final cleanFilename = '${_sanitizeFilename(title)}.$ext';
+          final finalPath = path.join(albumDir, cleanFilename);
+
           try {
-            // Check if final file already exists (shouldn't happen due to duplicate handling, but be safe)
+            // Check if final file already exists
             if (await File(finalPath).exists()) {
-              // Delete existing file (shouldn't happen, but handle it)
               await File(finalPath).delete();
             }
-            
+
             await tempFile.rename(finalPath);
             filePath = finalPath;
-            _videoIdToFilename[videoId] = finalFilename;
-            print('[YouTube Download] ✅ Renamed to: $finalFilename');
+            _videoIdToFilename[videoId] = path.join(folderName, cleanFilename);
+            print('[YouTube Download] ✅ Organized to: $folderName/$cleanFilename');
           } catch (e) {
-            print('[YouTube Download] ⚠️  Warning: Could not rename file, keeping temp name: $e');
-            // Keep using temp filename, but try to clean it up later
-            // The file will still work for playback
+            print('[YouTube Download] ⚠️  Warning: Could not organize file, keeping temp name: $e');
           }
         }
         
@@ -553,18 +640,21 @@ class YouTubeDownloadService {
           print('[YouTube Download] ✅ Download complete');
           print('[YouTube Download]    File: $filePath');
           print('[YouTube Download]    Size: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
-          
+
           // Log filename format info
           if (fileName.startsWith('youtube_') && !fileName.contains(' - ')) {
             print('[YouTube Download]    Note: Using video ID filename (metadata extraction failed or timed out)');
           }
-          
+
+          // Extract embedded thumbnail to folder.jpg for library display
+          await _extractThumbnailToFile(filePath);
+
           // Call completion callback after all file operations are done
           if (onDownloadComplete != null) {
             print('[YouTube Download] Triggering library refresh...');
             onDownloadComplete();
           }
-          
+
           return filePath;
         } else {
           // File not found after successful download - report this anomaly
@@ -689,16 +779,58 @@ class YouTubeDownloadService {
     // Remove or replace invalid characters: / \ : * ? " < > |
     final invalidChars = RegExp(r'[/\\:*?"<>|]');
     String sanitized = filename.replaceAll(invalidChars, '_');
-    
+
     // Remove leading/trailing dots and spaces (Windows doesn't like these)
     sanitized = sanitized.trim().replaceAll(RegExp(r'^\.+|\.+$'), '');
-    
+
     // Limit length to platform max (250 to be safe, leave room for extension)
     if (sanitized.length > 250) {
       sanitized = sanitized.substring(0, 250);
     }
-    
+
     return sanitized;
+  }
+
+  /// Extract embedded thumbnail from M4A file to folder.jpg
+  /// This enables artwork display in library for YouTube downloads
+  Future<void> _extractThumbnailToFile(String audioFilePath) async {
+    try {
+      final ffmpegLoc = ffmpegPath;
+      if (ffmpegLoc == null) {
+        print('[YouTube Download] ⚠️  ffmpeg not found, skipping thumbnail extraction');
+        return;
+      }
+
+      // Extract to folder.jpg in same directory as audio file
+      final audioDir = path.dirname(audioFilePath);
+      final thumbnailPath = path.join(audioDir, 'folder.jpg');
+
+      print('[YouTube Download] Extracting thumbnail to: $thumbnailPath');
+
+      // Use ffmpeg to extract the video stream (which is the thumbnail) to JPG
+      final result = await Process.run(
+        ffmpegLoc,
+        [
+          '-i', audioFilePath,
+          '-map', '0:v',  // Select video stream (thumbnail)
+          '-c:v', 'mjpeg',  // Convert to JPEG
+          '-vf', 'scale=600:-1',  // Scale to reasonable size (600px width)
+          '-y',  // Overwrite if exists
+          thumbnailPath,
+        ],
+      );
+
+      if (result.exitCode == 0 && await File(thumbnailPath).exists()) {
+        final size = await File(thumbnailPath).length();
+        print('[YouTube Download] ✅ Thumbnail extracted: ${(size / 1024).toStringAsFixed(1)} KB');
+      } else {
+        print('[YouTube Download] ⚠️  Thumbnail extraction failed (exit code: ${result.exitCode})');
+        // Non-critical error, don't throw
+      }
+    } catch (e) {
+      print('[YouTube Download] ⚠️  Error extracting thumbnail: $e');
+      // Non-critical error, don't throw - just log it
+    }
   }
 
   /// Extract metadata from YouTube video using yt-dlp

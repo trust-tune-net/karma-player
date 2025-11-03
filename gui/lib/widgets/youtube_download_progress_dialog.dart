@@ -25,7 +25,7 @@ class YouTubeDownloadProgressToast extends StatefulWidget {
 }
 
 class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressToast>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
@@ -197,7 +197,7 @@ class _YouTubeDownloadProgressToastState extends State<YouTubeDownloadProgressTo
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      widget.status ?? 'Downloading...',
+                                      widget.status ?? 'Thinking...',
                                       style: GoogleFonts.inter(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w500,

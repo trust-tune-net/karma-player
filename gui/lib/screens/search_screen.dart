@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -423,14 +424,16 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           print('[YouTube Download] ✅ Ready for playback');
           print('[YouTube Download]    File: $filePath');
 
-          // Create a Song object with local file path
-          final downloadedSong = Song(
-            id: sourceId,
-            title: title,
-            artist: 'YouTube Music',
-            filePath: filePath,  // Local file path
-            format: 'WEBM',
-            bitrate: null,
+          // Look for folder.jpg in the same directory as the M4A file
+          final fileDir = path.dirname(filePath);
+          final folderJpgPath = path.join(fileDir, 'folder.jpg');
+          final artworkPath = await File(folderJpgPath).exists() ? folderJpgPath : null;
+
+          // Extract metadata from the actual downloaded M4A file
+          final downloadedSong = await Song.fromFileWithMetadata(
+            filePath,
+            artworkPath: artworkPath, // Pass folder.jpg path
+            useRealMetadata: true, // Read actual M4A metadata
           );
 
           // Play using shared playback service
