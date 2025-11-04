@@ -639,10 +639,44 @@ class AudioDeviceService extends ChangeNotifier {
           );
         }
       } else {
-        // No saved device or "auto" - use MediaKit's auto device selection
-        // DON'T try to resolve this ourselves - let MediaKit/MPV handle it
-        _selectedDevice = _systemDefaultDevice; // Usually "auto"
-        print('[AudioDevice] No saved device preference, using "auto" (MediaKit will choose)');
+        // No saved device or "auto" - query macOS for the current default and select that explicitly
+        // This ensures we use the actual device (e.g., External Headphones) instead of "auto"
+        print('[AudioDevice] No saved device preference, querying macOS for current default...');
+
+        if (_platform.supportsNativeEnumeration) {
+          try {
+            final platformDefault = await _platform.getDefaultDevice();
+            if (platformDefault != null) {
+              print('[AudioDevice] macOS default device: ${platformDefault.name}');
+
+              // Find matching MediaKit device by description
+              try {
+                final matchingDevice = _availableDevices.firstWhere(
+                  (d) => d.description == platformDefault.name,
+                );
+                _selectedDevice = matchingDevice;
+                print('[AudioDevice] Matched to MediaKit device: ${matchingDevice.name} (${matchingDevice.description})');
+
+                // Save this as the preference so it persists
+                await _saveDevicePreference();
+              } catch (e) {
+                print('[AudioDevice] Could not find matching MediaKit device for "${platformDefault.name}"');
+                print('[AudioDevice] Available devices: ${_availableDevices.map((d) => d.description).join(', ')}');
+                _selectedDevice = _systemDefaultDevice;
+              }
+            } else {
+              print('[AudioDevice] Platform returned no default device, using system default');
+              _selectedDevice = _systemDefaultDevice;
+            }
+          } catch (e) {
+            print('[AudioDevice] Error querying platform default: $e');
+            _selectedDevice = _systemDefaultDevice;
+          }
+        } else {
+          // Platform doesn't support native enumeration, use "auto"
+          _selectedDevice = _systemDefaultDevice; // Usually "auto"
+          print('[AudioDevice] Platform does not support native enumeration, using "auto"');
+        }
       }
       notifyListeners();
     } catch (e, stackTrace) {

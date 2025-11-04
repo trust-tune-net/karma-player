@@ -16,6 +16,7 @@ import 'services/error_handler.dart';
 import 'services/analytics_service.dart';
 import 'services/metadata_service.dart';
 import 'services/audio_device_service.dart';
+import 'services/mobile_discovery_service.dart';
 import 'screens/now_playing_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/downloads_screen.dart';
@@ -23,6 +24,7 @@ import 'screens/settings_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/audio_settings_screen.dart';
+import 'screens/mobile_connectivity_screen.dart';
 
 // App Color Palette (like Melo)
 class AppColors {
@@ -605,6 +607,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
     // Global keyboard handler for Space key
     ServicesBinding.instance.keyboard.addHandler(_handleKeyEvent);
+
+    // Initialize mobile discovery service (loads saved state, but doesn't auto-start)
+    MobileDiscoveryService().initialize();
   }
 
   bool _handleKeyEvent(KeyEvent event) {
@@ -684,7 +689,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     children: [
                       // Logo/App Name - Banksy Style
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -728,7 +733,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 4),
                             // Network name - spray paint style
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,7 +766,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
                       // Divider
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: Container(
                           height: 1,
                           decoration: BoxDecoration(
@@ -810,15 +815,34 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
                       const Spacer(),
 
+                      // Divider before mobile app
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.0),
+                                Colors.white.withOpacity(0.08),
+                                Colors.white.withOpacity(0.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Mobile App - special styling
+                      _buildMobileNavItem(),
+
                       // Settings at very bottom
                       _buildNavItem(
                         icon: Icons.settings_outlined,
                         selectedIcon: Icons.settings,
                         label: 'Settings',
-                        index: 5,
+                        index: 7,
                       ),
 
-                      const SizedBox(height: 16), // Minimal space for player bar
                     ],
                   ),
                 ),
@@ -839,7 +863,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           const DownloadsScreen(),
                           NowPlayingScreen(playbackService: _playbackService),
                           const AudioSettingsScreen(),
-                          const SettingsScreen(),
+                          Container(), // Placeholder for index 5 (removed)
+                          const MobileConnectivityScreen(), // Mobile App at index 6
+                          const SettingsScreen(), // Settings at index 7
                         ],
                       );
                     },
@@ -906,6 +932,82 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 const SizedBox(width: 14),
                 Text(
                   label,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected
+                        ? Colors.white
+                        : const Color(0xFF888888),
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Mobile App nav item with special styling
+  Widget _buildMobileNavItem() {
+    const index = 6;
+    final isSelected = _selectedIndex == index;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: isSelected
+                  ? LinearGradient(
+                      colors: [
+                        const Color(0xFF1A1A1A),
+                        const Color(0xFF1A1A1A).withOpacity(0.8),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    )
+                  : LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withOpacity(0.02),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+              borderRadius: BorderRadius.circular(10),
+              border: isSelected
+                  ? Border.all(
+                      color: const Color(0xFFA855F7).withOpacity(0.4),
+                      width: 1,
+                    )
+                  : Border.all(
+                      color: Colors.white.withOpacity(0.06),
+                      width: 1,
+                    ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isSelected ? Icons.phone_android : Icons.phone_android_outlined,
+                  size: 20,
+                  color: isSelected
+                      ? const Color(0xFFA855F7)
+                      : const Color(0xFF888888),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  'Mobile App',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,

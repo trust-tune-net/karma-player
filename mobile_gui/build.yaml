@@ -1,0 +1,9 @@
+# Build configuration for code generation
+targets:
+  $default:
+    builders:
+      riverpod_generator:
+        options:
+          # Generate the .g.dart files for Riverpod providers
+          # Use @riverpod annotation to generate provider code
+          # Example: @riverpod FutureOr<String> example(ExampleRef ref) => 'hello';

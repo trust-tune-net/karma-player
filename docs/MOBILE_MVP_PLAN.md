@@ -18,7 +18,7 @@
 - Statistics obsession (users LOVE their data)
 
 **Timeline**: 12-14 weeks to functional MVP
-**Platforms**: iOS first, Android follow (same codebase)
+**Platforms**: Android first, iOs follow (same codebase)
 
 ---
 
