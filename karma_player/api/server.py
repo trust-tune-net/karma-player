@@ -108,6 +108,7 @@ class SearchRequest(BaseModel):
     format_filter: Optional[str] = None
     min_seeders: int = 1
     limit: int = 20
+    offset: int = 0  # For pagination
 
 
 class TorrentInfo(BaseModel):
@@ -420,6 +421,7 @@ async def websocket_search(websocket: WebSocket):
         format_filter = request_data.get("format_filter")
         min_seeders = request_data.get("min_seeders", 1)
         limit = request_data.get("limit", 20)
+        offset = request_data.get("offset", 0)
 
         if not query:
             await websocket.send_json({
@@ -429,7 +431,7 @@ async def websocket_search(websocket: WebSocket):
             await websocket.close()
             return
 
-        logger.info(f"🔍 WebSocket search: '{query}' (limit={limit}, min_seeders={min_seeders})")
+        logger.info(f"🔍 WebSocket search: '{query}' (offset={offset}, limit={limit}, min_seeders={min_seeders})")
 
         # Progress callback
         async def send_progress(percent: int, message: str):
@@ -493,6 +495,7 @@ async def websocket_search(websocket: WebSocket):
             format_filter=format_filter,
             min_seeders=min_seeders,
             limit=limit,
+            offset=offset,
             use_ai_parsing=False,
             progress_callback=send_progress,
             partial_result_callback=send_partial_results

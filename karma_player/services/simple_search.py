@@ -46,6 +46,7 @@ class SimpleSearch:
         format_filter: Optional[str] = None,
         min_seeders: int = 1,
         limit: int = 20,
+        offset: int = 0,
         use_ai_parsing: bool = False,
         source_type_filter: Optional[str] = None,
         progress_callback: Optional[Callable] = None,
@@ -59,6 +60,7 @@ class SimpleSearch:
             format_filter: Optional format (FLAC, MP3, etc.)
             min_seeders: Minimum seeders
             limit: Max results to return
+            offset: Number of results to skip (for pagination)
             use_ai_parsing: Enable AI query parsing (default: False for performance)
             source_type_filter: Filter by source type: "torrent", "streaming", or None (all)
             progress_callback: Optional progress updates
@@ -160,8 +162,10 @@ class SimpleSearch:
         await progress(70, "Ranking results...")
 
         # Rank (already sorted by quality_score)
+        # Apply offset and limit for pagination
+        paginated_sources = torrents[offset:offset+limit]
         ranked = []
-        for i, source in enumerate(torrents[:music_query.limit], 1):
+        for i, source in enumerate(paginated_sources, start=offset+1):
             explanation = self._explain(source, i)
             tags = self._tag(source, i)
 
@@ -177,7 +181,7 @@ class SimpleSearch:
         search_time_ms = int((time.time() - start_time) * 1000)
 
         # Log final results
-        logger.info(f"   ✅ Returning {len(ranked)} results (from {len(torrents)} total) in {search_time_ms}ms")
+        logger.info(f"   ✅ Returning {len(ranked)} results at offset {offset} (from {len(torrents)} total) in {search_time_ms}ms")
 
         return SimpleSearchResult(
             query=query,

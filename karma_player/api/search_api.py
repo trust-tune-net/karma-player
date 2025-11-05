@@ -598,6 +598,7 @@ async def websocket_search(websocket: WebSocket):
         format_filter = request_data.get("format_filter")
         min_seeders = request_data.get("min_seeders", 1)
         limit = request_data.get("limit", 50)
+        offset = request_data.get("offset", 0)
 
         if not query:
             await websocket.send_json({
@@ -619,11 +620,19 @@ async def websocket_search(websocket: WebSocket):
 
         # Partial result callback - send results as each adapter completes
         async def send_partial_results(adapter_name: str, sources: List):
-            logger.info(f"   📦 Sending partial results from {adapter_name}: {len(sources)} sources")
+            # Limit partial results to the requested limit
+            limited_sources = sources[:limit]
+
+            # Determine source type
+            source_type = "unknown"
+            if limited_sources:
+                source_type = limited_sources[0].source_type.value
+
+            logger.info(f"   📦 {adapter_name}: Sending {len(limited_sources)} {source_type} results (filtered from {len(sources)} total)")
 
             # Build ranked results for this adapter
             partial_results = []
-            for i, source in enumerate(sources, 1):
+            for i, source in enumerate(limited_sources, 1):
                 partial_results.append({
                     "rank": i,  # Temporary rank, will be re-ranked in final result
                     "source": {
@@ -663,6 +672,7 @@ async def websocket_search(websocket: WebSocket):
             format_filter=format_filter,
             min_seeders=min_seeders,
             limit=limit,
+            offset=offset,
             use_ai_parsing=False,
             progress_callback=send_progress,
             partial_result_callback=send_partial_results

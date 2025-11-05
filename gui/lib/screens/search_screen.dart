@@ -46,6 +46,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   bool _useWebSocket = true;  // Feature flag: false = HTTP, true = WebSocket
   SourceFilter _sourceFilter = SourceFilter.all;
 
+  // Pagination state
+  final ScrollController _scrollController = ScrollController();
+  int _currentOffset = 0;
+  bool _isLoadingMore = false;
+  bool _hasMoreResults = true;
+  int _totalFound = 0;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -54,6 +61,38 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     super.initState();
     _loadFilterPreference();
     _verifyYtDlp();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final pixels = _scrollController.position.pixels;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final threshold = maxScroll * 0.8;
+
+    print('[SCROLL] pixels: $pixels, max: $maxScroll, threshold: $threshold');
+    print('[SCROLL] isLoadingMore: $_isLoadingMore, hasMore: $_hasMoreResults, isSearching: $_isSearching');
+
+    if (pixels >= threshold) {
+      print('[SCROLL] ✓ Reached 80% threshold!');
+      if (!_isLoadingMore && _hasMoreResults && !_isSearching) {
+        print('[SCROLL] ✓ Conditions met, loading more...');
+        _loadMoreResults();
+      } else {
+        print('[SCROLL] ✗ Conditions not met: loading=$_isLoadingMore, hasMore=$_hasMoreResults, searching=$_isSearching');
+      }
+    }
+  }
+
+  void _loadMoreResults() async {
+    if (_isLoadingMore || !_hasMoreResults || _searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isLoadingMore = true;
+      _currentOffset += 20; // Move to next page
+    });
+
+    // Perform another search with new offset
+    _searchWebSocket();
   }
 
   /// Verify yt-dlp binary is available and working
@@ -65,6 +104,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     _channel?.sink.close();
     _youtubeDownloadService.dispose();
     super.dispose();
@@ -165,9 +205,15 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       _torrentLoading = true;
       _progress = 0;
       _statusMessage = 'Connecting...';
-      _results = [];
-      _streamingResults = [];
-      _torrentResults = [];
+
+      // Only clear results for new search (offset = 0), not when loading more
+      if (_currentOffset == 0) {
+        _results = [];
+        _streamingResults = [];
+        _torrentResults = [];
+        _hasMoreResults = true;
+        _totalFound = 0;
+      }
     });
 
     try {
@@ -181,6 +227,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         'format_filter': null,
         'min_seeders': 1,
         'limit': 20,
+        'offset': _currentOffset,
       }));
 
       // Listen for messages
@@ -197,42 +244,58 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               break;
 
             case 'partial_result':
-              // Add partial results as they arrive
+              // Show progress as each adapter completes
               final adapter = data['adapter'] as String;
+              final count = data['count'] ?? 0;
+              setState(() {
+                _statusMessage = 'Searching... ($adapter found $count results)';
+              });
+              break;
+
+            case 'result':
+              // This is the unified, quality-sorted results from the backend
+              final resultData = data['data'];
               final newResults = List<Map<String, dynamic>>.from(
-                data['results'] ?? []
+                resultData['results'] ?? []
               );
 
               setState(() {
-                // Determine source type from adapter name or first result
-                if (newResults.isNotEmpty) {
-                  final firstResult = newResults[0];
-                  final source = firstResult['source'];
-                  final sourceType = source['source_type'] ?? 'torrent';
-
-                  if (sourceType == 'youtube' || sourceType == 'piped') {
-                    _streamingResults.addAll(newResults);
-                    _streamingLoading = false;
-                    _statusMessage = 'Found ${_streamingResults.length} streaming results...';
-                  } else {
-                    _torrentResults.addAll(newResults);
-                    _torrentLoading = false;
-                    _statusMessage = 'Found ${_torrentResults.length} torrents...';
-                  }
-
-                  // Update combined results
-                  _results = [..._streamingResults, ..._torrentResults];
-                  _applyFilter();
+                // For pagination, append new results to existing ones
+                if (_currentOffset > 0) {
+                  _results.addAll(newResults);
+                } else {
+                  // New search, replace results
+                  _results = newResults;
                 }
+
+                // Separate into streaming/torrent for display counts
+                _streamingResults = _results.where((result) {
+                  final source = result['source'] ?? result['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  return sourceType == 'youtube' || sourceType == 'piped';
+                }).toList();
+
+                _torrentResults = _results.where((result) {
+                  final source = result['source'] ?? result['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  return sourceType == 'torrent';
+                }).toList();
+
+                _streamingLoading = false;
+                _torrentLoading = false;
+                _applyFilter();
               });
               break;
 
             case 'complete':
               setState(() {
                 _isSearching = false;
+                _isLoadingMore = false;
                 _streamingLoading = false;
                 _torrentLoading = false;
                 _progress = 100;
+                _totalFound = data['total_found'] ?? 0;
+                _hasMoreResults = _results.length < _totalFound;
                 _statusMessage = 'Found ${_results.length} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
               });
               _channel?.sink.close();
@@ -343,6 +406,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   }
 
   void _search() {
+    // Reset pagination for new search
+    setState(() {
+      _currentOffset = 0;
+      _hasMoreResults = true;
+      _totalFound = 0;
+    });
+
     if (_useWebSocket) {
       _searchWebSocket();
     } else {
@@ -915,43 +985,36 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             ],
             Expanded(
               child: ListView(
+                controller: _scrollController,
                 children: [
-                  // Streaming section (always on top for fast access)
-                  if (_streamingLoading && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.streaming)) ...[
-                    _buildSectionHeader('🎵 Stream Now', 0),
+                  // Show filtered results (unified, sorted by quality)
+                  if (_filteredResults.isNotEmpty) ...[
+                    ..._filteredResults.map((result) => _buildResultCard(result)),
+                  ],
+
+                  // Loading more indicator
+                  if (_isLoadingMore) ...[
                     const Padding(
                       padding: EdgeInsets.all(16),
                       child: Center(
-                        child: CircularProgressIndicator(),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Loading more results...'),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  if (_streamingResults.isNotEmpty && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.streaming)) ...[
-                    _buildSectionHeader('🎵 Stream Now', _streamingResults.length),
-                    ..._streamingResults.map((result) => _buildResultCard(result)),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Torrent section
-                  if (_torrentLoading && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.torrents)) ...[
-                    _buildSectionHeader('💾 Download (Torrents)', 0),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                  ],
-
-                  if (_torrentResults.isNotEmpty && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.torrents)) ...[
-                    _buildSectionHeader('💾 Download (Torrents)', _torrentResults.length),
-                    ..._torrentResults.map((result) => _buildResultCard(result)),
                   ],
 
                   // No results
-                  if (_streamingResults.isEmpty && _torrentResults.isEmpty && !_isSearching && !_streamingLoading && !_torrentLoading) ...[
+                  if (_filteredResults.isEmpty && !_isSearching && !_streamingLoading && !_torrentLoading) ...[
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
