@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package trusttune.common;
+
+// Common status codes for API responses
+enum StatusCode {
+  STATUS_CODE_UNSPECIFIED = 0;
+  STATUS_CODE_OK = 1;
+  STATUS_CODE_ERROR = 2;
+  STATUS_CODE_NOT_FOUND = 3;
+  STATUS_CODE_UNAUTHORIZED = 4;
+  STATUS_CODE_RATE_LIMITED = 5;
+  STATUS_CODE_BANNED = 6;
+}
+
+// Common error message
+message Error {
+  StatusCode code = 1;
+  string message = 2;
+  string details = 3;
+}
+
+// Timestamp message
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+// Pagination request
+message PaginationRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// Pagination response
+message PaginationResponse {
+  int32 total_count = 1;
+  int32 returned_count = 2;
+  int32 offset = 3;
+  bool has_more = 4;
+}

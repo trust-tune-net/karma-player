@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package trusttune.search;
+
+import "common.proto";
+
+// Search service for music discovery
+service SearchService {
+  // Stream search results as they arrive from different sources
+  rpc Search(SearchRequest) returns (stream SearchResponse);
+
+  // Get search statistics (for admin)
+  rpc GetSearchStats(SearchStatsRequest) returns (SearchStatsResponse);
+}
+
+// Search request
+message SearchRequest {
+  // Authentication (passed via metadata in gRPC)
+  // device_id and api_key will be in call metadata
+
+  // Search parameters
+  string query = 1;
+  optional string format_filter = 2;  // FLAC, MP3, etc.
+  int32 min_seeders = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+
+  // Filters
+  optional string artist = 6;
+  optional string album = 7;
+  optional int32 min_bitrate = 8;
+  optional int32 max_size_mb = 9;
+}
+
+// Search response (streamed)
+message SearchResponse {
+  // Response type
+  ResponseType type = 1;
+
+  // Progress update
+  optional ProgressUpdate progress = 2;
+
+  // Partial results from a specific adapter
+  optional PartialResult partial_result = 3;
+
+  // Final complete result
+  optional CompleteResult complete_result = 4;
+
+  // Error
+  optional trusttune.common.Error error = 5;
+}
+
+enum ResponseType {
+  RESPONSE_TYPE_UNSPECIFIED = 0;
+  RESPONSE_TYPE_PROGRESS = 1;
+  RESPONSE_TYPE_PARTIAL_RESULT = 2;
+  RESPONSE_TYPE_COMPLETE = 3;
+  RESPONSE_TYPE_ERROR = 4;
+}
+
+// Progress update during search
+message ProgressUpdate {
+  int32 percent = 1;
+  string message = 2;
+}
+
+// Partial results from one adapter
+message PartialResult {
+  string adapter_name = 1;
+  int32 count = 2;
+  repeated MusicSource sources = 3;
+}
+
+// Final complete result
+message CompleteResult {
+  int32 total_found = 1;
+  int32 search_time_ms = 2;
+  repeated RankedSource ranked_sources = 3;
+}
+
+// Music source (torrent or streaming)
+message MusicSource {
+  string id = 1;
+  string title = 2;
+  string url = 3;
+  SourceType source_type = 4;
+  optional string format = 5;
+  float quality_score = 6;
+  string indexer = 7;
+
+  // Torrent-specific fields
+  optional string magnet_link = 8;
+  optional int64 size_bytes = 9;
+  optional string size_formatted = 10;
+  optional int32 seeders = 11;
+  optional int32 leechers = 12;
+
+  // Streaming-specific fields
+  optional string codec = 13;
+  optional string bitrate = 14;
+  optional string thumbnail_url = 15;
+  optional int32 duration_seconds = 16;
+}
+
+enum SourceType {
+  SOURCE_TYPE_UNSPECIFIED = 0;
+  SOURCE_TYPE_TORRENT = 1;
+  SOURCE_TYPE_YOUTUBE = 2;
+  SOURCE_TYPE_PIPED = 3;
+  SOURCE_TYPE_INVIDIOUS = 4;
+}
+
+// Ranked source with explanation
+message RankedSource {
+  int32 rank = 1;
+  MusicSource source = 2;
+  string explanation = 3;
+  repeated string tags = 4;
+}
+
+// Search stats request (admin only)
+message SearchStatsRequest {
+  // Time range
+  optional int64 start_time = 1;
+  optional int64 end_time = 2;
+}
+
+// Search stats response
+message SearchStatsResponse {
+  int64 total_searches = 1;
+  int64 total_results_returned = 2;
+  float average_search_time_ms = 3;
+  map<string, int64> searches_by_adapter = 4;
+}
