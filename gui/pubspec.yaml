@@ -63,6 +63,10 @@ dependencies:
   # App Info (for dynamic version reading)
   package_info_plus: ^8.0.0
 
+  # Security & Authentication
+  uuid: ^4.5.1  # Device ID generation
+  crypto: ^3.0.5  # HMAC-SHA256 for API key generation
+
   # UI Enhancements
   google_fonts: ^6.2.1  # Already included - will use Inter font
   flutter_slidable: ^3.1.1

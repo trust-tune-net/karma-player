@@ -52,6 +52,11 @@ Thumbs.db
 *.db
 *.db-journal
 
+# Environment files (contains secrets)
+.env
+.env.local
+.env.*.local
+
 # Transmission bundling temp directory
 transmission-binaries/
 

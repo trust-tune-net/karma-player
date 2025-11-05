@@ -7,16 +7,18 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from slowapi.errors import RateLimitExceeded
 import json
 
 from karma_player import __version__, __app_name__
 from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
-from karma_player.services.torrent.download_manager import DownloadManager, DownloadStatus
+from karma_player.api.middleware import verify_api_key, verify_websocket_auth, log_request_middleware
+from karma_player.api.rate_limit import limiter
 
 
 # Configure logging
@@ -30,15 +32,12 @@ logger = logging.getLogger(__name__)
 # Global search instance
 search_service: Optional[SimpleSearch] = None
 
-# Global download manager
-download_manager: Optional[DownloadManager] = None
-
 
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events"""
-    global search_service, download_manager
+    global search_service
 
     logger.info(f"Starting {__app_name__} v{__version__}")
     logger.info(f"API server running on port {os.getenv('PORT', 8765)}")
@@ -47,8 +46,13 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing search infrastructure...")
 
     # Jackett adapter
-    jackett_url = os.getenv("JACKETT_REMOTE_URL", "https://trust-tune-trust-tune-jack.62ickh.easypanel.host")
-    jackett_api_key = os.getenv("JACKETT_REMOTE_API_KEY", "ugokmbv2cfeghwcsm27mtnjva5ch7948")
+    # Support both JACKETT_REMOTE_URL and JACKETT_URL for backward compatibility
+    jackett_url = os.getenv("JACKETT_REMOTE_URL") or os.getenv("JACKETT_URL")
+    jackett_api_key = os.getenv("JACKETT_REMOTE_API_KEY") or os.getenv("JACKETT_API_KEY")
+
+    if not jackett_url or not jackett_api_key:
+        logger.error("Jackett configuration missing. Set JACKETT_REMOTE_URL (or JACKETT_URL) and JACKETT_REMOTE_API_KEY (or JACKETT_API_KEY)")
+        raise RuntimeError("Missing required Jackett configuration. Please set JACKETT_REMOTE_URL and JACKETT_REMOTE_API_KEY (or JACKETT_URL and JACKETT_API_KEY) environment variables.")
 
     jackett = AdapterJackett(
         base_url=jackett_url,
@@ -68,20 +72,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("✅ Search infrastructure ready!")
 
-    # Initialize download manager
-    logger.info("Initializing download manager...")
-    download_path = os.path.expanduser("~/Music")
-    download_manager = DownloadManager(download_path=download_path)
-    logger.info(f"✅ Download manager ready! Saving to: {download_path}")
-
     yield
 
     # Cleanup on shutdown
     logger.info("Shutting down...")
-    if download_manager:
-        download_manager.shutdown()
     search_service = None
-    download_manager = None
 
 
 # Create FastAPI app
@@ -100,6 +95,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add request logging middleware
+app.middleware("http")(log_request_middleware)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+
+# Add exception handler for rate limit exceeded
+from slowapi import _rate_limit_exceeded_handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # Request/Response models
@@ -146,29 +151,6 @@ class HealthResponse(BaseModel):
     search_ready: bool
 
 
-class DownloadRequest(BaseModel):
-    magnet_link: str
-    title: str
-
-
-class DownloadResponse(BaseModel):
-    download_id: str
-    title: str
-    status: str
-    message: str
-
-
-class DownloadInfoResponse(BaseModel):
-    download_id: str
-    title: str
-    status: str
-    progress: float
-    download_rate: float
-    upload_rate: float
-    num_peers: int
-    error_message: Optional[str] = None
-
-
 # Routes
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -192,12 +174,18 @@ async def root():
 
 
 @app.post("/api/search", response_model=SearchResponse)
-async def search(request: SearchRequest):
+@limiter.limit("100/hour")  # Limit to 100 searches per hour per device
+async def search(req: Request, request: SearchRequest, device_id: str = Depends(verify_api_key)):
     """
     Execute music search
 
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Rate limit: 100 requests per hour per device.
+
     Args:
+        req: FastAPI Request (for rate limiting)
         request: SearchRequest with query and filters
+        device_id: Authenticated device ID (from dependency)
 
     Returns:
         SearchResponse with ranked results
@@ -254,156 +242,18 @@ async def search(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/download", response_model=DownloadResponse)
-async def start_download(request: DownloadRequest):
-    """
-    Start downloading a torrent
-
-    Args:
-        request: DownloadRequest with magnet link and title
-
-    Returns:
-        DownloadResponse with download_id and status
-    """
-    if not download_manager:
-        raise HTTPException(status_code=503, detail="Download manager not available")
-
-    # Validate magnet link format
-    if not request.magnet_link.startswith("magnet:"):
-        logger.error(f"Invalid magnet link format: {request.magnet_link[:100]}")
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid magnet link. Only magnet URIs are supported."
-        )
-
-    try:
-        download_id = download_manager.add_magnet(
-            magnet_link=request.magnet_link,
-            title=request.title
-        )
-
-        logger.info(f"Started download: {request.title} (ID: {download_id})")
-
-        return DownloadResponse(
-            download_id=download_id,
-            title=request.title,
-            status="queued",
-            message=f"Download started successfully"
-        )
-
-    except Exception as e:
-        logger.error(f"Download start error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/downloads")
-async def get_downloads():
-    """Get all active downloads"""
-    if not download_manager:
-        raise HTTPException(status_code=503, detail="Download manager not available")
-
-    try:
-        downloads = download_manager.get_all_downloads()
-
-        return {
-            "downloads": [
-                {
-                    "download_id": download_id,
-                    "title": info.title,
-                    "status": info.status.value,
-                    "progress": info.progress,
-                    "download_rate": info.download_rate,
-                    "upload_rate": info.upload_rate,
-                    "num_peers": info.num_peers,
-                    "error_message": info.error_message
-                }
-                for download_id, info in downloads.items()
-            ]
-        }
-
-    except Exception as e:
-        logger.error(f"Get downloads error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/download/{download_id}", response_model=DownloadInfoResponse)
-async def get_download_info(download_id: str):
-    """Get information about a specific download"""
-    if not download_manager:
-        raise HTTPException(status_code=503, detail="Download manager not available")
-
-    try:
-        info = download_manager.get_download_info(download_id)
-
-        if not info:
-            raise HTTPException(status_code=404, detail="Download not found")
-
-        return DownloadInfoResponse(
-            download_id=download_id,
-            title=info.title,
-            status=info.status.value,
-            progress=info.progress,
-            download_rate=info.download_rate,
-            upload_rate=info.upload_rate,
-            num_peers=info.num_peers,
-            error_message=info.error_message
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get download info error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/download/{download_id}")
-async def delete_download(download_id: str):
-    """
-    Delete a download.
-
-    This removes the download from the download manager but keeps any completed files.
-
-    Args:
-        download_id: The download ID to delete
-
-    Returns:
-        Success message
-    """
-    if not download_manager:
-        raise HTTPException(status_code=503, detail="Download manager not available")
-
-    try:
-        # Check if download exists
-        info = download_manager.get_download_info(download_id)
-        if not info:
-            raise HTTPException(status_code=404, detail="Download not found")
-
-        # Remove download (keep files)
-        success = download_manager.remove_download(download_id, delete_files=False)
-
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to delete download")
-
-        logger.info(f"Deleted download: {download_id}")
-
-        return {
-            "status": "success",
-            "message": f"Download {download_id} deleted successfully"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Delete download error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.websocket("/ws/search")
 async def websocket_search(websocket: WebSocket):
     """
     WebSocket endpoint for real-time search with progress updates
 
-    Client sends: {"query": "artist name", "format_filter": "FLAC", "min_seeders": 1, "limit": 50}
+    Client sends: {
+        "auth": {"device_id": "...", "api_key": "..."},
+        "query": "artist name",
+        "format_filter": "FLAC",
+        "min_seeders": 1,
+        "limit": 50
+    }
     Server sends:
         - Progress: {"type": "progress", "percent": 50, "message": "Searching..."}
         - Result: {"type": "result", "data": {...}}
@@ -417,6 +267,26 @@ async def websocket_search(websocket: WebSocket):
         data = await websocket.receive_text()
         request_data = json.loads(data)
 
+        # Validate authentication
+        auth_data = request_data.get("auth")
+        if not auth_data:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Authentication required"
+            })
+            return
+
+        try:
+            device_id = verify_websocket_auth(auth_data)
+            logger.debug(f"WebSocket authenticated: device {device_id[:8]}...")
+        except ValueError as e:
+            logger.warning(f"WebSocket authentication failed: {e}")
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Authentication failed: {e}"
+            })
+            return
+
         query = request_data.get("query")
         format_filter = request_data.get("format_filter")
         min_seeders = request_data.get("min_seeders", 1)
@@ -428,7 +298,6 @@ async def websocket_search(websocket: WebSocket):
                 "type": "error",
                 "message": "Query is required"
             })
-            await websocket.close()
             return
 
         logger.info(f"🔍 WebSocket search: '{query}' (offset={offset}, limit={limit}, min_seeders={min_seeders})")
@@ -549,18 +418,27 @@ async def websocket_search(websocket: WebSocket):
         logger.info("WebSocket disconnected")
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON: {e}")
-        await websocket.send_json({
-            "type": "error",
-            "message": "Invalid JSON format"
-        })
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Invalid JSON format"
+            })
+        except RuntimeError:
+            pass  # Connection already closed
     except Exception as e:
         logger.error(f"WebSocket search error: {e}", exc_info=True)
-        await websocket.send_json({
-            "type": "error",
-            "message": str(e)
-        })
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except RuntimeError:
+            pass  # Connection already closed
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass  # Connection already closed
 
 
 # Run server (for development)

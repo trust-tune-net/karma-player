@@ -9,9 +9,10 @@ import json
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from slowapi.errors import RateLimitExceeded
 
 from karma_player import __version__, __app_name__
 from karma_player.config import config
@@ -19,6 +20,8 @@ from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
 from karma_player.services.search.adapter_youtube_music import AdapterYouTubeMusic
+from karma_player.api.middleware import verify_api_key, verify_websocket_auth, log_request_middleware
+from karma_player.api.rate_limit import limiter
 
 
 # Configure logging
@@ -90,6 +93,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add request logging middleware
+app.middleware("http")(log_request_middleware)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+
+# Add exception handler for rate limit exceeded
+from slowapi import _rate_limit_exceeded_handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # Request/Response models
@@ -190,12 +203,18 @@ async def root():
 
 
 @app.post("/api/search", response_model=SearchResponse)
-async def search(request: SearchRequest):
+@limiter.limit("100/hour")
+async def search(req: Request, request: SearchRequest, device_id: str = Depends(verify_api_key)):
     """
     Execute music search (fast mode - no AI parsing)
 
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Rate limit: 100 requests per hour per device.
+
     Args:
+        req: FastAPI Request (for rate limiting)
         request: SearchRequest with query and filters
+        device_id: Authenticated device ID (from dependency)
 
     Returns:
         SearchResponse with ranked results
@@ -264,9 +283,13 @@ async def search(request: SearchRequest):
 
 
 @app.post("/api/search/advanced", response_model=SearchResponse)
-async def search_advanced(request: SearchRequest):
+@limiter.limit("50/hour")
+async def search_advanced(req: Request, request: SearchRequest, device_id: str = Depends(verify_api_key)):
     """
     Execute advanced music search with AI query parsing (for power users)
+
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Rate limit: 50 requests per hour per device (lower due to AI cost).
 
     This endpoint uses AI to parse natural language queries into structured searches.
     Use this for complex queries like:
@@ -346,9 +369,13 @@ async def search_advanced(request: SearchRequest):
 
 
 @app.post("/api/search/torrents", response_model=SearchResponse)
-async def search_torrents(request: SearchRequest):
+@limiter.limit("100/hour")
+async def search_torrents(req: Request, request: SearchRequest, device_id: str = Depends(verify_api_key)):
     """
     Search torrents only (Jackett, 1337x, etc.)
+
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Rate limit: 100 requests per hour per device.
 
     This endpoint returns only torrent results, ignoring streaming sources.
     Use this when you only want downloadable torrents.
@@ -421,9 +448,13 @@ async def search_torrents(request: SearchRequest):
 
 
 @app.post("/api/search/streaming", response_model=SearchResponse)
-async def search_streaming(request: SearchRequest):
+@limiter.limit("100/hour")
+async def search_streaming(req: Request, request: SearchRequest, device_id: str = Depends(verify_api_key)):
     """
     Search streaming sources only (YouTube Music, Piped, etc.)
+
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Rate limit: 100 requests per hour per device.
 
     This endpoint returns only streaming results, ignoring torrents.
     Use this when you only want instant streaming options.
@@ -509,9 +540,13 @@ class ResolveResponse(BaseModel):
 
 
 @app.post("/api/resolve", response_model=ResolveResponse)
-async def resolve_youtube_url(request: ResolveRequest):
+@limiter.limit("200/hour")
+async def resolve_youtube_url(req: Request, request: ResolveRequest, device_id: str = Depends(verify_api_key)):
     """
     Resolve YouTube Music video ID to playable stream URL
+
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Rate limit: 200 requests per hour per device (higher for playback).
 
     This endpoint is called on-demand when user clicks "Stream",
     not during search (to avoid slow searches and bot detection)
@@ -575,7 +610,13 @@ async def websocket_search(websocket: WebSocket):
     """
     WebSocket endpoint for real-time search with progressive results
 
-    Client sends: {"query": "artist name", "format_filter": "FLAC", "min_seeders": 1, "limit": 20}
+    Client sends: {
+        "auth": {"device_id": "...", "api_key": "..."},
+        "query": "artist name",
+        "format_filter": "FLAC",
+        "min_seeders": 1,
+        "limit": 20
+    }
     Server sends (in order):
         - Progress: {"type": "progress", "percent": 10, "message": "Parsing query..."}
         - Partial Result: {"type": "partial_result", "adapter": "YouTube Music", "count": 20, "results": [...]}
@@ -594,6 +635,26 @@ async def websocket_search(websocket: WebSocket):
         data = await websocket.receive_text()
         request_data = json.loads(data)
 
+        # Validate authentication
+        auth_data = request_data.get("auth")
+        if not auth_data:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Authentication required"
+            })
+            return
+
+        try:
+            device_id = verify_websocket_auth(auth_data)
+            logger.debug(f"WebSocket authenticated: device {device_id[:8]}...")
+        except ValueError as e:
+            logger.warning(f"WebSocket authentication failed: {e}")
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Authentication failed: {e}"
+            })
+            return
+
         query = request_data.get("query")
         format_filter = request_data.get("format_filter")
         min_seeders = request_data.get("min_seeders", 1)
@@ -605,7 +666,6 @@ async def websocket_search(websocket: WebSocket):
                 "type": "error",
                 "message": "Query is required"
             })
-            await websocket.close()
             return
 
         logger.info(f"WebSocket search request: {query}")
@@ -747,18 +807,27 @@ async def websocket_search(websocket: WebSocket):
         logger.info("WebSocket disconnected")
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON: {e}")
-        await websocket.send_json({
-            "type": "error",
-            "message": "Invalid JSON format"
-        })
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Invalid JSON format"
+            })
+        except RuntimeError:
+            pass  # Connection already closed
     except Exception as e:
         logger.error(f"WebSocket search error: {e}", exc_info=True)
-        await websocket.send_json({
-            "type": "error",
-            "message": str(e)
-        })
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except RuntimeError:
+            pass  # Connection already closed
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass  # Connection already closed
 
 
 # Run server (for development)

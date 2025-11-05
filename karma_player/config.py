@@ -109,14 +109,8 @@ class Config:
     DOWNLOAD_DAEMON_PORT = int(os.getenv("DOWNLOAD_DAEMON_PORT", "3001"))
 
     # === Jackett Configuration ===
-    JACKETT_URL = os.getenv(
-        "JACKETT_REMOTE_URL",
-        os.getenv("JACKETT_URL", "https://trust-tune-trust-tune-jack.62ickh.easypanel.host")
-    )
-    JACKETT_API_KEY = os.getenv(
-        "JACKETT_REMOTE_API_KEY",
-        os.getenv("JACKETT_API_KEY", "ugokmbv2cfeghwcsm27mtnjva5ch7948")
-    )
+    JACKETT_URL = os.getenv("JACKETT_REMOTE_URL") or os.getenv("JACKETT_URL")
+    JACKETT_API_KEY = os.getenv("JACKETT_REMOTE_API_KEY") or os.getenv("JACKETT_API_KEY")
     JACKETT_INDEXER = os.getenv("JACKETT_INDEXER", "all")
 
     # === AI Configuration ===

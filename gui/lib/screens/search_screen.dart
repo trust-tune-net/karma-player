@@ -13,6 +13,7 @@ import '../services/transmission_client.dart';
 import '../services/playback_service.dart';
 import '../services/youtube_download_service.dart';
 import '../services/analytics_service.dart';
+import '../services/api_auth_service.dart';
 import '../widgets/youtube_download_progress_dialog.dart';
 import '../main.dart';
 
@@ -29,8 +30,9 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClientMixin {
-  // YouTube download service for streaming
+  // Services
   final YouTubeDownloadService _youtubeDownloadService = YouTubeDownloadService();
+  final ApiAuthService _apiAuthService = ApiAuthService();
   final TextEditingController _searchController = TextEditingController();
   WebSocketChannel? _channel;
 
@@ -152,9 +154,15 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
   Future<List<Map<String, dynamic>>> _searchStreaming() async {
     try {
+      // Get authentication headers
+      final authHeaders = await _apiAuthService.getAuthHeaders();
+
       final response = await http.post(
         Uri.parse('${appSettings.searchApiUrl}/api/search/streaming'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: json.encode({
           'query': _searchController.text,
           'format_filter': null,
@@ -175,9 +183,15 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
   Future<List<Map<String, dynamic>>> _searchTorrents() async {
     try {
+      // Get authentication headers
+      final authHeaders = await _apiAuthService.getAuthHeaders();
+
       final response = await http.post(
         Uri.parse('${appSettings.searchApiUrl}/api/search/torrents'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: json.encode({
           'query': _searchController.text,
           'format_filter': null,
@@ -221,8 +235,12 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       final wsUrl = appSettings.searchApiUrl.replaceFirst('http', 'ws');
       _channel = WebSocketChannel.connect(Uri.parse('$wsUrl/ws/search'));
 
-      // Send search request
+      // Get authentication data
+      final authData = await _apiAuthService.getWebSocketAuth();
+
+      // Send search request with authentication
       _channel!.sink.add(json.encode({
+        'auth': authData,
         'query': _searchController.text,
         'format_filter': null,
         'min_seeders': 1,

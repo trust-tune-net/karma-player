@@ -30,6 +30,49 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   void initState() {
     super.initState();
     _initialize();
+
+    // Listen to AudioDeviceService changes (e.g., when headphones plugged in)
+    _audioService.addListener(_onAudioDeviceChanged);
+  }
+
+  /// Called when AudioDeviceService notifies of device changes
+  /// This happens when:
+  /// - User plugs/unplugs headphones
+  /// - macOS changes system default device
+  /// - User manually selects device
+  void _onAudioDeviceChanged() {
+    print('[AudioSettings] Audio device changed, updating UI...');
+
+    // Sync UI with the newly selected device from AudioDeviceService
+    final selectedDevice = _audioService.selectedDevice;
+
+    if (selectedDevice != null && selectedDevice.name != 'auto') {
+      // Map MediaKit AudioDevice to PlatformAudioDevice by description
+      final matchingPlatformDevice = _audioService.platformDevices.firstWhere(
+        (d) => d.name == selectedDevice.description,
+        orElse: () => _audioService.platformDevices.isNotEmpty
+            ? _audioService.platformDevices.first
+            : _selectedPlatformDevice!,
+      );
+
+      if (mounted) {
+        setState(() {
+          _selectedPlatformDevice = matchingPlatformDevice;
+        });
+
+        // Reload exclusive mode state and metadata for new device
+        _loadExclusiveModeState(matchingPlatformDevice);
+      }
+
+      print('[AudioSettings] ✓ UI updated to show: ${matchingPlatformDevice.name}');
+    }
+  }
+
+  @override
+  void dispose() {
+    // Remove listener to prevent memory leaks
+    _audioService.removeListener(_onAudioDeviceChanged);
+    super.dispose();
   }
 
   Future<void> _initialize() async {
