@@ -38,6 +38,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   int _progress = 0;
   List<Map<String, dynamic>> _results = [];
   List<Map<String, dynamic>> _filteredResults = [];
+  List<Map<String, dynamic>> _streamingResults = [];
+  List<Map<String, dynamic>> _torrentResults = [];
   bool _isSearching = false;
   SourceFilter _sourceFilter = SourceFilter.all;
 
@@ -105,20 +107,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     });
   }
 
-  void _search() async {
-    if (_searchController.text.trim().isEmpty) return;
-
-    setState(() {
-      _isSearching = true;
-      _progress = 0;
-      _statusMessage = 'Searching...';
-      _results = [];
-    });
-
+  Future<List<Map<String, dynamic>>> _searchStreaming() async {
     try {
-      // Make HTTP POST request to search API
       final response = await http.post(
-        Uri.parse('${appSettings.searchApiUrl}/api/search'),
+        Uri.parse('${appSettings.searchApiUrl}/api/search/streaming'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'query': _searchController.text,
@@ -130,30 +122,80 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        setState(() {
-          _results = List<Map<String, dynamic>>.from(data['results'] ?? []);
-          _applyFilter();
-          _statusMessage = 'Found ${_filteredResults.length} of ${_results.length} results';
-          _isSearching = false;
-        });
-      } else {
-        setState(() {
-          _statusMessage = 'Search failed: ${response.statusCode}';
-          _isSearching = false;
-        });
+        return List<Map<String, dynamic>>.from(data['results'] ?? []);
       }
+    } catch (e) {
+      print('Streaming search error: $e');
+    }
+    return [];
+  }
+
+  Future<List<Map<String, dynamic>>> _searchTorrents() async {
+    try {
+      final response = await http.post(
+        Uri.parse('${appSettings.searchApiUrl}/api/search/torrents'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'query': _searchController.text,
+          'format_filter': null,
+          'min_seeders': 1,
+          'limit': 20,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return List<Map<String, dynamic>>.from(data['results'] ?? []);
+      }
+    } catch (e) {
+      print('Torrent search error: $e');
+    }
+    return [];
+  }
+
+  void _search() async {
+    if (_searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _progress = 0;
+      _statusMessage = 'Searching...';
+      _results = [];
+      _streamingResults = [];
+      _torrentResults = [];
+    });
+
+    try {
+      // Fire both requests concurrently
+      final results = await Future.wait([
+        _searchStreaming(),  // Usually faster (1-2s)
+        _searchTorrents(),   // Usually slower (5-10s or timeout)
+      ]);
+
+      final streamingResults = results[0];
+      final torrentResults = results[1];
+
+      setState(() {
+        _streamingResults = streamingResults;
+        _torrentResults = torrentResults;
+        // Combine results (streaming first for better UX)
+        _results = [...streamingResults, ...torrentResults];
+        _applyFilter();
+        _statusMessage = 'Found ${_filteredResults.length} results (${streamingResults.length} streaming, ${torrentResults.length} torrents)';
+        _isSearching = false;
+      });
     } catch (e, stackTrace) {
       // Report to Glitchtip
       AnalyticsService().captureError(
         e,
         stackTrace,
-        context: 'search_api',
+        context: 'concurrent_search',
         extras: {
           'query': _searchController.text,
           'api_url': appSettings.searchApiUrl,
         },
       );
-      
+
       setState(() {
         _statusMessage = 'Search error: $e';
         _isSearching = false;
@@ -725,16 +767,82 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               const SizedBox(height: 8),
             ],
             Expanded(
-              child: ListView.builder(
-                itemCount: _filteredResults.length,
-                itemBuilder: (context, index) {
-                  final result = _filteredResults[index];
-                  // Support both old 'torrent' and new 'source' keys for backward compatibility
-                  final source = result['source'] ?? result['torrent'];
-                  final sourceType = source['source_type'] ?? 'torrent';
-                  final isStreaming = sourceType == 'youtube' || sourceType == 'piped';
+              child: ListView(
+                children: [
+                  // Streaming section (always on top for fast access)
+                  if (_streamingResults.isNotEmpty && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.streaming)) ...[
+                    _buildSectionHeader('🎵 Stream Now', _streamingResults.length),
+                    ..._streamingResults.map((result) => _buildResultCard(result)),
+                    const SizedBox(height: 16),
+                  ],
 
-                  return Card(
+                  // Torrent section
+                  if (_torrentResults.isNotEmpty && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.torrents)) ...[
+                    _buildSectionHeader('💾 Download (Torrents)', _torrentResults.length),
+                    ..._torrentResults.map((result) => _buildResultCard(result)),
+                  ],
+
+                  // No results
+                  if (_streamingResults.isEmpty && _torrentResults.isEmpty && !_isSearching) ...[
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'No results found',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, int count) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultCard(Map<String, dynamic> result) {
+    final source = result['source'] ?? result['torrent'];
+    final sourceType = source['source_type'] ?? 'torrent';
+    final isStreaming = sourceType == 'youtube' || sourceType == 'piped';
+
+    return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: CircleAvatar(
@@ -828,13 +936,6 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                       isThreeLine: true,
                     ),
                   );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

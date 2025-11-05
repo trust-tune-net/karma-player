@@ -2,7 +2,7 @@
 Simple search orchestrator - No MusicBrainz complexity
 Just: Query → Parse → Search → Rank → Return
 """
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Awaitable
 from dataclasses import dataclass
 import time
 import logging
@@ -47,7 +47,9 @@ class SimpleSearch:
         min_seeders: int = 1,
         limit: int = 20,
         use_ai_parsing: bool = False,
-        progress_callback: Optional[Callable] = None
+        source_type_filter: Optional[str] = None,
+        progress_callback: Optional[Callable] = None,
+        partial_result_callback: Optional[Callable[[str, List[MusicSource]], Awaitable[None]]] = None
     ) -> SimpleSearchResult:
         """
         Execute simple search
@@ -58,10 +60,11 @@ class SimpleSearch:
             min_seeders: Minimum seeders
             limit: Max results to return
             use_ai_parsing: Enable AI query parsing (default: False for performance)
+            source_type_filter: Filter by source type: "torrent", "streaming", or None (all)
             progress_callback: Optional progress updates
 
         Returns:
-            SimpleSearchResult with ranked torrents
+            SimpleSearchResult with ranked results
         """
         start_time = time.time()
 
@@ -148,7 +151,9 @@ class SimpleSearch:
         torrents = await self.search_engine.search(
             query=search_str,
             format_filter=music_query.format,
-            min_seeders=music_query.min_seeders
+            min_seeders=music_query.min_seeders,
+            source_type_filter=source_type_filter,
+            partial_result_callback=partial_result_callback
         )
 
         logger.info(f"   → Found {len(torrents)} torrents from indexers")

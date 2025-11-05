@@ -345,6 +345,156 @@ async def search_advanced(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/search/torrents", response_model=SearchResponse)
+async def search_torrents(request: SearchRequest):
+    """
+    Search torrents only (Jackett, 1337x, etc.)
+
+    This endpoint returns only torrent results, ignoring streaming sources.
+    Use this when you only want downloadable torrents.
+
+    Args:
+        request: SearchRequest with query and filters
+
+    Returns:
+        SearchResponse with torrent results only
+    """
+    if not search_service:
+        raise HTTPException(status_code=503, detail="Search service not initialized")
+
+    logger.info(f"Torrent search request: {request.query}")
+
+    try:
+        # Execute search with torrent filter
+        result = await search_service.search(
+            query=request.query,
+            format_filter=request.format_filter,
+            min_seeders=request.min_seeders,
+            limit=request.limit,
+            use_ai_parsing=False,
+            source_type_filter="torrent"  # Only torrents
+        )
+
+        # Convert to response model
+        ranked_sources = []
+        for ranked in result.results:
+            s = ranked.source
+            ranked_sources.append(
+                RankedSource(
+                    rank=ranked.rank,
+                    source=MusicSourceInfo(
+                        id=s.id,
+                        title=s.title,
+                        url=s.url,
+                        source_type=s.source_type.value,
+                        format=s.format,
+                        quality_score=s.quality_score,
+                        indexer=s.indexer,
+                        # Torrent-specific
+                        magnet_link=s.magnet_link,
+                        size_bytes=s.size_bytes,
+                        size_formatted=s.size_formatted if s.size_bytes else None,
+                        seeders=s.seeders,
+                        leechers=s.leechers,
+                        # Streaming-specific
+                        codec=s.codec,
+                        bitrate=s.bitrate,
+                        thumbnail_url=s.thumbnail_url,
+                        duration_seconds=s.duration_seconds
+                    ),
+                    explanation=ranked.explanation,
+                    tags=ranked.tags
+                )
+            )
+
+        return SearchResponse(
+            query=result.query,
+            sql_query=result.sql_query,
+            total_found=result.total_found,
+            search_time_ms=result.search_time_ms,
+            results=ranked_sources
+        )
+
+    except Exception as e:
+        logger.error(f"Torrent search error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/search/streaming", response_model=SearchResponse)
+async def search_streaming(request: SearchRequest):
+    """
+    Search streaming sources only (YouTube Music, Piped, etc.)
+
+    This endpoint returns only streaming results, ignoring torrents.
+    Use this when you only want instant streaming options.
+
+    Args:
+        request: SearchRequest with query and filters
+
+    Returns:
+        SearchResponse with streaming results only
+    """
+    if not search_service:
+        raise HTTPException(status_code=503, detail="Search service not initialized")
+
+    logger.info(f"Streaming search request: {request.query}")
+
+    try:
+        # Execute search with streaming filter
+        result = await search_service.search(
+            query=request.query,
+            format_filter=request.format_filter,
+            min_seeders=request.min_seeders,
+            limit=request.limit,
+            use_ai_parsing=False,
+            source_type_filter="streaming"  # Only streaming
+        )
+
+        # Convert to response model
+        ranked_sources = []
+        for ranked in result.results:
+            s = ranked.source
+            ranked_sources.append(
+                RankedSource(
+                    rank=ranked.rank,
+                    source=MusicSourceInfo(
+                        id=s.id,
+                        title=s.title,
+                        url=s.url,
+                        source_type=s.source_type.value,
+                        format=s.format,
+                        quality_score=s.quality_score,
+                        indexer=s.indexer,
+                        # Torrent-specific
+                        magnet_link=s.magnet_link,
+                        size_bytes=s.size_bytes,
+                        size_formatted=s.size_formatted if s.size_bytes else None,
+                        seeders=s.seeders,
+                        leechers=s.leechers,
+                        # Streaming-specific
+                        codec=s.codec,
+                        bitrate=s.bitrate,
+                        thumbnail_url=s.thumbnail_url,
+                        duration_seconds=s.duration_seconds
+                    ),
+                    explanation=ranked.explanation,
+                    tags=ranked.tags
+                )
+            )
+
+        return SearchResponse(
+            query=result.query,
+            sql_query=result.sql_query,
+            total_found=result.total_found,
+            search_time_ms=result.search_time_ms,
+            results=ranked_sources
+        )
+
+    except Exception as e:
+        logger.error(f"Streaming search error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class ResolveRequest(BaseModel):
     """Request model for URL resolution"""
     video_id: str
@@ -423,13 +573,18 @@ async def resolve_youtube_url(request: ResolveRequest):
 @app.websocket("/ws/search")
 async def websocket_search(websocket: WebSocket):
     """
-    WebSocket endpoint for real-time search with progress updates
+    WebSocket endpoint for real-time search with progressive results
 
-    Client sends: {"query": "artist name", "format_filter": "FLAC", "min_seeders": 1, "limit": 50}
-    Server sends:
-        - Progress: {"type": "progress", "percent": 50, "message": "Searching..."}
-        - Result: {"type": "result", "data": {...}}
+    Client sends: {"query": "artist name", "format_filter": "FLAC", "min_seeders": 1, "limit": 20}
+    Server sends (in order):
+        - Progress: {"type": "progress", "percent": 10, "message": "Parsing query..."}
+        - Partial Result: {"type": "partial_result", "adapter": "YouTube Music", "count": 20, "results": [...]}
+        - Partial Result: {"type": "partial_result", "adapter": "Jackett (all)", "count": 50, "results": [...]}
+        - Result: {"type": "result", "data": {...}} (complete ranked results)
+        - Complete: {"type": "complete", "total_found": 70, "search_time_ms": 850}
         - Error: {"type": "error", "message": "..."}
+
+    Partial results are sent as each adapter completes, allowing progressive UI updates.
     """
     await websocket.accept()
     logger.info("WebSocket connection established")
@@ -462,13 +617,55 @@ async def websocket_search(websocket: WebSocket):
                 "message": message
             })
 
-        # Execute search with progress updates
+        # Partial result callback - send results as each adapter completes
+        async def send_partial_results(adapter_name: str, sources: List):
+            logger.info(f"   📦 Sending partial results from {adapter_name}: {len(sources)} sources")
+
+            # Build ranked results for this adapter
+            partial_results = []
+            for i, source in enumerate(sources, 1):
+                partial_results.append({
+                    "rank": i,  # Temporary rank, will be re-ranked in final result
+                    "source": {
+                        "id": source.id,
+                        "title": source.title,
+                        "url": source.url,
+                        "source_type": source.source_type.value,
+                        "format": source.format,
+                        "quality_score": source.quality_score,
+                        "indexer": source.indexer,
+                        # Torrent-specific
+                        "magnet_link": source.magnet_link,
+                        "size_bytes": source.size_bytes,
+                        "size_formatted": source.size_formatted if source.size_bytes else None,
+                        "seeders": source.seeders,
+                        "leechers": source.leechers,
+                        # Streaming-specific
+                        "codec": source.codec,
+                        "bitrate": source.bitrate,
+                        "thumbnail_url": source.thumbnail_url,
+                        "duration_seconds": source.duration_seconds
+                    },
+                    "explanation": f"{source.format or 'Unknown'} • {source.indexer}",
+                    "tags": []
+                })
+
+            await websocket.send_json({
+                "type": "partial_result",
+                "adapter": adapter_name,
+                "count": len(partial_results),
+                "results": partial_results
+            })
+
+        # Execute search with progress and partial result updates
         result = await search_service.search(
             query=query,
             format_filter=format_filter,
             min_seeders=min_seeders,
             limit=limit,
-            progress_callback=send_progress
+            use_ai_parsing=False,
+            progress_callback=send_progress,
+            partial_result_callback=send_partial_results
         )
 
         # Convert to response format
@@ -515,7 +712,7 @@ async def websocket_search(websocket: WebSocket):
                 "tags": ranked.tags
             })
 
-        # Send final result
+        # Send final result (optional, clients can use partial results instead)
         await websocket.send_json({
             "type": "result",
             "data": {
@@ -525,6 +722,13 @@ async def websocket_search(websocket: WebSocket):
                 "search_time_ms": result.search_time_ms,
                 "results": ranked_torrents
             }
+        })
+
+        # Send complete signal
+        await websocket.send_json({
+            "type": "complete",
+            "total_found": result.total_found,
+            "search_time_ms": result.search_time_ms
         })
 
         logger.info(f"WebSocket search completed: {result.total_found} results")

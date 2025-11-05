@@ -2,9 +2,9 @@
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Callable, Awaitable
 
-from karma_player.models.source import MusicSource
+from karma_player.models.source import MusicSource, SourceType
 from karma_player.services.search.source_adapter import SourceAdapter
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,8 @@ class SearchEngine:
         format_filter: Optional[str] = None,
         min_seeders: int = 5,
         timeout_per_adapter: float = 8.0,
+        source_type_filter: Optional[str] = None,
+        partial_result_callback: Optional[Callable[[str, List[MusicSource]], Awaitable[None]]] = None,
     ) -> List[MusicSource]:
         """Search all healthy sources and return deduplicated, sorted results.
 
@@ -35,13 +37,28 @@ class SearchEngine:
             format_filter: Optional format filter (FLAC, MP3, etc.)
             min_seeders: Minimum number of seeders (applies to torrent sources only)
             timeout_per_adapter: Maximum time (seconds) to wait for each adapter (default: 8s)
+            source_type_filter: Filter by source type: "torrent", "streaming", or None (all)
+            partial_result_callback: Optional callback for progressive results (adapter_name, results)
 
         Returns:
             List of MusicSource objects, deduplicated and sorted by quality
         """
         # Filter to healthy adapters only
         healthy_adapters = [a for a in self.adapters if a.is_healthy]
-        logger.info(f"🔍 Searching with {len(healthy_adapters)} healthy adapters (timeout: {timeout_per_adapter}s each)")
+
+        # Further filter by source type if specified
+        if source_type_filter == "torrent":
+            healthy_adapters = [
+                a for a in healthy_adapters
+                if a.source_type == SourceType.TORRENT
+            ]
+        elif source_type_filter == "streaming":
+            healthy_adapters = [
+                a for a in healthy_adapters
+                if a.source_type in [SourceType.YOUTUBE, SourceType.PIPED, SourceType.INVIDIOUS]
+            ]
+
+        logger.info(f"🔍 Searching with {len(healthy_adapters)} healthy adapters (filter: {source_type_filter or 'all'}, timeout: {timeout_per_adapter}s each)")
 
         if not healthy_adapters:
             return []
@@ -49,10 +66,17 @@ class SearchEngine:
         # Wrap each search with timeout to prevent slow adapters from blocking
         async def search_with_timeout(adapter: SourceAdapter):
             try:
-                return await asyncio.wait_for(
+                results = await asyncio.wait_for(
                     adapter.search(query),
                     timeout=timeout_per_adapter
                 )
+
+                # Send partial results immediately if callback provided
+                if partial_result_callback and results:
+                    await partial_result_callback(adapter.name, results)
+
+                adapter._update_health(success=True)
+                return results
             except asyncio.TimeoutError:
                 logger.warning(f"⏱️  {adapter.name} timed out after {timeout_per_adapter}s")
                 adapter._update_health(success=False)
@@ -66,13 +90,12 @@ class SearchEngine:
         all_results = []
         for adapter, results in zip(healthy_adapters, results_lists):
             if isinstance(results, Exception):
-                # Adapter failed, mark unhealthy and continue
+                # Adapter failed
                 logger.error(f"   ❌ {adapter.name} failed: {results}", exc_info=results)
                 adapter._update_health(success=False)
                 continue
 
             logger.info(f"   ✓ {adapter.name}: {len(results)} results")
-            adapter._update_health(success=True)
             all_results.extend(results)
 
         # Deduplicate by infohash
