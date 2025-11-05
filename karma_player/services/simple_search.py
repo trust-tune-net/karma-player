@@ -45,7 +45,8 @@ class SimpleSearch:
         query: str,
         format_filter: Optional[str] = None,
         min_seeders: int = 1,
-        limit: int = 50,
+        limit: int = 20,
+        use_ai_parsing: bool = False,
         progress_callback: Optional[Callable] = None
     ) -> SimpleSearchResult:
         """
@@ -56,6 +57,7 @@ class SimpleSearch:
             format_filter: Optional format (FLAC, MP3, etc.)
             min_seeders: Minimum seeders
             limit: Max results to return
+            use_ai_parsing: Enable AI query parsing (default: False for performance)
             progress_callback: Optional progress updates
 
         Returns:
@@ -64,7 +66,7 @@ class SimpleSearch:
         start_time = time.time()
 
         # Log incoming query
-        logger.info(f"🔍 Search query received: '{query}'")
+        logger.info(f"🔍 Search query received: '{query}' (AI parsing: {use_ai_parsing})")
 
         async def progress(percent: int, message: str):
             if progress_callback:
@@ -76,20 +78,31 @@ class SimpleSearch:
 
         await progress(10, "Parsing query...")
 
-        # Try to parse as SQL-like query
+        # Query parsing logic
         music_query = None
         sql_query = None
 
-        if query.upper().startswith("SELECT"):
-            # Already SQL-like
+        if use_ai_parsing and query.upper().startswith("SELECT"):
+            # Already SQL-like query (for power users)
             music_query = SQLLikeParser.parse(query)
             sql_query = query
             logger.info(f"   → SQL query detected: {sql_query}")
-        else:
-            # Convert natural language to SQL
+        elif use_ai_parsing:
+            # AI conversion (opt-in for power users)
             sql_query = await NaturalLanguageToSQL.convert(query)
             music_query = SQLLikeParser.parse(sql_query)
-            logger.info(f"   → Converted to SQL: {sql_query}")
+            logger.info(f"   → AI converted to SQL: {sql_query}")
+        else:
+            # Default: Direct pass-through (FAST! No AI overhead)
+            # Create minimal MusicQuery for filters only
+            music_query = MusicQuery(
+                query_type="album",  # Default type (doesn't matter for direct search)
+                min_seeders=min_seeders,
+                limit=limit,
+                format=format_filter
+            )
+            sql_query = None
+            logger.info(f"   → Direct pass-through (no AI)")
 
         # Override with explicit filters
         if format_filter:
@@ -99,31 +112,37 @@ class SimpleSearch:
         if limit:
             music_query.limit = limit
 
-        # Log parsed query details
-        parsed_details = []
-        if music_query.artist:
-            parsed_details.append(f"artist='{music_query.artist}'")
-        if music_query.album:
-            parsed_details.append(f"album='{music_query.album}'")
-        if music_query.track:
-            parsed_details.append(f"track='{music_query.track}'")
-        if music_query.format:
-            parsed_details.append(f"format={music_query.format}")
-        logger.info(f"   → Parsed: {', '.join(parsed_details) if parsed_details else 'no specific fields'}")
+        # Log parsed query details (if AI parsing was used)
+        if use_ai_parsing:
+            parsed_details = []
+            if music_query.artist:
+                parsed_details.append(f"artist='{music_query.artist}'")
+            if music_query.album:
+                parsed_details.append(f"album='{music_query.album}'")
+            if music_query.track:
+                parsed_details.append(f"track='{music_query.track}'")
+            if music_query.format:
+                parsed_details.append(f"format={music_query.format}")
+            logger.info(f"   → Parsed: {', '.join(parsed_details) if parsed_details else 'no specific fields'}")
 
-        await progress(30, "Searching torrents...")
+        await progress(30, "Searching...")
 
-        # Build search string
-        search_terms = []
-        if music_query.artist:
-            search_terms.append(music_query.artist)
-        if music_query.album:
-            search_terms.append(music_query.album)
-        if music_query.track:
-            search_terms.append(music_query.track)
+        # Build search string - use original query for direct pass-through
+        if use_ai_parsing:
+            # AI parsing: build from extracted fields
+            search_terms = []
+            if music_query.artist:
+                search_terms.append(music_query.artist)
+            if music_query.album:
+                search_terms.append(music_query.album)
+            if music_query.track:
+                search_terms.append(music_query.track)
+            search_str = " ".join(search_terms) if search_terms else query
+        else:
+            # Direct pass-through: use original query as-is
+            search_str = query
 
-        search_str = " ".join(search_terms) if search_terms else query
-        logger.info(f"   → Search terms: '{search_str}' (min_seeders={music_query.min_seeders})")
+        logger.info(f"   → Searching: '{search_str}' (min_seeders={min_seeders}, limit={limit})")
 
         # Search
         torrents = await self.search_engine.search(

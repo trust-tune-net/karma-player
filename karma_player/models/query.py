@@ -44,7 +44,7 @@ class MusicQuery:
     catalog_number: Optional[str] = None
 
     # LIMIT/OFFSET
-    limit: int = 50
+    limit: int = 20
     offset: int = 0
 
     # ORDER BY

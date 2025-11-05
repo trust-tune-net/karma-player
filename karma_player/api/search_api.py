@@ -97,7 +97,7 @@ class SearchRequest(BaseModel):
     query: str
     format_filter: Optional[str] = None
     min_seeders: int = 1
-    limit: int = 50
+    limit: int = 20
 
 
 class MusicSourceInfo(BaseModel):
@@ -192,7 +192,7 @@ async def root():
 @app.post("/api/search", response_model=SearchResponse)
 async def search(request: SearchRequest):
     """
-    Execute music search
+    Execute music search (fast mode - no AI parsing)
 
     Args:
         request: SearchRequest with query and filters
@@ -206,12 +206,13 @@ async def search(request: SearchRequest):
     logger.info(f"Search request: {request.query}")
 
     try:
-        # Execute search
+        # Execute search WITHOUT AI parsing (default for performance)
         result = await search_service.search(
             query=request.query,
             format_filter=request.format_filter,
             min_seeders=request.min_seeders,
-            limit=request.limit
+            limit=request.limit,
+            use_ai_parsing=False  # Disabled for speed and cost savings
         )
 
         # Convert to response model
@@ -259,6 +260,88 @@ async def search(request: SearchRequest):
 
     except Exception as e:
         logger.error(f"Search error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/search/advanced", response_model=SearchResponse)
+async def search_advanced(request: SearchRequest):
+    """
+    Execute advanced music search with AI query parsing (for power users)
+
+    This endpoint uses AI to parse natural language queries into structured searches.
+    Use this for complex queries like:
+    - "radiohead album from 1997 in FLAC format"
+    - SQL-like: "SELECT album WHERE artist='Radiohead' AND year=1997"
+
+    Note: This endpoint is slower and costs more due to OpenAI API calls.
+    Regular users should use /api/search instead.
+
+    Args:
+        request: SearchRequest with query and filters
+
+    Returns:
+        SearchResponse with ranked results
+    """
+    if not search_service:
+        raise HTTPException(status_code=503, detail="Search service not initialized")
+
+    logger.info(f"Advanced search request (with AI): {request.query}")
+
+    try:
+        # Execute search WITH AI parsing (for power users)
+        result = await search_service.search(
+            query=request.query,
+            format_filter=request.format_filter,
+            min_seeders=request.min_seeders,
+            limit=request.limit,
+            use_ai_parsing=True  # Enabled for advanced queries
+        )
+
+        # Convert to response model
+        ranked_sources = []
+        for ranked in result.results:
+            s = ranked.source  # MusicSource object
+            # Use the to_dict() method for proper serialization
+            source_dict = s.to_dict()
+
+            ranked_sources.append(
+                RankedSource(
+                    rank=ranked.rank,
+                    source=MusicSourceInfo(
+                        id=s.id,
+                        title=s.title,
+                        url=s.url,
+                        source_type=s.source_type.value,
+                        format=s.format,
+                        quality_score=s.quality_score,
+                        indexer=s.indexer,
+                        # Torrent-specific
+                        magnet_link=s.magnet_link,
+                        size_bytes=s.size_bytes,
+                        size_formatted=s.size_formatted if s.size_bytes else None,
+                        seeders=s.seeders,
+                        leechers=s.leechers,
+                        # Streaming-specific
+                        codec=s.codec,
+                        bitrate=s.bitrate,
+                        thumbnail_url=s.thumbnail_url,
+                        duration_seconds=s.duration_seconds
+                    ),
+                    explanation=ranked.explanation,
+                    tags=ranked.tags
+                )
+            )
+
+        return SearchResponse(
+            query=result.query,
+            sql_query=result.sql_query,
+            total_found=result.total_found,
+            search_time_ms=result.search_time_ms,
+            results=ranked_sources
+        )
+
+    except Exception as e:
+        logger.error(f"Advanced search error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

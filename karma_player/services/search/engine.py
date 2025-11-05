@@ -26,6 +26,7 @@ class SearchEngine:
         query: str,
         format_filter: Optional[str] = None,
         min_seeders: int = 5,
+        timeout_per_adapter: float = 8.0,
     ) -> List[MusicSource]:
         """Search all healthy sources and return deduplicated, sorted results.
 
@@ -33,19 +34,32 @@ class SearchEngine:
             query: Search query string
             format_filter: Optional format filter (FLAC, MP3, etc.)
             min_seeders: Minimum number of seeders (applies to torrent sources only)
+            timeout_per_adapter: Maximum time (seconds) to wait for each adapter (default: 8s)
 
         Returns:
             List of MusicSource objects, deduplicated and sorted by quality
         """
         # Filter to healthy adapters only
         healthy_adapters = [a for a in self.adapters if a.is_healthy]
-        logger.info(f"🔍 Searching with {len(healthy_adapters)} healthy adapters: {[a.name for a in healthy_adapters]}")
+        logger.info(f"🔍 Searching with {len(healthy_adapters)} healthy adapters (timeout: {timeout_per_adapter}s each)")
 
         if not healthy_adapters:
             return []
 
-        # Search all adapters concurrently
-        tasks = [adapter.search(query) for adapter in healthy_adapters]
+        # Wrap each search with timeout to prevent slow adapters from blocking
+        async def search_with_timeout(adapter: SourceAdapter):
+            try:
+                return await asyncio.wait_for(
+                    adapter.search(query),
+                    timeout=timeout_per_adapter
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"⏱️  {adapter.name} timed out after {timeout_per_adapter}s")
+                adapter._update_health(success=False)
+                return []  # Return empty list, continue with other adapters
+
+        # Search all adapters concurrently with timeout protection
+        tasks = [search_with_timeout(adapter) for adapter in healthy_adapters]
         results_lists = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Combine results from all adapters

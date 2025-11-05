@@ -124,7 +124,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           'query': _searchController.text,
           'format_filter': null,
           'min_seeders': 1,
-          'limit': 50,
+          'limit': 20,
         }),
       );
 
