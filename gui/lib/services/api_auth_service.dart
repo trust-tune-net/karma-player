@@ -1,8 +1,8 @@
-/// API authentication service.
-///
-/// Generates HMAC-based API keys for authenticating with the TrustTune API.
-/// Uses the same HMAC-SHA256 algorithm as the backend to create deterministic
-/// but unpredictable API keys based on device ID + secret salt.
+// API authentication service.
+//
+// Generates HMAC-based API keys for authenticating with the TrustTune API.
+// Uses the same HMAC-SHA256 algorithm as the backend to create deterministic
+// but unpredictable API keys based on device ID + secret salt.
 
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
