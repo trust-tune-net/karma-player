@@ -56,8 +56,12 @@ async def lifespan(app: FastAPI):
         indexer_id="all"
     )
 
-    # Search engine
-    search_engine = SearchEngine(adapters=[jackett])
+    # YouTube Music streaming adapter
+    from karma_player.services.search.adapter_youtube_music import AdapterYouTubeMusic
+    youtube_music = AdapterYouTubeMusic()
+
+    # Search engine with both torrent and streaming sources
+    search_engine = SearchEngine(adapters=[jackett, youtube_music])
 
     # Simple search service
     search_service = SimpleSearch(search_engine)
@@ -103,7 +107,7 @@ class SearchRequest(BaseModel):
     query: str
     format_filter: Optional[str] = None
     min_seeders: int = 1
-    limit: int = 50
+    limit: int = 20
 
 
 class TorrentInfo(BaseModel):
@@ -415,7 +419,7 @@ async def websocket_search(websocket: WebSocket):
         query = request_data.get("query")
         format_filter = request_data.get("format_filter")
         min_seeders = request_data.get("min_seeders", 1)
-        limit = request_data.get("limit", 50)
+        limit = request_data.get("limit", 20)
 
         if not query:
             await websocket.send_json({
@@ -425,7 +429,7 @@ async def websocket_search(websocket: WebSocket):
             await websocket.close()
             return
 
-        logger.info(f"WebSocket search request: {query}")
+        logger.info(f"🔍 WebSocket search: '{query}' (limit={limit}, min_seeders={min_seeders})")
 
         # Progress callback
         async def send_progress(percent: int, message: str):
@@ -435,51 +439,108 @@ async def websocket_search(websocket: WebSocket):
                 "message": message
             })
 
-        # Execute search with progress updates
+        # Partial result callback - send results as each adapter completes
+        async def send_partial_results(adapter_name: str, sources: List):
+            # Limit partial results to the requested limit
+            limited_sources = sources[:limit]
+
+            # Determine source type
+            source_type = "unknown"
+            if limited_sources:
+                source_type = limited_sources[0].source_type.value
+
+            logger.info(f"   📦 {adapter_name}: Sending {len(limited_sources)} {source_type} results (filtered from {len(sources)} total)")
+
+            # Build ranked results for this adapter
+            partial_results = []
+            for i, source in enumerate(limited_sources, 1):
+                partial_results.append({
+                    "rank": i,  # Temporary rank, will be re-ranked in final result
+                    "source": {
+                        "id": source.id,
+                        "title": source.title,
+                        "url": source.url,
+                        "source_type": source.source_type.value,
+                        "format": source.format,
+                        "quality_score": source.quality_score,
+                        "indexer": source.indexer,
+                        # Torrent-specific
+                        "magnet_link": source.magnet_link,
+                        "size_bytes": source.size_bytes,
+                        "size_formatted": source.size_formatted if source.size_bytes else None,
+                        "seeders": source.seeders,
+                        "leechers": source.leechers,
+                        # Streaming-specific
+                        "codec": source.codec,
+                        "bitrate": source.bitrate,
+                        "thumbnail_url": source.thumbnail_url,
+                        "duration_seconds": source.duration_seconds
+                    },
+                    "explanation": f"{source.format or 'Unknown'} • {source.indexer}",
+                    "tags": []
+                })
+
+            await websocket.send_json({
+                "type": "partial_result",
+                "adapter": adapter_name,
+                "count": len(partial_results),
+                "results": partial_results
+            })
+
+        # Execute search with progress and partial result updates
         result = await search_service.search(
             query=query,
             format_filter=format_filter,
             min_seeders=min_seeders,
             limit=limit,
-            progress_callback=send_progress
+            use_ai_parsing=False,
+            progress_callback=send_progress,
+            partial_result_callback=send_partial_results
         )
 
         # Convert to response format
         ranked_torrents = []
         for ranked in result.results:
-            t = ranked.torrent
+            s = ranked.source  # MusicSource object (FIXED: was ranked.torrent)
             ranked_torrents.append({
                 "rank": ranked.rank,
-                "torrent": {
-                    "title": t.title,
-                    "magnet_link": t.magnet_link,
-                    "size_bytes": t.size_bytes,
-                    "size_formatted": t.size_formatted,
-                    "seeders": t.seeders,
-                    "leechers": t.leechers,
-                    "format": t.format,
-                    "bitrate": t.bitrate,
-                    "source": t.source,
-                    "quality_score": t.quality_score,
-                    "indexer": t.indexer
+                "source": {
+                    "id": s.id,
+                    "title": s.title,
+                    "url": s.url,
+                    "source_type": s.source_type.value,
+                    "format": s.format,
+                    "quality_score": s.quality_score,
+                    "indexer": s.indexer,
+                    # Torrent-specific
+                    "magnet_link": s.magnet_link,
+                    "size_bytes": s.size_bytes,
+                    "size_formatted": s.size_formatted if s.size_bytes else None,
+                    "seeders": s.seeders,
+                    "leechers": s.leechers,
+                    # Streaming-specific
+                    "codec": s.codec,
+                    "bitrate": s.bitrate,
+                    "thumbnail_url": s.thumbnail_url,
+                    "duration_seconds": s.duration_seconds
                 },
                 "explanation": ranked.explanation,
                 "tags": ranked.tags
             })
 
+        # Count by source type
+        streaming_count = sum(1 for r in ranked_torrents if r["source"]["source_type"] in ["youtube", "piped", "invidious"])
+        torrent_count = sum(1 for r in ranked_torrents if r["source"]["source_type"] == "torrent")
+
         # Send final result
         await websocket.send_json({
-            "type": "result",
-            "data": {
-                "query": result.query,
-                "sql_query": result.sql_query,
-                "total_found": result.total_found,
-                "search_time_ms": result.search_time_ms,
-                "results": ranked_torrents
-            }
+            "type": "complete",
+            "total_found": result.total_found,
+            "search_time_ms": result.search_time_ms,
+            "results": ranked_torrents
         })
 
-        logger.info(f"WebSocket search completed: {result.total_found} results")
+        logger.info(f"   ✅ Search complete: {len(ranked_torrents)} results ({streaming_count} streaming, {torrent_count} torrents) in {result.search_time_ms}ms")
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")

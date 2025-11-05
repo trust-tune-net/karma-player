@@ -41,6 +41,9 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   List<Map<String, dynamic>> _streamingResults = [];
   List<Map<String, dynamic>> _torrentResults = [];
   bool _isSearching = false;
+  bool _streamingLoading = false;
+  bool _torrentLoading = false;
+  bool _useWebSocket = true;  // Feature flag: false = HTTP, true = WebSocket
   SourceFilter _sourceFilter = SourceFilter.all;
 
   @override
@@ -153,7 +156,143 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     return [];
   }
 
-  void _search() async {
+  void _searchWebSocket() async {
+    if (_searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _streamingLoading = true;
+      _torrentLoading = true;
+      _progress = 0;
+      _statusMessage = 'Connecting...';
+      _results = [];
+      _streamingResults = [];
+      _torrentResults = [];
+    });
+
+    try {
+      // Connect to WebSocket
+      final wsUrl = appSettings.searchApiUrl.replaceFirst('http', 'ws');
+      _channel = WebSocketChannel.connect(Uri.parse('$wsUrl/ws/search'));
+
+      // Send search request
+      _channel!.sink.add(json.encode({
+        'query': _searchController.text,
+        'format_filter': null,
+        'min_seeders': 1,
+        'limit': 20,
+      }));
+
+      // Listen for messages
+      _channel!.stream.listen(
+        (message) {
+          final data = json.decode(message);
+
+          switch (data['type']) {
+            case 'progress':
+              setState(() {
+                _progress = data['percent'] ?? 0;
+                _statusMessage = data['message'] ?? 'Searching...';
+              });
+              break;
+
+            case 'partial_result':
+              // Add partial results as they arrive
+              final adapter = data['adapter'] as String;
+              final newResults = List<Map<String, dynamic>>.from(
+                data['results'] ?? []
+              );
+
+              setState(() {
+                // Determine source type from adapter name or first result
+                if (newResults.isNotEmpty) {
+                  final firstResult = newResults[0];
+                  final source = firstResult['source'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+
+                  if (sourceType == 'youtube' || sourceType == 'piped') {
+                    _streamingResults.addAll(newResults);
+                    _streamingLoading = false;
+                    _statusMessage = 'Found ${_streamingResults.length} streaming results...';
+                  } else {
+                    _torrentResults.addAll(newResults);
+                    _torrentLoading = false;
+                    _statusMessage = 'Found ${_torrentResults.length} torrents...';
+                  }
+
+                  // Update combined results
+                  _results = [..._streamingResults, ..._torrentResults];
+                  _applyFilter();
+                }
+              });
+              break;
+
+            case 'complete':
+              setState(() {
+                _isSearching = false;
+                _streamingLoading = false;
+                _torrentLoading = false;
+                _progress = 100;
+                _statusMessage = 'Found ${_results.length} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
+              });
+              _channel?.sink.close();
+              _channel = null;
+              break;
+
+            case 'error':
+              setState(() {
+                _statusMessage = 'Error: ${data["message"]}';
+                _isSearching = false;
+                _streamingLoading = false;
+                _torrentLoading = false;
+              });
+              _channel?.sink.close();
+              _channel = null;
+              break;
+          }
+        },
+        onError: (error) {
+          print('WebSocket error: $error');
+          setState(() {
+            _statusMessage = 'Connection error: $error';
+            _isSearching = false;
+            _streamingLoading = false;
+            _torrentLoading = false;
+          });
+        },
+        onDone: () {
+          print('WebSocket closed');
+          if (_isSearching) {
+            setState(() {
+              _statusMessage = 'Search completed';
+              _isSearching = false;
+              _streamingLoading = false;
+              _torrentLoading = false;
+            });
+          }
+        },
+      );
+    } catch (e, stackTrace) {
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'websocket_search',
+        extras: {
+          'query': _searchController.text,
+          'api_url': appSettings.searchApiUrl,
+        },
+      );
+
+      setState(() {
+        _statusMessage = 'Connection error: $e';
+        _isSearching = false;
+        _streamingLoading = false;
+        _torrentLoading = false;
+      });
+    }
+  }
+
+  void _searchHTTP() async {
     if (_searchController.text.trim().isEmpty) return;
 
     setState(() {
@@ -200,6 +339,14 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         _statusMessage = 'Search error: $e';
         _isSearching = false;
       });
+    }
+  }
+
+  void _search() {
+    if (_useWebSocket) {
+      _searchWebSocket();
+    } else {
+      _searchHTTP();
     }
   }
 
@@ -770,6 +917,17 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               child: ListView(
                 children: [
                   // Streaming section (always on top for fast access)
+                  if (_streamingLoading && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.streaming)) ...[
+                    _buildSectionHeader('🎵 Stream Now', 0),
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   if (_streamingResults.isNotEmpty && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.streaming)) ...[
                     _buildSectionHeader('🎵 Stream Now', _streamingResults.length),
                     ..._streamingResults.map((result) => _buildResultCard(result)),
@@ -777,13 +935,23 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                   ],
 
                   // Torrent section
+                  if (_torrentLoading && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.torrents)) ...[
+                    _buildSectionHeader('💾 Download (Torrents)', 0),
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  ],
+
                   if (_torrentResults.isNotEmpty && (_sourceFilter == SourceFilter.all || _sourceFilter == SourceFilter.torrents)) ...[
                     _buildSectionHeader('💾 Download (Torrents)', _torrentResults.length),
                     ..._torrentResults.map((result) => _buildResultCard(result)),
                   ],
 
                   // No results
-                  if (_streamingResults.isEmpty && _torrentResults.isEmpty && !_isSearching) ...[
+                  if (_streamingResults.isEmpty && _torrentResults.isEmpty && !_isSearching && !_streamingLoading && !_torrentLoading) ...[
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),

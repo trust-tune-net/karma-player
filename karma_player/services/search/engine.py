@@ -58,7 +58,8 @@ class SearchEngine:
                 if a.source_type in [SourceType.YOUTUBE, SourceType.PIPED, SourceType.INVIDIOUS]
             ]
 
-        logger.info(f"🔍 Searching with {len(healthy_adapters)} healthy adapters (filter: {source_type_filter or 'all'}, timeout: {timeout_per_adapter}s each)")
+        adapter_names = ", ".join([a.name for a in healthy_adapters])
+        logger.info(f"🔍 Searching with {len(healthy_adapters)} adapters: [{adapter_names}] (filter: {source_type_filter or 'all'}, timeout: {timeout_per_adapter}s)")
 
         if not healthy_adapters:
             return []
@@ -91,11 +92,13 @@ class SearchEngine:
         for adapter, results in zip(healthy_adapters, results_lists):
             if isinstance(results, Exception):
                 # Adapter failed
-                logger.error(f"   ❌ {adapter.name} failed: {results}", exc_info=results)
+                logger.error(f"   ❌ {adapter.name} failed: {results}")
                 adapter._update_health(success=False)
                 continue
 
-            logger.info(f"   ✓ {adapter.name}: {len(results)} results")
+            # Determine source type for better logging
+            source_type = results[0].source_type.value if results else "unknown"
+            logger.info(f"   ✓ {adapter.name}: {len(results)} {source_type} results")
             all_results.extend(results)
 
         # Deduplicate by infohash
