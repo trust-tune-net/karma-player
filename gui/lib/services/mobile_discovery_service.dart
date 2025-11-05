@@ -83,8 +83,12 @@ class MobileDiscoveryService extends ChangeNotifier {
     _isInitialized = true;
     notifyListeners();
 
-    // Note: We don't auto-start the server even if _isEnabled is true.
-    // The server will only start when user explicitly toggles it on.
+    // Auto-start server if it was previously enabled
+    // This ensures mobile apps can connect without requiring user to toggle
+    if (_isEnabled) {
+      print('[MobileDiscovery] Auto-starting server (was previously enabled)');
+      await _startDiscovery();
+    }
   }
 
   /// Update local IP address

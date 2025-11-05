@@ -329,6 +329,46 @@ class AudioDeviceService extends ChangeNotifier {
             await _refreshPlatformDevices();
           }
           await _refreshDevices();
+
+          // CRITICAL FIX: When device list changes (headphones plugged in),
+          // automatically follow macOS system default device
+          // This ensures audio routes to newly plugged devices like all other apps
+          if (_platform.supportsNativeEnumeration) {
+            try {
+              final platformDefault = await _platform.getDefaultDevice();
+              if (platformDefault != null) {
+                print('[AudioDevice] System default device: ${platformDefault.name}');
+
+                // Check if system default is different from our current selection
+                final currentDeviceDesc = _selectedDevice?.description ?? '';
+                if (currentDeviceDesc != platformDefault.name) {
+                  print('[AudioDevice] 🔄 System default changed from "$currentDeviceDesc" to "${platformDefault.name}"');
+                  print('[AudioDevice] 🔀 Auto-switching to follow macOS default...');
+
+                  // Find matching MediaKit device and switch to it
+                  try {
+                    final matchingDevice = _availableDevices.firstWhere(
+                      (d) => d.description == platformDefault.name,
+                    );
+
+                    _selectedDevice = matchingDevice;
+                    await _saveDevicePreference();
+                    notifyListeners(); // This will trigger PlaybackService to apply the device
+
+                    print('[AudioDevice] ✅ Auto-switched to: ${matchingDevice.description}');
+                  } catch (e) {
+                    print('[AudioDevice] ⚠️  Could not find MediaKit device for "${platformDefault.name}"');
+                    print('[AudioDevice] Available devices: ${_availableDevices.map((d) => d.description).join(', ')}');
+                  }
+                } else {
+                  print('[AudioDevice] ✓ Already using system default: ${platformDefault.name}');
+                }
+              }
+            } catch (e) {
+              print('[AudioDevice] Warning: Could not check system default: $e');
+              // Non-fatal - continue with current device
+            }
+          }
         },
         onError: (error, stackTrace) {
           // Stream errors may be platform-specific limitations - log only
