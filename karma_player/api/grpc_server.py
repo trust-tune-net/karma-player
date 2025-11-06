@@ -54,42 +54,36 @@ class AuthInterceptor(aio.ServerInterceptor):
         # Validate presence
         if not device_id or not api_key:
             logger.warning(f"gRPC auth failed: missing credentials for {method}")
-            return grpc.unary_unary_rpc_method_handler(
-                lambda request, context: self._abort_with_status(
-                    context,
-                    grpc.StatusCode.UNAUTHENTICATED,
-                    "Missing device_id or api_key in metadata"
-                )
+            return self._create_abort_handler(
+                grpc.StatusCode.UNAUTHENTICATED,
+                "Missing device_id or api_key in metadata"
             )
 
         # Validate device ID format
         if not validate_device_id_format(device_id):
             logger.warning(f"gRPC auth failed: invalid device_id format")
-            return grpc.unary_unary_rpc_method_handler(
-                lambda request, context: self._abort_with_status(
-                    context,
-                    grpc.StatusCode.UNAUTHENTICATED,
-                    "Invalid device ID format"
-                )
+            return self._create_abort_handler(
+                grpc.StatusCode.UNAUTHENTICATED,
+                "Invalid device ID format"
             )
 
         # Validate API key
         if not validate_api_key(device_id, api_key):
             logger.warning(f"gRPC auth failed: invalid API key for {device_id[:8]}...")
-            return grpc.unary_unary_rpc_method_handler(
-                lambda request, context: self._abort_with_status(
-                    context,
-                    grpc.StatusCode.UNAUTHENTICATED,
-                    "Invalid API key"
-                )
+            return self._create_abort_handler(
+                grpc.StatusCode.UNAUTHENTICATED,
+                "Invalid API key"
             )
 
         logger.debug(f"gRPC auth successful: {device_id[:8]}...")
         return await continuation(handler_call_details)
 
-    async def _abort_with_status(self, context, status_code, details):
-        """Helper to abort RPC with proper status"""
-        await context.abort(status_code, details)
+    def _create_abort_handler(self, status_code, details):
+        """Create a handler that aborts the RPC with the given status"""
+        async def abort_handler(request, context):
+            await context.abort(status_code, details)
+
+        return grpc.unary_unary_rpc_method_handler(abort_handler)
 
 
 class SearchServiceServicer(search_pb2_grpc.SearchServiceServicer):

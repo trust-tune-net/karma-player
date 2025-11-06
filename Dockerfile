@@ -38,12 +38,13 @@ RUN useradd -m -u 1000 trusttune && \
 
 USER trusttune
 
-# Expose port (configurable via PORT env var)
+# Expose ports (HTTP/WebSocket and gRPC)
 EXPOSE 3000
+EXPOSE 50051
 
-# Health check
+# Health check (HTTP endpoint)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
-# Run search API using entrypoint script (supports dynamic PORT env var)
+# Run both HTTP and gRPC servers via entrypoint script
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

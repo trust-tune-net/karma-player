@@ -4,18 +4,20 @@
 version: '3.8'
 
 services:
-  # Search API - Lightweight search-only service
+  # Search API - Lightweight search-only service (HTTP + gRPC)
   search-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: trusttune-search-api
     ports:
-      - "3000:3000"
+      - "3000:3000"   # HTTP/WebSocket API
+      - "50051:50051" # gRPC API
     environment:
       # API Configuration
       - SEARCH_API_HOST=0.0.0.0
       - SEARCH_API_PORT=3000
+      - GRPC_PORT=50051
 
       # Security (REQUIRED)
       - API_SECRET_SALT=${API_SECRET_SALT}

@@ -63,6 +63,11 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   @override
   bool get wantKeepAlive => true;
 
+  /// Get API URL with 0.0.0.0 fixed to 127.0.0.1 (0.0.0.0 is server-only)
+  String get _clientApiUrl {
+    return appSettings.searchApiUrl.replaceFirst('0.0.0.0', '127.0.0.1');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -74,8 +79,9 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
   void _initializeGrpcService() {
     try {
-      // Parse gRPC host from API URL
-      final uri = Uri.parse(appSettings.searchApiUrl);
+      // Parse gRPC host from API URL (using _clientApiUrl to fix 0.0.0.0)
+      final uri = Uri.parse(_clientApiUrl);
+
       print('[gRPC] Initializing: ${uri.host}:50051 (secure: ${uri.scheme == 'https'})');
       _grpcService = SearchServiceGrpc(
         authService: _apiAuthService,
@@ -184,7 +190,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       final authHeaders = await _apiAuthService.getAuthHeaders();
 
       final response = await http.post(
-        Uri.parse('${appSettings.searchApiUrl}/api/search/streaming'),
+        Uri.parse('$_clientApiUrl/api/search/streaming'),
         headers: {
           'Content-Type': 'application/json',
           ...authHeaders,
@@ -213,7 +219,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       final authHeaders = await _apiAuthService.getAuthHeaders();
 
       final response = await http.post(
-        Uri.parse('${appSettings.searchApiUrl}/api/search/torrents'),
+        Uri.parse('$_clientApiUrl/api/search/torrents'),
         headers: {
           'Content-Type': 'application/json',
           ...authHeaders,
@@ -399,8 +405,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     });
 
     try {
-      // Connect to WebSocket
-      final wsUrl = appSettings.searchApiUrl.replaceFirst('http', 'ws');
+      // Connect to WebSocket (using _clientApiUrl to fix 0.0.0.0)
+      final wsUrl = _clientApiUrl.replaceFirst('http', 'ws');
       _channel = WebSocketChannel.connect(Uri.parse('$wsUrl/ws/search'));
 
       // Get authentication data
