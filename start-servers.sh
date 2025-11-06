@@ -12,12 +12,9 @@ echo "  gRPC: 0.0.0.0:$GRPC_PORT"
 # Start gRPC server in background (using -m to set PYTHONPATH correctly)
 python -m karma_player.api.grpc_server &
 GRPC_PID=$!
+echo "Started gRPC server (PID: $GRPC_PID)"
 
 # Start HTTP/WebSocket server in foreground
-python -m uvicorn karma_player.api.search_api:app \
+exec python -m uvicorn karma_player.api.search_api:app \
     --host 0.0.0.0 \
-    --port "$HTTP_PORT" &
-HTTP_PID=$!
-
-# Wait for both processes
-wait $GRPC_PID $HTTP_PID
+    --port "$HTTP_PORT"
