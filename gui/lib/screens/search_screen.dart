@@ -53,6 +53,11 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   bool _useWebSocket = true;  // Feature flag: false = HTTP, true = WebSocket (when gRPC fails)
   SourceFilter _sourceFilter = SourceFilter.all;
 
+  // Quality and source toggles
+  bool _reorderByQuality = true;  // Default: ON - sort results by quality score
+  bool _showTorrents = true;      // Show torrent results
+  bool _showYouTube = true;        // Show YouTube/streaming results
+
   // Pagination state
   final ScrollController _scrollController = ScrollController();
   int _currentOffset = 0;
@@ -172,25 +177,53 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
   void _applyFilter() {
     setState(() {
+      // Start with all results
+      List<Map<String, dynamic>> filtered = _results;
+
+      // Apply old filter chip logic (All/Torrents/Streaming)
       switch (_sourceFilter) {
         case SourceFilter.all:
-          _filteredResults = _results;
+          filtered = _results;
           break;
         case SourceFilter.torrents:
-          _filteredResults = _results.where((result) {
+          filtered = _results.where((result) {
             final source = result['source'] ?? result['torrent'];
             final sourceType = source['source_type'] ?? 'torrent';
             return sourceType == 'torrent';
           }).toList();
           break;
         case SourceFilter.streaming:
-          _filteredResults = _results.where((result) {
+          filtered = _results.where((result) {
             final source = result['source'] ?? result['torrent'];
             final sourceType = source['source_type'] ?? 'torrent';
             return sourceType == 'youtube' || sourceType == 'piped';
           }).toList();
           break;
       }
+
+      // Apply new checkbox toggles (Show Torrents / Show YouTube)
+      filtered = filtered.where((result) {
+        final source = result['source'] ?? result['torrent'];
+        final sourceType = source['source_type'] ?? 'torrent';
+        final isTorrent = sourceType == 'torrent';
+        final isStreaming = sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious';
+
+        // Include result based on toggles
+        if (isTorrent && !_showTorrents) return false;
+        if (isStreaming && !_showYouTube) return false;
+        return true;
+      }).toList();
+
+      // Apply quality sorting if toggle is ON
+      if (_reorderByQuality) {
+        filtered.sort((a, b) {
+          final aScore = (a['source'] ?? a['torrent'])['quality_score'] ?? 0.0;
+          final bScore = (b['source'] ?? b['torrent'])['quality_score'] ?? 0.0;
+          return bScore.compareTo(aScore);  // Descending order (highest first)
+        });
+      }
+
+      _filteredResults = filtered;
     });
   }
 
@@ -353,14 +386,17 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           case SearchResultType.complete:
             if (result.completeResult != null) {
               setState(() {
-                // Sort results by quality_score (highest first) to match server ranking
-                _results.sort((a, b) {
-                  final aScore = (a['source'] ?? a['torrent'])['quality_score'] ?? 0.0;
-                  final bScore = (b['source'] ?? b['torrent'])['quality_score'] ?? 0.0;
-                  return bScore.compareTo(aScore);  // Descending order
-                });
+                // Conditionally sort results by quality_score (only if toggle is ON)
+                if (_reorderByQuality) {
+                  _results.sort((a, b) {
+                    final aScore = (a['source'] ?? a['torrent'])['quality_score'] ?? 0.0;
+                    final bScore = (b['source'] ?? b['torrent'])['quality_score'] ?? 0.0;
+                    return bScore.compareTo(aScore);  // Descending order (highest first)
+                  });
+                }
+                // If _reorderByQuality is OFF, results stay in arrival order
 
-                // Recalculate ranks based on sorted position + offset
+                // Recalculate ranks based on position + offset (for internal tracking)
                 for (int i = 0; i < _results.length; i++) {
                   _results[i]['rank'] = _currentOffset + i + 1;
                 }
@@ -1180,9 +1216,111 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                   : const Icon(Icons.search),
               label: const Text('Search'),
             ),
+            const SizedBox(height: 12),
+
+            // Quality and Source Controls (Collapsible)
+            ExpansionTile(
+              initiallyExpanded: true,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              childrenPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              title: const Text(
+                'Quality & Source Filters',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              children: [
+                // Re-order by quality toggle
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Re-order by Quality',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Sort by quality score when search completes',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: _reorderByQuality,
+                      onChanged: (value) {
+                        setState(() {
+                          _reorderByQuality = value;
+                          if (!_isSearching) {
+                            _applyFilter();
+                          }
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                // Source type toggles with Switch widgets
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Torrents',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: _showTorrents,
+                          onChanged: (value) {
+                            setState(() {
+                              _showTorrents = value;
+                              _applyFilter();
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        const Text(
+                          'YouTube',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: _showYouTube,
+                          onChanged: (value) {
+                            setState(() {
+                              _showYouTube = value;
+                              _applyFilter();
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Status and Progress
+            if (_isSearching) ...[
+              LinearProgressIndicator(value: _progress / 100),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              _statusMessage,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
 
-            // Source Filter Toggle
+            // Source Filter Chips (above results)
             if (_results.isNotEmpty) ...[
               Wrap(
                 spacing: 8,
@@ -1222,22 +1360,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
             ],
 
-            // Status and Progress
-            if (_isSearching) ...[
-              LinearProgressIndicator(value: _progress / 100),
-              const SizedBox(height: 8),
-            ],
-            Text(
-              _statusMessage,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-
-            // Results List
+            // Results Count
             if (_filteredResults.isNotEmpty) ...[
               Text(
                 'Showing ${_filteredResults.length} results:',
@@ -1330,6 +1456,86 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     );
   }
 
+  Widget _buildQualityBadge(Map<String, dynamic> source) {
+    final format = source['format']?.toString().toUpperCase() ?? '';
+    final bitrate = source['bitrate']?.toString() ?? '';
+    final codec = source['codec']?.toString().toUpperCase() ?? '';
+    final sourceType = source['source_type'] ?? 'torrent';
+    final isStreaming = sourceType == 'youtube' || sourceType == 'piped';
+
+    String label = '';
+    Color badgeColor = Colors.grey;
+
+    if (format == 'FLAC') {
+      // High-res FLAC: Extract bit depth and sample rate from title/metadata
+      if (bitrate.contains('24') && (bitrate.contains('192') || bitrate.contains('196'))) {
+        label = 'FLAC 24/192';
+        badgeColor = Colors.deepPurple;
+      } else if (bitrate.contains('24') && (bitrate.contains('96') || bitrate.contains('88'))) {
+        label = 'FLAC 24/96';
+        badgeColor = Colors.deepPurple.shade400;
+      } else if (bitrate.contains('24')) {
+        label = 'FLAC 24-bit';
+        badgeColor = Colors.purple;
+      } else {
+        label = 'FLAC';
+        badgeColor = Colors.purple.shade300;
+      }
+    } else if (format == 'MP3') {
+      // MP3: Quality by bitrate
+      if (bitrate.contains('320')) {
+        label = 'MP3 320';
+        badgeColor = Colors.green.shade700;
+      } else if (bitrate.contains('256')) {
+        label = 'MP3 256';
+        badgeColor = Colors.green.shade600;
+      } else if (bitrate.isNotEmpty) {
+        label = 'MP3 $bitrate';
+        badgeColor = Colors.amber.shade700;
+      } else {
+        label = 'MP3';
+        badgeColor = Colors.amber.shade600;
+      }
+    } else if (format == 'M4A' || format == 'AAC') {
+      label = bitrate.isNotEmpty ? 'M4A $bitrate' : 'M4A';
+      badgeColor = Colors.orange.shade600;
+    } else if (isStreaming) {
+      // Streaming: Show codec + bitrate
+      if (codec.isNotEmpty && bitrate.isNotEmpty) {
+        label = '$codec $bitrate';
+      } else if (codec.isNotEmpty) {
+        label = codec;
+      } else {
+        label = 'YouTube';
+      }
+      badgeColor = Colors.blue.shade600;
+    } else if (format.isNotEmpty) {
+      // Other formats: Just show format
+      label = format;
+      badgeColor = Colors.blueGrey.shade600;
+    } else {
+      // Fallback
+      label = 'Unknown';
+      badgeColor = Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: badgeColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
   Widget _buildResultCard(Map<String, dynamic> result) {
     final source = result['source'] ?? result['torrent'];
     final sourceType = source['source_type'] ?? 'torrent';
@@ -1338,22 +1544,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: result['rank'] == 1
-                            ? Theme.of(context).colorScheme.primaryContainer
-                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: Text(
-                          '${result['rank']}',
-                          style: TextStyle(
-                            color: result['rank'] == 1
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
-                                : Theme.of(context).colorScheme.onSurface,
-                            fontWeight: result['rank'] == 1
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ),
+                      leading: _buildQualityBadge(source),
                       title: Text(
                         source['title'],
                         maxLines: 2,
