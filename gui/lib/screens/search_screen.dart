@@ -14,6 +14,8 @@ import '../services/playback_service.dart';
 import '../services/youtube_download_service.dart';
 import '../services/analytics_service.dart';
 import '../services/api_auth_service.dart';
+import '../services/device_service.dart';
+import '../services/search_service_grpc.dart';
 import '../widgets/youtube_download_progress_dialog.dart';
 import '../main.dart';
 
@@ -33,8 +35,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   // Services
   final YouTubeDownloadService _youtubeDownloadService = YouTubeDownloadService();
   final ApiAuthService _apiAuthService = ApiAuthService();
+  final DeviceService _deviceService = DeviceService();
   final TextEditingController _searchController = TextEditingController();
   WebSocketChannel? _channel;
+  SearchServiceGrpc? _grpcService;
 
   String _statusMessage = 'Enter a search query';
   int _progress = 0;
@@ -45,7 +49,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   bool _isSearching = false;
   bool _streamingLoading = false;
   bool _torrentLoading = false;
-  bool _useWebSocket = true;  // Feature flag: false = HTTP, true = WebSocket
+  bool _useGrpc = true;  // Feature flag: try gRPC first, fallback to WebSocket/HTTP
+  bool _useWebSocket = true;  // Feature flag: false = HTTP, true = WebSocket (when gRPC fails)
   SourceFilter _sourceFilter = SourceFilter.all;
 
   // Pagination state
@@ -61,9 +66,27 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   @override
   void initState() {
     super.initState();
+    _initializeGrpcService();
     _loadFilterPreference();
     _verifyYtDlp();
     _scrollController.addListener(_onScroll);
+  }
+
+  void _initializeGrpcService() {
+    try {
+      // Parse gRPC host from API URL
+      final uri = Uri.parse(appSettings.searchApiUrl);
+      _grpcService = SearchServiceGrpc(
+        authService: _apiAuthService,
+        deviceService: _deviceService,
+        host: uri.host,
+        port: 50051,  // gRPC port
+        useSecure: uri.scheme == 'https',
+      );
+    } catch (e) {
+      print('[gRPC] Initialization failed: $e');
+      // Will fall back to WebSocket/HTTP
+    }
   }
 
   void _onScroll() {
@@ -108,6 +131,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     _searchController.dispose();
     _scrollController.dispose();
     _channel?.sink.close();
+    _grpcService?.close();
     _youtubeDownloadService.dispose();
     super.dispose();
   }
@@ -208,6 +232,148 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       print('Torrent search error: $e');
     }
     return [];
+  }
+
+  void _searchGrpc() async {
+    if (_searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _streamingLoading = true;
+      _torrentLoading = true;
+      _progress = 0;
+      _statusMessage = 'Connecting via gRPC...';
+
+      if (_currentOffset == 0) {
+        _results = [];
+        _streamingResults = [];
+        _torrentResults = [];
+        _hasMoreResults = true;
+        _totalFound = 0;
+      }
+    });
+
+    try {
+      if (_grpcService == null) {
+        throw Exception('gRPC service not initialized');
+      }
+
+      // Execute gRPC search with streaming
+      final stream = _grpcService!.search(
+        query: _searchController.text,
+        minSeeders: 1,
+        limit: 20,
+        offset: _currentOffset,
+      );
+
+      await for (final result in stream) {
+        switch (result.type) {
+          case SearchResultType.progress:
+            if (result.progress != null) {
+              setState(() {
+                _progress = result.progress!.percent;
+                _statusMessage = result.progress!.message;
+              });
+            }
+            break;
+
+          case SearchResultType.partialResult:
+            if (result.partialResult != null) {
+              final adapter = result.partialResult!.adapterName;
+              final count = result.partialResult!.sources.length;
+              setState(() {
+                _statusMessage = 'Searching... ($adapter found $count results)';
+              });
+            }
+            break;
+
+          case SearchResultType.complete:
+            if (result.completeResult != null) {
+              final newResults = result.completeResult!.rankedSources
+                  .map((ranked) => _convertGrpcSourceToMap(ranked))
+                  .toList();
+
+              setState(() {
+                if (_currentOffset > 0) {
+                  _results.addAll(newResults);
+                } else {
+                  _results = newResults;
+                }
+
+                // Separate streaming/torrent
+                _streamingResults = _results.where((r) {
+                  final source = r['source'] ?? r['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  return ['youtube', 'piped', 'invidious'].contains(sourceType);
+                }).toList();
+
+                _torrentResults = _results.where((r) {
+                  final source = r['source'] ?? r['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  return sourceType == 'torrent';
+                }).toList();
+
+                _applyFilter();
+                _streamingLoading = false;
+                _torrentLoading = false;
+                _isSearching = false;
+                _progress = 100;
+                _statusMessage = 'Found ${_results.length} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
+
+                // Update pagination state
+                _totalFound = result.completeResult!.totalFound;
+                _hasMoreResults = (_currentOffset + _results.length) < _totalFound;
+              });
+            }
+            break;
+
+          case SearchResultType.error:
+            if (result.error != null) {
+              throw Exception(result.error!.message);
+            }
+            break;
+        }
+      }
+    } catch (e) {
+      print('[gRPC] Search failed: $e');
+      setState(() {
+        _statusMessage = 'gRPC failed, falling back to WebSocket...';
+        _isSearching = false;
+      });
+      // Fallback to WebSocket/HTTP
+      if (_useWebSocket) {
+        _searchWebSocket();
+      } else {
+        _searchHTTP();
+      }
+    }
+  }
+
+  Map<String, dynamic> _convertGrpcSourceToMap(RankedMusicSource ranked) {
+    final source = ranked.source;
+    return {
+      'rank': ranked.rank,
+      'source': {
+        'id': source.id,
+        'title': source.title,
+        'url': source.url,
+        'source_type': source.sourceType,
+        'format': source.format,
+        'quality_score': source.qualityScore,
+        'indexer': source.indexer,
+        'magnet_link': source.magnetLink,
+        'size_bytes': source.sizeBytes,
+        'size_formatted': source.sizeFormatted,
+        'seeders': source.seeders,
+        'leechers': source.leechers,
+        'codec': source.codec,
+        'bitrate': source.bitrate,
+        'thumbnail_url': source.thumbnailUrl,
+        'duration_seconds': source.durationSeconds,
+      },
+      'explanation': ranked.explanation,
+      'tags': ranked.tags,
+    };
   }
 
   void _searchWebSocket() async {
@@ -431,7 +597,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       _totalFound = 0;
     });
 
-    if (_useWebSocket) {
+    // Try gRPC first (binary protocol, faster), fallback to WebSocket/HTTP
+    if (_useGrpc && _grpcService != null) {
+      _searchGrpc();
+    } else if (_useWebSocket) {
       _searchWebSocket();
     } else {
       _searchHTTP();
