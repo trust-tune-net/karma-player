@@ -26,7 +26,7 @@ class SearchEngine:
         query: str,
         format_filter: Optional[str] = None,
         min_seeders: int = 5,
-        timeout_per_adapter: float = 15.0,
+        timeout_per_adapter: float = 60.0,
         source_type_filter: Optional[str] = None,
         partial_result_callback: Optional[Callable[[str, List[MusicSource]], Awaitable[None]]] = None,
     ) -> List[MusicSource]:
@@ -36,7 +36,7 @@ class SearchEngine:
             query: Search query string
             format_filter: Optional format filter (FLAC, MP3, etc.)
             min_seeders: Minimum number of seeders (applies to torrent sources only)
-            timeout_per_adapter: Maximum time (seconds) to wait for each adapter (default: 8s)
+            timeout_per_adapter: Maximum time (seconds) to wait for each adapter (default: 60s)
             source_type_filter: Filter by source type: "torrent", "streaming", or None (all)
             partial_result_callback: Optional callback for progressive results (adapter_name, results)
 

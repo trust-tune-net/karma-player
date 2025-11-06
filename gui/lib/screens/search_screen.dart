@@ -128,8 +128,14 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       _currentOffset += 20; // Move to next page
     });
 
-    // Perform another search with new offset
-    _searchWebSocket();
+    // Perform another search with new offset using the same method as initial search
+    if (_useGrpc && _grpcService != null) {
+      _searchGrpc();
+    } else if (_useWebSocket) {
+      _searchWebSocket();
+    } else {
+      _searchHTTP();
+    }
   }
 
   /// Verify yt-dlp binary is available and working
@@ -292,27 +298,40 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           case SearchResultType.partialResult:
             if (result.partialResult != null) {
               final adapter = result.partialResult!.adapterName;
-              final count = result.partialResult!.sources.length;
+              final partialSources = result.partialResult!.sources;
+
+              // Convert partial sources to map format and add to results immediately
+              final newPartialResults = partialSources.map((source) {
+                return {
+                  'rank': 0,  // Placeholder - will be recalculated after complete
+                  'source': {
+                    'id': source.id,
+                    'title': source.title,
+                    'url': source.url,
+                    'source_type': source.sourceType,
+                    'format': source.format,
+                    'quality_score': source.qualityScore,
+                    'indexer': source.indexer,
+                    'magnet_link': source.magnetLink,
+                    'size_bytes': source.sizeBytes,
+                    'size_formatted': source.sizeFormatted,
+                    'seeders': source.seeders,
+                    'leechers': source.leechers,
+                    'codec': source.codec,
+                    'bitrate': source.bitrate,
+                    'thumbnail_url': source.thumbnailUrl,
+                    'duration_seconds': source.durationSeconds,
+                  },
+                  'explanation': '',
+                  'tags': [],
+                };
+              }).toList();
+
               setState(() {
-                _statusMessage = 'Searching... ($adapter found $count results)';
-              });
-            }
-            break;
+                // Add partial results immediately
+                _results.addAll(newPartialResults);
 
-          case SearchResultType.complete:
-            if (result.completeResult != null) {
-              final newResults = result.completeResult!.rankedSources
-                  .map((ranked) => _convertGrpcSourceToMap(ranked))
-                  .toList();
-
-              setState(() {
-                if (_currentOffset > 0) {
-                  _results.addAll(newResults);
-                } else {
-                  _results = newResults;
-                }
-
-                // Separate streaming/torrent
+                // Update streaming/torrent counts
                 _streamingResults = _results.where((r) {
                   final source = r['source'] ?? r['torrent'];
                   final sourceType = source['source_type'] ?? 'torrent';
@@ -326,15 +345,39 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                 }).toList();
 
                 _applyFilter();
+                _statusMessage = '$adapter: ${partialSources.length} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
+              });
+            }
+            break;
+
+          case SearchResultType.complete:
+            if (result.completeResult != null) {
+              setState(() {
+                // Sort results by quality_score (highest first) to match server ranking
+                _results.sort((a, b) {
+                  final aScore = (a['source'] ?? a['torrent'])['quality_score'] ?? 0.0;
+                  final bScore = (b['source'] ?? b['torrent'])['quality_score'] ?? 0.0;
+                  return bScore.compareTo(aScore);  // Descending order
+                });
+
+                // Recalculate ranks based on sorted position + offset
+                for (int i = 0; i < _results.length; i++) {
+                  _results[i]['rank'] = _currentOffset + i + 1;
+                }
+
+                // Finalize the search state
                 _streamingLoading = false;
                 _torrentLoading = false;
                 _isSearching = false;
+                _isLoadingMore = false;
                 _progress = 100;
-                _statusMessage = 'Found ${_results.length} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
 
                 // Update pagination state
                 _totalFound = result.completeResult!.totalFound;
                 _hasMoreResults = (_currentOffset + _results.length) < _totalFound;
+
+                // Show both loaded and total available
+                _statusMessage = 'Showing ${_results.length} of ${_totalFound} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
               });
             }
             break;
@@ -430,6 +473,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       _channel!.stream.listen(
         (message) {
           final data = json.decode(message);
+          print('[WS] Received message type: ${data['type']}');
 
           switch (data['type']) {
             case 'progress':
@@ -443,6 +487,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               // Show progress as each adapter completes
               final adapter = data['adapter'] as String;
               final count = data['count'] ?? 0;
+              print('[WS] Partial result from $adapter: $count results');
               setState(() {
                 _statusMessage = 'Searching... ($adapter found $count results)';
               });
@@ -450,10 +495,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
             case 'result':
               // This is the unified, quality-sorted results from the backend
+              print('[WS] Result message received');
               final resultData = data['data'];
+              print('[WS] resultData keys: ${resultData?.keys}');
               final newResults = List<Map<String, dynamic>>.from(
                 resultData['results'] ?? []
               );
+              print('[WS] Received ${newResults.length} results');
 
               setState(() {
                 // For pagination, append new results to existing ones
@@ -463,19 +511,24 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                   // New search, replace results
                   _results = newResults;
                 }
+                print('[WS] Total _results: ${_results.length}');
 
                 // Separate into streaming/torrent for display counts
+                print('[WS] Starting filtering...');
                 _streamingResults = _results.where((result) {
                   final source = result['source'] ?? result['torrent'];
                   final sourceType = source['source_type'] ?? 'torrent';
-                  return sourceType == 'youtube' || sourceType == 'piped';
+                  print('[FILTER] source_type: $sourceType, title: ${source['title']}');
+                  return sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious';
                 }).toList();
+                print('[WS] Filtered _streamingResults: ${_streamingResults.length}');
 
                 _torrentResults = _results.where((result) {
                   final source = result['source'] ?? result['torrent'];
                   final sourceType = source['source_type'] ?? 'torrent';
                   return sourceType == 'torrent';
                 }).toList();
+                print('[WS] Filtered _torrentResults: ${_torrentResults.length}');
 
                 _streamingLoading = false;
                 _torrentLoading = false;
@@ -607,7 +660,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       _currentOffset = 0;
       _hasMoreResults = true;
       _totalFound = 0;
+      _results = [];
+      _streamingResults = [];
+      _torrentResults = [];
+      _filteredResults = [];
     });
+
+    print('[SEARCH] Starting new search, offset reset to: $_currentOffset');
 
     // Try gRPC first (binary protocol, faster), fallback to WebSocket/HTTP
     print('[SEARCH] useGrpc: $_useGrpc, grpcService: ${_grpcService != null ? 'available' : 'null'}');
