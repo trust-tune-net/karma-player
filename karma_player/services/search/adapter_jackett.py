@@ -76,6 +76,10 @@ class AdapterJackett(SourceAdapter):
         max_retries = 2 if "localhost" not in self.base_url else 1
         retry_delay = 3  # seconds
 
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔎 Jackett searching: query='{query}', base_url={self.base_url}")
+
         for attempt in range(max_retries):
             try:
                 # Torznab API endpoint
@@ -99,6 +103,7 @@ class AdapterJackett(SourceAdapter):
                 async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
                     async with session.get(url, params=params) as response:
                         if response.status != 200:
+                            logger.warning(f"❌ Jackett HTTP {response.status} (attempt {attempt+1}/{max_retries})")
                             if attempt < max_retries - 1:
                                 # Wait and retry (might be cold start)
                                 await asyncio.sleep(retry_delay)
@@ -107,13 +112,16 @@ class AdapterJackett(SourceAdapter):
                             return []
 
                         xml_text = await response.text()
+                        logger.info(f"✓ Jackett HTTP 200, XML length: {len(xml_text)} bytes")
 
                 # Parse Torznab XML response
                 results = self._parse_torznab_xml(xml_text)
+                logger.info(f"✅ Jackett parsed: {len(results)} results (PROXY_URL_SUPPORT=ENABLED)")
                 self._update_health(success=True)
                 return results
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.error(f"❌ Jackett network error (attempt {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     # Timeout or connection error - might be cold start, retry
                     await asyncio.sleep(retry_delay)
@@ -122,6 +130,7 @@ class AdapterJackett(SourceAdapter):
                 self._update_health(success=False)
                 return []
             except Exception as e:
+                logger.error(f"❌ Jackett unexpected error (attempt {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
                     continue
