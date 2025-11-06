@@ -82,13 +82,17 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       // Parse gRPC host from API URL (using _clientApiUrl to fix 0.0.0.0)
       final uri = Uri.parse(_clientApiUrl);
 
-      print('[gRPC] Initializing: ${uri.host}:50051 (secure: ${uri.scheme == 'https'})');
+      // gRPC on non-standard ports (50051) typically doesn't use TLS
+      // Only use secure connection if explicitly configured (port 443)
+      final useSecure = false; // gRPC port 50051 is insecure by default
+
+      print('[gRPC] Initializing: ${uri.host}:50051 (secure: $useSecure)');
       _grpcService = SearchServiceGrpc(
         authService: _apiAuthService,
         deviceService: _deviceService,
         host: uri.host,
         port: 50051,  // gRPC port
-        useSecure: uri.scheme == 'https',
+        useSecure: useSecure,
       );
       print('[gRPC] ✅ Service initialized successfully');
     } catch (e) {

@@ -26,7 +26,7 @@ class SearchEngine:
         query: str,
         format_filter: Optional[str] = None,
         min_seeders: int = 5,
-        timeout_per_adapter: float = 8.0,
+        timeout_per_adapter: float = 15.0,
         source_type_filter: Optional[str] = None,
         partial_result_callback: Optional[Callable[[str, List[MusicSource]], Awaitable[None]]] = None,
     ) -> List[MusicSource]:
