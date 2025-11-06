@@ -76,6 +76,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     try {
       // Parse gRPC host from API URL
       final uri = Uri.parse(appSettings.searchApiUrl);
+      print('[gRPC] Initializing: ${uri.host}:50051 (secure: ${uri.scheme == 'https'})');
       _grpcService = SearchServiceGrpc(
         authService: _apiAuthService,
         deviceService: _deviceService,
@@ -83,8 +84,9 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         port: 50051,  // gRPC port
         useSecure: uri.scheme == 'https',
       );
+      print('[gRPC] ✅ Service initialized successfully');
     } catch (e) {
-      print('[gRPC] Initialization failed: $e');
+      print('[gRPC] ❌ Initialization failed: $e');
       // Will fall back to WebSocket/HTTP
     }
   }
@@ -598,11 +600,15 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     });
 
     // Try gRPC first (binary protocol, faster), fallback to WebSocket/HTTP
+    print('[SEARCH] useGrpc: $_useGrpc, grpcService: ${_grpcService != null ? 'available' : 'null'}');
     if (_useGrpc && _grpcService != null) {
+      print('[SEARCH] → Using gRPC');
       _searchGrpc();
     } else if (_useWebSocket) {
+      print('[SEARCH] → Using WebSocket (gRPC unavailable)');
       _searchWebSocket();
     } else {
+      print('[SEARCH] → Using HTTP');
       _searchHTTP();
     }
   }

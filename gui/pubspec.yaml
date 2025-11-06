@@ -69,7 +69,7 @@ dependencies:
 
   # gRPC & Protobuf
   grpc: ^4.0.1  # gRPC client for binary protocol communication
-  protobuf: ^3.1.0  # Protocol buffers for efficient data serialization
+  protobuf: ^5.0.0  # Protocol buffers for efficient data serialization
 
   # UI Enhancements
   google_fonts: ^6.2.1  # Already included - will use Inter font
