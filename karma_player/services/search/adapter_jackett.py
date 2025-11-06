@@ -121,7 +121,9 @@ class AdapterJackett(SourceAdapter):
                 return results
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                logger.error(f"❌ Jackett network error (attempt {attempt+1}/{max_retries}): {e}")
+                import traceback
+                logger.error(f"❌ Jackett network error (attempt {attempt+1}/{max_retries}): {type(e).__name__}: {e}")
+                logger.error(f"   Traceback: {traceback.format_exc()}")
                 if attempt < max_retries - 1:
                     # Timeout or connection error - might be cold start, retry
                     await asyncio.sleep(retry_delay)
@@ -130,7 +132,9 @@ class AdapterJackett(SourceAdapter):
                 self._update_health(success=False)
                 return []
             except Exception as e:
-                logger.error(f"❌ Jackett unexpected error (attempt {attempt+1}/{max_retries}): {e}")
+                import traceback
+                logger.error(f"❌ Jackett unexpected error (attempt {attempt+1}/{max_retries}): {type(e).__name__}: {e}")
+                logger.error(f"   Traceback: {traceback.format_exc()}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
                     continue
