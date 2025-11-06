@@ -143,13 +143,40 @@ class TransmissionClient {
     return _rpcRequest('session-get');
   }
 
+  /// Resolve Jackett proxy URL to magnet link
+  Future<String> _resolveJackettProxyUrl(String proxyUrl) async {
+    try {
+      final response = await http.head(Uri.parse(proxyUrl));
+
+      // Jackett returns HTTP 302 with magnet link in Location header
+      if (response.statusCode == 302 || response.statusCode == 301) {
+        final location = response.headers['location'];
+        if (location != null && location.startsWith('magnet:')) {
+          return location;
+        }
+      }
+
+      // If no redirect or invalid location, return original URL
+      return proxyUrl;
+    } catch (e) {
+      // If HEAD request fails, return original URL
+      return proxyUrl;
+    }
+  }
+
   /// Add a torrent by magnet link or URL
   Future<int> addTorrent({
     required String magnetLink,
     String? downloadDir,
   }) async {
+    // If this is a Jackett proxy URL, resolve it to actual magnet link
+    String resolvedMagnetLink = magnetLink;
+    if (!magnetLink.startsWith('magnet:') && (magnetLink.contains('/dl/') || magnetLink.contains('/download/'))) {
+      resolvedMagnetLink = await _resolveJackettProxyUrl(magnetLink);
+    }
+
     final arguments = {
-      'filename': magnetLink,
+      'filename': resolvedMagnetLink,
       if (downloadDir != null) 'download-dir': downloadDir,
     };
 

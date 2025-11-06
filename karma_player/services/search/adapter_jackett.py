@@ -161,15 +161,20 @@ class AdapterJackett(SourceAdapter):
                         if name and value:
                             attrs[name] = value
 
-                    # Get magnet link (prefer magneturl over link)
+                    # Get magnet link or proxy URL
+                    # Prefer direct magnet link, but accept Jackett proxy URLs too
                     magnet_link = attrs.get("magneturl", "")
                     if not magnet_link and link.startswith("magnet:"):
                         magnet_link = link
 
-                    # ONLY accept real magnet URIs (skip Jackett proxy URLs)
-                    # Jackett proxy URLs (base_url/dl/) can't be used with libtorrent
-                    if not magnet_link or not magnet_link.startswith("magnet:"):
-                        continue  # Skip if no valid magnet link
+                    # If no magnet link, use the link field (Jackett proxy URL)
+                    # GUI will resolve proxy URLs to magnet links at download time
+                    if not magnet_link:
+                        magnet_link = link
+
+                    # Skip if no link at all
+                    if not magnet_link:
+                        continue
 
                     # Parse attributes
                     seeders = int(attrs.get("seeders", "0"))
@@ -227,12 +232,18 @@ class AdapterJackett(SourceAdapter):
                                     format_type = "AAC"
 
                     # Generate infohash for ID
+                    # For magnet links: extract infohash from URI
+                    # For proxy URLs: hash the URL itself
                     import re
                     import hashlib
-                    match = re.search(r"xt=urn:btih:([a-fA-F0-9]+)", magnet_link)
-                    if match:
-                        infohash = match.group(1).lower()
+                    if magnet_link.startswith("magnet:"):
+                        match = re.search(r"xt=urn:btih:([a-fA-F0-9]+)", magnet_link)
+                        if match:
+                            infohash = match.group(1).lower()
+                        else:
+                            infohash = hashlib.sha1(magnet_link.encode()).hexdigest()[:40].lower()
                     else:
+                        # Proxy URL - use hash of URL as ID
                         infohash = hashlib.sha1(magnet_link.encode()).hexdigest()[:40].lower()
 
                     results.append(

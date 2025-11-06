@@ -3,10 +3,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'daemon_manager.dart';
 import 'app_settings.dart';
 import 'transmission_client.dart';
 import 'analytics_service.dart';
+import 'api_auth_service.dart';
+import 'device_service.dart';
+import 'search_service_grpc.dart';
 
 enum DiagnosticStatus { success, warning, error, info }
 
@@ -51,6 +55,8 @@ class DiagnosticResult {
 class DiagnosticsService {
   final DaemonManager daemonManager;
   final AppSettings appSettings;
+  final ApiAuthService _apiAuthService = ApiAuthService();
+  final DeviceService _deviceService = DeviceService();
 
   DiagnosticsService({
     required this.daemonManager,
@@ -249,69 +255,147 @@ class DiagnosticsService {
   }
 
   Future<DiagnosticResult> _checkTestSearch() async {
+    final stopwatch = Stopwatch()..start();
+
+    // Try gRPC first
     try {
-      final url = '${appSettings.searchApiUrl}/api/search';
-      final body = jsonEncode({
+      final uri = Uri.parse(appSettings.searchApiUrl);
+      // gRPC on port 50051 is typically insecure (plaintext)
+      final useSecure = false;
+
+      final grpcService = SearchServiceGrpc(
+        authService: _apiAuthService,
+        deviceService: _deviceService,
+        host: uri.host,
+        port: 50051,
+        useSecure: useSecure,
+      );
+
+      int totalResults = 0;
+      int completeResults = 0;
+      String? errorMessage;
+
+      await for (final result in grpcService.search(
+        query: 'pink floyd',
+        minSeeders: 1,
+        limit: 10,
+      ).timeout(
+        const Duration(seconds: 3),
+        onTimeout: (sink) => throw TimeoutException('gRPC timed out'),
+      )) {
+        if (result.type == SearchResultType.complete) {
+          totalResults = result.completeResult!.totalFound;
+          completeResults = result.completeResult!.rankedSources.length;
+          break;
+        } else if (result.type == SearchResultType.error) {
+          errorMessage = result.error?.message ?? 'Unknown error';
+          break;
+        }
+      }
+
+      stopwatch.stop();
+
+      // gRPC worked!
+      if (completeResults > 0) {
+        return DiagnosticResult(
+          name: 'Test Search',
+          status: DiagnosticStatus.success,
+          message: 'Search working (gRPC)',
+          details: 'Query: "pink floyd"\nProtocol: gRPC (binary)\nTotal found: $totalResults\nResults: $completeResults\nTime: ${stopwatch.elapsedMilliseconds}ms',
+        );
+      }
+
+      // gRPC returned 0 results or error - fallback to WebSocket
+    } catch (e) {
+      // gRPC failed - fallback to WebSocket
+    }
+
+    // Fallback to WebSocket
+    stopwatch.reset();
+    stopwatch.start();
+
+    try {
+      final wsUrl = appSettings.searchApiUrl.replaceFirst('http', 'ws');
+      final channel = WebSocketChannel.connect(Uri.parse('$wsUrl/ws/search'));
+
+      final authData = await _apiAuthService.getWebSocketAuth();
+
+      channel.sink.add(json.encode({
+        'auth': authData,
         'query': 'pink floyd',
         'format_filter': null,
         'min_seeders': 1,
         'limit': 10,
-      });
+        'offset': 0,
+      }));
 
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      ).timeout(
-        const Duration(seconds: 90),
-        onTimeout: () => throw TimeoutException('Search request timed out'),
-      );
+      int totalResults = 0;
+      int completeResults = 0;
+      String? errorMessage;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final results = data['results'] as List? ?? [];
-        final totalFound = data['total_found'] ?? 0;
-        final searchTime = data['search_time_ms'] ?? 0;
+      await for (final message in channel.stream.timeout(
+        const Duration(seconds: 15),
+        onTimeout: (sink) => throw TimeoutException('WebSocket timed out'),
+      )) {
+        final data = json.decode(message);
 
-        // Check if results have magnet links
-        var validMagnets = 0;
-        if (results.isNotEmpty) {
-          for (var result in results) {
-            final source = result['source'] ?? result['torrent'];
-            final magnetLink = source?['magnet_link'] ?? source?['url'];
-            if (magnetLink != null && 
-                magnetLink.toString().trim().isNotEmpty &&
-                magnetLink.toString().startsWith('magnet:')) {
-              validMagnets++;
-            }
+        // Accept partial_result as proof search is working (much faster!)
+        if (data['type'] == 'partial_result') {
+          final count = data['count'] ?? 0;
+          if (count > 0) {
+            completeResults = count;
+            break;  // Got results from first adapter - search works!
           }
+        } else if (data['type'] == 'result') {
+          final resultData = data['data'];
+          final results = List<Map<String, dynamic>>.from(resultData['results'] ?? []);
+          completeResults = results.length;
+          if (completeResults > 0) {
+            break;
+          }
+        } else if (data['type'] == 'complete') {
+          totalResults = data['total_found'] ?? 0;
+          break;
+        } else if (data['type'] == 'error') {
+          errorMessage = data['message'] ?? 'Unknown error';
+          break;
         }
+      }
 
-        final hasValidResults = results.isNotEmpty && validMagnets > 0;
+      channel.sink.close();
+      stopwatch.stop();
 
+      if (errorMessage != null) {
         return DiagnosticResult(
           name: 'Test Search',
-          status: hasValidResults ? DiagnosticStatus.success : DiagnosticStatus.warning,
-          message: hasValidResults
-              ? 'Search working correctly'
-              : 'Search returned results but no valid magnet links',
-          details: 'Query: "pink floyd"\nTotal found: $totalFound\nResults returned: ${results.length}\nWith valid magnets: $validMagnets\nSearch time: ${searchTime}ms',
+          status: DiagnosticStatus.error,
+          message: 'Search failed (WebSocket)',
+          details: 'Query: "pink floyd"\nProtocol: WebSocket\nError: $errorMessage\nTime: ${stopwatch.elapsedMilliseconds}ms',
+        );
+      }
+
+      if (completeResults > 0) {
+        return DiagnosticResult(
+          name: 'Test Search',
+          status: DiagnosticStatus.success,
+          message: 'Search working (WebSocket fallback)',
+          details: 'Query: "pink floyd"\nProtocol: WebSocket (gRPC unavailable)\nTotal found: $totalResults\nResults: $completeResults\nTime: ${stopwatch.elapsedMilliseconds}ms',
         );
       } else {
         return DiagnosticResult(
           name: 'Test Search',
-          status: DiagnosticStatus.error,
-          message: 'Search request failed',
-          details: 'Status: ${response.statusCode}\nBody: ${response.body}',
+          status: DiagnosticStatus.warning,
+          message: 'Search returned no results',
+          details: 'Query: "pink floyd"\nProtocol: WebSocket\nTotal found: $totalResults\nTime: ${stopwatch.elapsedMilliseconds}ms',
         );
       }
     } catch (e, stackTrace) {
-      // Diagnostics are user-initiated tests - don't report to Glitchtip
+      stopwatch.stop();
       return DiagnosticResult(
         name: 'Test Search',
         status: DiagnosticStatus.error,
-        message: 'Search request failed',
-        details: e.toString(),
+        message: 'Both gRPC and WebSocket failed',
+        details: 'Query: "pink floyd"\nError: ${e.toString()}\nTime: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
   }
