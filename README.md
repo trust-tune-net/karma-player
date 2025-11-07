@@ -10,11 +10,11 @@
 <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python"/>
 <img src="https://img.shields.io/badge/flutter-3.9+-blue.svg" alt="Flutter"/>
 
-### AI-powered music discovery with quality you can trust
+### Music discovery with quality you can trust
 
-*Talk to it like a friend. Query it like a database. Own your music. Pay artists fairly.*
+*Search naturally or query like a database. Own your music. Pay artists fairly.*
 
-**[Download](#installation)** • **[Quick Start](#usage)** • **[Documentation](docs/VISION.md)** • **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)**
+**[Download](#-installation)** • **[Quick Start](#-quick-start)** • **[Roadmap](ROADMAP.md)** • **[Documentation](docs/VISION.md)**
 
 <br/>
 
@@ -28,21 +28,20 @@
 
 ---
 
-## What and Why
+## What is TrustTune?
 
-> **The future of music shouldn’t be controlled by algorithms, middlemen, or opaque platforms.**
+> **The future of music shouldn't be controlled by algorithms, middlemen, or opaque platforms.**
 
-You can stream anything on Spotify, but artists get **$0.003 per play**. You can find FLAC torrents, but which ones are real? Which are transcodes? Which uploaders are trusted?
+TrustTune is a **music discovery app** that finds high-quality music ranked by format:
 
-**TrustTune solves this:**
+- 🗣️ **Two search modes:** Natural language ("radiohead ok computer flac")
+- 🎯 **Quality ranking:** Server ranks by quality - DSD > FLAC 24-bit > FLAC > MP3 320
+- 🎵 **Dual download modes:** Torrents (high quality, slower) OR YouTube (quick download, converted to m4a with artwork)
+- 📦 **Zero config:** Everything bundled - just download and run
+- 🌐 **Protocol-first:** Like BitTorrent, anyone can run a node (Phase 2+)
+- 💰 **Endgame:** 95% revenue to artists (Phase 3+)
 
-- 🗣️ Search naturally ("radiohead ok computer flac") or precisely (`SELECT album WHERE artist="Radiohead" AND format="FLAC"`)
-- 🎯 AI ranks by actual quality (DSD > FLAC 24-bit > FLAC > MP3 320)
-- 🎵 Built-in player, auto-organized library, zero config
-- 🌐 **Protocol-first**: Like BitTorrent, anyone can run a node
-- 💰 **Endgame**: 95% revenue to artists (Phase 3+)
-
-This is **Phase 0.5** of a larger vision. Today: Beautiful app. Tomorrow: Decentralized trust network. Future: Fair creator economy.
+This is **Phase 0.5** of a larger vision. See **[ROADMAP.md](ROADMAP.md)** for the full plan.
 
 ---
 
@@ -55,190 +54,16 @@ This is **Phase 0.5** of a larger vision. Today: Beautiful app. Tomorrow: Decent
 
 **Torrents:**
 - High quality available (FLAC, hi-res)
-- Complex (torrent clients, VPNs, ratios)
-- **No trust**: Fake files, transcodes, malware
+- No trust: Fake files, transcodes, malware
 - Hard to find, hard to verify
 
-## The Solution
-
-> **TrustTune = AI-powered search + Quality verification + Fair compensation**
-
-We're building this in phases. Each phase works standalone, each builds toward the vision.
-
-### Phase 0.5 — Available Now
-
-**Desktop app with two interfaces:**
-- Talk: *"radiohead ok computer flac"*
-- Query: `SELECT album WHERE artist="Radiohead" AND format="FLAC"`
-
-Both get you the same results: AI-ranked, quality-scored, ready to play.
-
-**What it does:**
-- ✅ Searches 18+ sources in parallel (Jackett, 1337x, more via plugins)
-- ✅ AI ranks by real quality (not just file size)
-- ✅ MusicBrainz metadata (35M+ recordings)
-- ✅ Built-in player + auto-tagging
-- ✅ **Bundled Transmission** - No separate installation!
-- ✅ **Dual playback modes:**
-  - 🎵 **Torrents:** Download high-quality files (FLAC, DSD, hi-res) to own forever
-  - ▶️ **YouTube:** Stream instantly (or "downplay" - download while playing)
-- ✅ Works out of the box (your grandma could use it)
-
-### Phases 1-3 — The Vision
-
-**Phase 1:** Community trust network (like Wikipedia for music quality)
-**Phase 2:** Federation protocol (anyone can run a node)
-**Phase 3:** Creator payments (95% to artists, not Spotify's $0.003)
+**TrustTune fixes both:** Quality ranked automatically, community validates authenticity (Phase 1+), validators get rewarded (karma, platform benefits, money when economics arrive), you own the files, artists get paid fairly (Phase 3+).
 
 ---
 
-## 🔧 Troubleshooting
+## 🚀 Quick Start
 
-### Security Warnings (Expected Behavior)
-
-**⚠️ KarmaPlayer is not code-signed**, so you'll see security warnings on first launch. This is normal and expected.
-
-#### macOS Security Warning
-
-**⚠️ First, make sure you downloaded the correct version for your Mac:**
-- **Intel Macs** (2020 and earlier): Use `KarmaPlayer-macOS-Intel.zip`
-- **Apple Silicon** (M1/M2/M3+): Use `KarmaPlayer-macOS-AppleSilicon.zip`
-
-When you first run KarmaPlayer on macOS, you'll see:
-> **"KarmaPlayer.app cannot be opened because it is from an unidentified developer"**
-
-**How to fix:**
-1. Right-click (or Control+click) on `KarmaPlayer.app`
-2. Select **"Open"** from the menu
-3. Click **"Open"** in the security dialog
-
-**OR:**
-
-1. Try to open KarmaPlayer normally (it will be blocked)
-2. Go to **System Settings** → **Privacy & Security**
-3. Scroll down to the **Security** section
-4. Look for the message: *"KarmaPlayer.app was blocked from use because it is not from an identified developer"*
-5. Click **"Open Anyway"**
-6. Confirm by clicking **"Open"** in the dialog
-
-**Why this happens:**
-- Code signing certificates cost $99/year
-- KarmaPlayer is open-source and community-driven
-- You can verify the source code yourself on GitHub
-- Once allowed, macOS will remember your choice
-
-#### Windows Security Warning
-
-Windows Defender SmartScreen may show:
-> **"Windows protected your PC"**
-
-**How to fix:**
-1. Click **"More info"**
-2. Click **"Run anyway"**
-
-**Why this happens:**
-- Windows flags unsigned applications
-- KarmaPlayer is safe - check the source code yourself
-- Once allowed, Windows will remember your choice
-
-#### Linux Permission Issues
-
-If KarmaPlayer won't run on Linux:
-
-```bash
-# Make it executable
-chmod +x KarmaPlayer
-
-# If transmission-daemon won't start
-chmod +x resources/bin/transmission-daemon
-```
-
-### Common Issues
-
-#### "Bad CPU type in executable" (macOS)
-
-**Cause:** Downloaded wrong architecture version
-
-**Fix:**
-- Check your Mac processor: Apple menu () → About This Mac
-- **Intel processor**: Download `KarmaPlayer-macOS-Intel.zip`
-- **Apple M1/M2/M3**: Download `KarmaPlayer-macOS-AppleSilicon.zip`
-- Delete the wrong version and download the correct one
-
-#### "Transmission daemon failed to start"
-
-**Cause:** Port conflict or permission issue
-
-**Fix:**
-```bash
-# Check if transmission is already running
-ps aux | grep transmission
-
-# Kill existing processes
-pkill transmission-daemon
-
-# On macOS, also check for KarmaPlayer processes
-pkill karma_player
-```
-
-#### YouTube downloads not working (Windows)
-
-**Cause:** yt-dlp not in PATH or missing ffmpeg
-
-**Fix:**
-- KarmaPlayer bundles yt-dlp automatically on Windows
-- If issues persist, restart KarmaPlayer
-- Check logs: `%APPDATA%\Local\com.example.karma_player\logs\`
-
-#### Audio not playing
-
-**Cause:** Missing audio codecs or permissions
-
-**Fix:**
-- **macOS:** Grant microphone/audio permissions in System Settings
-- **Windows:** Install Windows Media Feature Pack
-- **Linux:** Install `libmpv` and `ffmpeg`
-
-### Debug Logs
-
-**Log locations:**
-- **macOS:** `~/Library/Application Support/com.example.karma_player/logs/` and `/tmp/log/karmaplayer.log`
-- **Windows:** `%APPDATA%\Local\com.example.karma_player\logs\`
-- **Linux:** `~/.local/share/com.example.karma_player/logs/`
-
-Check logs for detailed error messages if something goes wrong.
-
-### 🐛 Found a Bug? Help Us Fix It!
-
-If you're experiencing issues, **please help us improve KarmaPlayer** by reporting them:
-
-**Quick bug report (macOS/Linux):**
-```bash
-# Copy the latest log to your clipboard
-cat /tmp/log/karmaplayer.log | pbcopy  # macOS
-cat /tmp/log/karmaplayer.log | xclip   # Linux
-
-# Or view the full log
-cat "$(ls -t ~/Library/Application\ Support/com.example.karma_player/logs/*.log | head -1)"  # macOS
-cat "$(ls -t ~/.local/share/com.example.karma_player/logs/*.log | head -1)"  # Linux
-```
-
-**Then:**
-1. Go to [GitHub Issues](https://github.com/trust-tune-net/karma-player/issues)
-2. Click **"New Issue"**
-3. Describe what happened and what you expected
-4. **Paste your error log** (it's anonymous - no personal data)
-5. Submit!
-
-**Your bug reports help everyone.** Every issue fixed makes KarmaPlayer better for the community. Thank you! 🙏
-
----
-
-## Installation
-
-### Desktop App (Recommended)
-
-**One-click install for macOS, Windows, Linux:**
+### 1. Download
 
 | Platform | Download | Notes |
 |----------|----------|-------|
@@ -247,9 +72,151 @@ cat "$(ls -t ~/.local/share/com.example.karma_player/logs/*.log | head -1)"  # L
 | **Windows** | [Download ZIP](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-Windows.zip) | Windows 10/11 |
 | **Linux** | [Download TAR.GZ](https://github.com/trust-tune-net/karma-player/releases/latest/download/KarmaPlayer-Linux.tar.gz) | Ubuntu/Debian/Fedora |
 
-> **✅ Everything Included:** KarmaPlayer now comes with Transmission bundled - just download, extract, and run! No separate installation needed. See **[Setup Guide](SETUP.md)** for details.
+> **✅ Everything Included:** Transmission bundled, no separate installation needed!
 
-### CLI (For Power Users)
+### 2. Search
+
+Two ways to search - your choice:
+
+**Natural Language:**
+```
+radiohead ok computer flac
+miles davis kind of blue 24-bit
+pink floyd dark side vinyl rip
+```
+
+**SQL-Like:**
+```sql
+SELECT album WHERE artist="Radiohead" AND format="FLAC"
+SELECT track WHERE title="Paranoid Android" ORDER BY seeders DESC
+SELECT album WHERE artist="Miles Davis" AND year BETWEEN 1955 AND 1965
+```
+
+### 3. Play
+
+Choose your download mode:
+
+🎵 **Torrent Downloads** (High Quality)
+- Download FLAC, DSD, hi-res files to **own forever**
+- Quality-ranked results, depends on seeders
+- Built-in Transmission daemon handles everything
+
+⚡ **YouTube Downloads** (Quick - Under 1 Minute)
+- Fast download, converted from opus to m4a
+- Album artwork added automatically
+- Both modes save to library for offline playback
+
+**That's it!** Built-in player, auto-organized library, zero configuration.
+
+---
+
+## 🎨 How It Works
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Your Computer (LOCAL)                 │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │  Desktop App (Flutter)                            │  │
+│  │  - Built-in player (MPV)                          │  │
+│  │  - Auto-organized library                         │  │
+│  │  - Transmission daemon (bundled)                  │  │
+│  │  - YouTube downloader (yt-dlp + opus→m4a)         │  │
+│  └───────────────────────────────────────────────────┘  │
+│                          │                               │
+│                          │ Search queries                │
+│                          ↓                               │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           │ gRPC
+                           ↓
+┌─────────────────────────────────────────────────────────┐
+│              Remote Search API (REMOTE)                  │
+│  - Multi-source aggregation (Jackett, 1337x, DHT)       │
+│  - Quality ranking (DSD > FLAC 24-bit > FLAC > MP3)     │
+│  - MusicBrainz metadata enrichment                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key point:** Search is **remote** (no local setup needed), but downloads, playback, and library are all **local** (you own your files).
+
+---
+
+## 🎯 Key Features
+
+### Two Search Modes
+
+**Natural Language** - For everyone (even grandma):
+```
+radiohead ok computer flac
+```
+
+**SQL-Like** - For power users:
+```sql
+SELECT album WHERE artist="Radiohead" AND format="FLAC"
+```
+
+Both modes produce the same quality-ranked results, just different input styles.
+
+### Dual Download Modes
+
+🎵 **Torrent Downloads:**
+- High quality: FLAC, DSD, hi-res formats
+- Download speed depends on seeders
+- Auto-organized with metadata
+- Built-in Transmission (no config)
+
+⚡ **YouTube Downloads:**
+- Fast: Downloads complete in under 1 minute
+- Converted from opus to m4a with album artwork
+- Perfect for quick listening
+- Both modes save to library for offline playback
+
+### Quality Ranking
+
+Server ranks torrents by audio quality:
+- DSD (Direct Stream Digital) - Best
+- FLAC 24-bit/96kHz or higher
+- FLAC 16-bit/44.1kHz (CD quality)
+- MP3 320kbps
+- Lower quality formats
+
+**Example output:**
+```
+🎵 Found 47 results, showing top 10:
+
+✅ #1 Radiohead - OK Computer (1997)
+   💎 FLAC 24-bit/96kHz | 1.4 GB | 52 seeders
+   🏆 Best quality
+   magnet:?xt=urn:btih:...
+```
+
+### MusicBrainz Integration
+
+Canonical metadata from MusicBrainz (35M+ recordings):
+- Artist disambiguation
+- Release year and country
+- Track listings
+- Album art
+- Auto-tagging for downloads
+
+---
+
+## 📖 Documentation
+
+- **[ROADMAP](ROADMAP.md)** - Full project roadmap (Phase 0.5 → Phase 3)
+- **[TROUBLESHOOTING](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[LEGAL](LEGAL.md)** - Legal disclaimers and user responsibility
+- **[Vision Document](docs/VISION.md)** - Full project vision and philosophy
+- **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture details
+- **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)** - How to add new sources
+
+---
+
+## 🛠️ For Developers
+
+### CLI Installation
 
 ```bash
 # Install via pip
@@ -260,45 +227,7 @@ git clone https://github.com/trust-tune-net/karma-player.git
 cd karma-player && pip install -e .
 ```
 
----
-
-## Usage
-
-### Desktop App — Two Ways to Search
-
-**Natural Language** (talk like a human):
-```
-radiohead ok computer flac
-miles davis kind of blue 24-bit
-pink floyd dark side vinyl rip
-```
-
-**SQL-Like** (query like a database):
-```sql
-SELECT album WHERE artist="Radiohead" AND format="FLAC"
-SELECT track WHERE title="Paranoid Android" ORDER BY seeders DESC
-SELECT album WHERE artist="Miles Davis" AND year BETWEEN 1955 AND 1965
-```
-
-Both interfaces → Same AI-ranked results → Choose your playback mode:
-
-### Two Playback Modes
-
-🎵 **Torrent Downloads** (High Quality)
-- Download FLAC, DSD, hi-res files to **own forever**
-- Quality-verified, seeder-ranked results
-- Auto-organized library with metadata
-- Built-in Transmission daemon handles everything
-
-▶️ **YouTube Streaming** (Instant Playback)
-- Stream instantly or "downplay" (download while playing)
-- Perfect for quick listening or previews
-- Uses yt-dlp for best quality streams
-- Optional: download for offline playback
-
-**Both modes work seamlessly** in the same interface with the built-in player.
-
-### CLI — For Power Users & Scripts
+### CLI Usage
 
 ```bash
 # Natural language
@@ -311,91 +240,33 @@ karma-player query 'SELECT album WHERE artist="Radiohead" AND format="FLAC"'
 karma-player search "miles davis" --full-ai --min-seeders 10 --skip-musicbrainz
 ```
 
-**Example output:**
-```
-🎵 Found 47 results, showing top 10:
+### Technology Stack
 
-✅ #1 Radiohead - OK Computer (1997)
-   💎 FLAC 24-bit/96kHz | 1.4 GB | 52 seeders
-   🏆 Best quality • Verified uploader
-   magnet:?xt=urn:btih:...
-```
-
----
-
-## 🛠️ Configuration
-
-### Setup Jackett (Optional)
-
-For best results, run Jackett locally:
-
-```bash
-# Install Jackett
-# macOS: brew install jackett
-# Windows: Download from https://github.com/Jackett/Jackett/releases
-
-# Configure in TrustTune
-export JACKETT_URL="http://localhost:9117"
-export JACKETT_API_KEY="your_api_key"
-```
-
-### Environment Variables
-
-```bash
-# Required for AI features
-export OPENAI_API_KEY="sk-..."           # OpenAI API key
-export ANTHROPIC_API_KEY="sk-ant-..."   # Anthropic API key
-
-# Optional
-export JACKETT_URL="http://localhost:9117"
-export JACKETT_API_KEY="..."
-export MUSICBRAINZ_API_KEY="..."        # For faster MusicBrainz queries
-```
-
----
-
-## 🎨 How It Works
-
-```
-Your Query (Natural Language OR SQL-like)
-    ↓
-Natural Language: AI parsing ("radiohead ok computer")
-SQL-like: Direct parsing (SELECT album WHERE artist="Radiohead")
-    ↓
-MusicBrainz Lookup (Canonical Metadata)
-    ↓
-Multi-Source Search (18+ Indexers + DHT)
-    ↓
-AI Quality Ranking (FLAC 24-bit > 16-bit > MP3 320)
-    ↓
-Best Results with AI Explanations
-```
-
-**Two Search Modes:**
-- **Natural Language** - For everyone (even grandma): "radiohead ok computer flac"
-- **SQL-Like** - For power users: `SELECT album WHERE artist="Radiohead" AND format="FLAC"`
-
-Both modes produce the same high-quality results, just different input styles.
-
-**Technology Stack:**
-- **Backend:** Python + FastAPI
+- **Backend:** Python + FastAPI + gRPC
 - **Desktop:** Flutter (cross-platform)
-- **Search:** Plugin architecture (Jackett, 1337x, DHT - easy to add more)
-- **AI:** OpenAI + Anthropic (Groq for speed)
+- **Search:** Plugin architecture (Jackett, 1337x, DHT)
 - **Metadata:** MusicBrainz API
 - **Player:** media_kit (MPV)
-- **Architecture:** See [Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md) for adding sources
+- **Torrents:** Transmission daemon (bundled)
+- **YouTube:** yt-dlp with opus→m4a conversion
 
----
+### Running the Backend Locally
 
-## 📖 Documentation
+**Only needed if developing the backend.** End users don't need this - search happens via remote API.
 
-- **[Vision Document](docs/VISION.md)** - Full project vision and roadmap
-- **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture details
-- **[Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)** - How to add new sources (adapters)
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Deploy search API to cloud (Easypanel, Railway, Render, etc.)
-- **[Implementation](docs/IMPLEMENTATION.md)** - Development progress
-- **[Progress](docs/PROGRESS.md)** - Current status
+```bash
+# Install dependencies
+poetry install
+
+# Set up environment (for backend development only)
+export JACKETT_REMOTE_URL="your-jackett-url"
+export JACKETT_REMOTE_API_KEY="your-jackett-api-key"
+
+# Run gRPC search API
+poetry run python -m karma_player.api.grpc_server
+```
+
+See **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** for deploying your own search API.
 
 ---
 
@@ -403,12 +274,8 @@ Both modes produce the same high-quality results, just different input styles.
 
 We welcome contributions! **TrustTune is not a company—it's a protocol and movement.**
 
-**We're building:**
-- Phase 0.5: Beautiful app anyone can use ✅
-- Phase 1-2: Community trust network and federation
-- Phase 3+: Fair creator payment system (95% to artists)
-
 **How to contribute:**
+
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
@@ -421,6 +288,35 @@ We welcome contributions! **TrustTune is not a company—it's a protocol and mov
 - Community validation algorithms
 - Mobile app development (iOS/Android)
 - Documentation and tutorials
+- Adding new search sources (adapters)
+
+See **[ROADMAP.md](ROADMAP.md)** for what's coming next.
+
+---
+
+## 🔧 Troubleshooting
+
+**Security warnings on first launch?** This is normal and expected for open-source software.
+
+- **macOS:** Right-click → Open, or use System Settings → Privacy & Security
+- **Windows:** Click "More info" → "Run anyway"
+
+**Other issues?** See **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for:
+- Architecture-specific issues ("Bad CPU type")
+- Transmission daemon problems
+- YouTube download issues
+- Debug log locations
+- Bug reporting
+
+---
+
+## ⚖️ Legal
+
+**TrustTune is a protocol and open-source software** for music discovery. Like BitTorrent or web search engines, we facilitate discovery of publicly available content.
+
+**Users are solely responsible** for ensuring their downloads comply with local laws and regulations.
+
+See **[LEGAL.md](LEGAL.md)** for full legal disclaimers, DMCA compliance, and user responsibility.
 
 ---
 
@@ -428,42 +324,36 @@ We welcome contributions! **TrustTune is not a company—it's a protocol and mov
 
 - [x] **Phase 0:** CLI tool with AI search
 - [x] **Phase 0.5:** Desktop GUI with built-in player (Available now)
-- [ ] **Phase 1:** Community validation network
-- [ ] **Phase 2:** Mobile apps + federation
-- [ ] **Phase 3:** Creator payment system
+- [ ] **Phase 1:** Community validation network (Q2-Q3 2025)
+- [ ] **Phase 2:** Mobile apps + federation (Q4 2025 - Q1 2026)
+- [ ] **Phase 3:** Creator payment system (2026+)
 
-See [VISION.md](docs/VISION.md) for detailed roadmap.
+See **[ROADMAP.md](ROADMAP.md)** for detailed phase breakdown, timelines, and success metrics.
 
 ---
 
-## ⚖️ Legal
+## 💡 The Vision
 
-TrustTune is a **decentralized protocol and open-source software** for music discovery and artist compensation. Like BitTorrent, email, or the web itself, it's a protocol that anyone can implement.
+> **Music has a trust problem, not a technology problem.**
 
-**What TrustTune is:**
-- A protocol specification (like HTTP, SMTP, BitTorrent)
-- Open-source reference implementation
-- A vision for fair creator compensation
-- Community-driven, decentralized infrastructure
+**Streaming services** are broken:
+- Artists earn $0.003/stream
+- Listeners own nothing
+- Compressed audio only
 
-**What we do NOT do:**
-- Host any copyrighted content
-- Circumvent DRM or encryption
-- Encourage piracy or copyright infringement
-- Control what users download
+**TrustTune fixes this:**
 
-**User Responsibility:**
-Users are solely responsible for ensuring their downloads comply with local laws and regulations. TrustTune facilitates search and discovery of publicly available content, similar to web search engines or torrent clients.
+**Phase 0.5 (Now):** Beautiful app with quality-ranked search
+**Phase 1-2 (Soon):** Community trust network + federation protocol
+**Phase 3+ (Vision):** Fair creator economy (95% to artists)
 
-**DMCA Compliance:**
-We respect intellectual property rights and respond to valid DMCA takedown notices. If you believe content indexed by TrustTune infringes your copyright, please contact us with a proper DMCA notice.
+We're building a **protocol**, like BitTorrent or email:
+- Anyone can implement it
+- Anyone can run a node
+- No single point of control
+- Open source, transparent
 
-**This project is for:**
-- Building decentralized music discovery protocols
-- Researching fair creator compensation models
-- Educational and academic purposes
-- Discovering public domain and Creative Commons music
-- Finding legitimately free content (indie artists, demos, live recordings)
+**Read the full vision:** [ROADMAP.md](ROADMAP.md)
 
 ---
 
@@ -477,39 +367,13 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 - **GitHub Issues:** [Report bugs or request features](https://github.com/trust-tune-net/karma-player/issues)
 - **Discussions:** [Join the conversation](https://github.com/trust-tune-net/karma-player/discussions)
-
----
-
-## Why This Matters
-
-> **Music has a trust problem, not a technology problem.**
-
-The tools exist. Spotify has great UX. Torrents have great quality. MusicBrainz has great metadata. But:
-- **Listeners** overpay for compressed audio and own nothing
-- **Artists** get $0.003 per stream (~$3,000 for 1M plays)
-- **Quality** is unverified (fake FLACs, transcodes everywhere)
-
-**TrustTune fixes this step by step:**
-
-**Phase 0.5 (Now):** Beautiful app that finds quality automatically
-**Phase 1-2 (Soon):** Community trust network + federation protocol
-**Phase 3+ (Vision):** Fair creator economy (95% to artists)
-
-### Not Building a Company
-
-We're building a **protocol**, like BitTorrent or email:
-- Anyone can implement it
-- Anyone can run a node
-- No single point of control
-- Open source, transparent
-
-**Start simple. Scale responsibly. Stay ethical.**
+- **Roadmap:** [See what's coming next](ROADMAP.md)
 
 ---
 
 <div align="center">
 
-**[Download Now](#installation)** • **[Read the Vision](docs/VISION.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
+**[Download Now](#-quick-start)** • **[Read the Roadmap](ROADMAP.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
 
 *Made with ❤️ for music lovers and creators*
 
