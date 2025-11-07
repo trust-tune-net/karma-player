@@ -64,6 +64,7 @@ class SearchServiceGrpc {
     int minSeeders = 1,
     int limit = 50,
     int offset = 0,
+    pb_search.SourceTypeFilter? sourceTypeFilter,
   }) async* {
     _ensureClient();
 
@@ -88,6 +89,7 @@ class SearchServiceGrpc {
         minSeeders: minSeeders,
         limit: limit,
         offset: offset,
+        sourceTypeFilter: sourceTypeFilter,
       );
 
       // Execute streaming RPC

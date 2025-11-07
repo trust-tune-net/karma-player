@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/playback_service.dart';
 import '../services/analytics_service.dart';
+import '../services/audio_quality_verification_service.dart';
 import '../main.dart';
 
 class NowPlayingScreen extends StatefulWidget {
@@ -202,6 +203,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                         onPressed: () => setState(() => _showDetailedInfo = !_showDetailedInfo),
                                         tooltip: 'Show detailed file info',
                                       ),
+                                      // Verify Quality button
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.verified,
+                                          size: 20,
+                                          color: Color(0xFFA855F7),
+                                        ),
+                                        onPressed: () => _verifyAudioQuality(context, song),
+                                        tooltip: 'Verify audio quality with FFprobe',
+                                      ),
                                     ],
                                   ),
                                   // Expandable detailed info panel
@@ -356,6 +367,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     } else {
       return '$minutes:${twoDigits(seconds)}';
     }
+  }
+
+  void _verifyAudioQuality(BuildContext context, dynamic song) {
+    // Create source map from song properties for comparison
+    final source = <String, dynamic>{
+      'format': song.format,
+      'bitrate': song.bitrate?.toString(),
+    };
+
+    final verificationService = AudioQualityVerificationService();
+    verificationService.verifyAudioQuality(
+      context,
+      source,
+      filePath: song.filePath,  // Pass the file path directly
+    );
   }
 }
 

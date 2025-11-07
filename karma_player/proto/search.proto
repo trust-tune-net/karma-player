@@ -30,6 +30,7 @@ message SearchRequest {
   optional string album = 7;
   optional int32 min_bitrate = 8;
   optional int32 max_size_mb = 9;
+  optional SourceTypeFilter source_type_filter = 10;  // Filter by torrent/streaming
 }
 
 // Search response (streamed)
@@ -108,6 +109,12 @@ enum SourceType {
   SOURCE_TYPE_YOUTUBE = 2;
   SOURCE_TYPE_PIPED = 3;
   SOURCE_TYPE_INVIDIOUS = 4;
+}
+
+enum SourceTypeFilter {
+  SOURCE_TYPE_FILTER_ALL = 0;  // All sources (default)
+  SOURCE_TYPE_FILTER_TORRENT = 1;  // Only torrents
+  SOURCE_TYPE_FILTER_STREAMING = 2;  // Only streaming (YouTube, Piped, etc.)
 }
 
 // Ranked source with explanation

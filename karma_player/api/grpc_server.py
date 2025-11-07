@@ -164,6 +164,15 @@ class SearchServiceServicer(search_pb2_grpc.SearchServiceServicer):
                 )
                 await context.write(response)
 
+            # Map protobuf source_type_filter to string filter
+            source_type_filter = None
+            if request.HasField('source_type_filter'):
+                if request.source_type_filter == search_pb2.SOURCE_TYPE_FILTER_TORRENT:
+                    source_type_filter = "torrent"
+                elif request.source_type_filter == search_pb2.SOURCE_TYPE_FILTER_STREAMING:
+                    source_type_filter = "streaming"
+                # SOURCE_TYPE_FILTER_ALL or unspecified = None (all sources)
+
             # Execute search
             result = await _search_service.search(
                 query=request.query,
@@ -172,6 +181,7 @@ class SearchServiceServicer(search_pb2_grpc.SearchServiceServicer):
                 limit=request.limit,
                 offset=request.offset,
                 use_ai_parsing=False,
+                source_type_filter=source_type_filter,
                 progress_callback=send_progress,
                 partial_result_callback=send_partial_results
             )

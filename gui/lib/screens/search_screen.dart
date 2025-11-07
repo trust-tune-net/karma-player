@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +16,8 @@ import '../services/analytics_service.dart';
 import '../services/api_auth_service.dart';
 import '../services/device_service.dart';
 import '../services/search_service_grpc.dart';
+import '../services/audio_quality_verification_service.dart';
+import '../proto/search.pb.dart' as pb_search;
 import '../widgets/youtube_download_progress_dialog.dart';
 import '../main.dart';
 
@@ -76,34 +78,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   @override
   void initState() {
     super.initState();
-    _initializeGrpcService();
+    // No longer initialize gRPC here - do it dynamically in _searchGrpc()
     _loadFilterPreference();
     _verifyYtDlp();
     _scrollController.addListener(_onScroll);
-  }
-
-  void _initializeGrpcService() {
-    try {
-      // Parse gRPC host from API URL (using _clientApiUrl to fix 0.0.0.0)
-      final uri = Uri.parse(_clientApiUrl);
-
-      // gRPC on non-standard ports (50051) typically doesn't use TLS
-      // Only use secure connection if explicitly configured (port 443)
-      final useSecure = false; // gRPC port 50051 is insecure by default
-
-      print('[gRPC] Initializing: ${uri.host}:50051 (secure: $useSecure)');
-      _grpcService = SearchServiceGrpc(
-        authService: _apiAuthService,
-        deviceService: _deviceService,
-        host: uri.host,
-        port: 50051,  // gRPC port
-        useSecure: useSecure,
-      );
-      print('[gRPC] ✅ Service initialized successfully');
-    } catch (e) {
-      print('[gRPC] ❌ Initialization failed: $e');
-      // Will fall back to WebSocket/HTTP
-    }
   }
 
   void _onScroll() {
@@ -134,7 +112,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     });
 
     // Perform another search with new offset using the same method as initial search
-    if (_useGrpc && _grpcService != null) {
+    if (_useGrpc) {
       _searchGrpc();
     } else if (_useWebSocket) {
       _searchWebSocket();
@@ -305,25 +283,90 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     });
 
     try {
-      if (_grpcService == null) {
-        throw Exception('gRPC service not initialized');
+      // Initialize gRPC service dynamically from current settings (like WebSocket does)
+      // Close old service if exists
+      _grpcService?.close();
+
+      // Parse host and port from URL (using _clientApiUrl to fix 0.0.0.0)
+      String apiUrl = _clientApiUrl;
+
+      // Add scheme if missing for Uri.parse to work
+      if (!apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+        apiUrl = 'http://$apiUrl';
       }
 
-      // Execute gRPC search with streaming
-      final stream = _grpcService!.search(
-        query: _searchController.text,
-        minSeeders: 1,
-        limit: 20,
-        offset: _currentOffset,
+      final uri = Uri.parse(apiUrl);
+      final host = uri.host.isNotEmpty ? uri.host : 'localhost';
+      final port = uri.hasPort ? uri.port : 50051;  // Default to 50051 if no port specified
+      final useSecure = port == 443 || uri.scheme == 'https';  // Use secure connection for port 443 or https://
+
+      print('[gRPC] Connecting to: $host:$port (secure: $useSecure)');
+      _grpcService = SearchServiceGrpc(
+        authService: _apiAuthService,
+        deviceService: _deviceService,
+        host: host,
+        port: port,
+        useSecure: useSecure,
       );
 
+      // Execute 2 parallel gRPC searches - one for streaming, one for torrents
+      final streamingStream = _grpcService!.search(
+        query: _searchController.text,
+        minSeeders: 1,
+        limit: 10,
+        offset: _currentOffset,
+        sourceTypeFilter: pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_STREAMING,
+      );
+
+      final torrentStream = _grpcService!.search(
+        query: _searchController.text,
+        minSeeders: 1,
+        limit: 10,
+        offset: _currentOffset,
+        sourceTypeFilter: pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_TORRENT,
+      );
+
+      // Process both streams concurrently
+      await Future.wait([
+        _processSearchStream(streamingStream, 'streaming'),
+        _processSearchStream(torrentStream, 'torrent'),
+      ]);
+
+      // Finalize search after both complete
+      setState(() {
+        _streamingLoading = false;
+        _torrentLoading = false;
+        _isSearching = false;
+        _isLoadingMore = false;
+        _progress = 100;
+        _applyFilter();
+        _statusMessage = 'Found ${_streamingResults.length} streaming, ${_torrentResults.length} torrents';
+      });
+
+    } catch (e) {
+      print('[gRPC] Search failed: $e');
+      setState(() {
+        _statusMessage = 'gRPC failed, falling back to WebSocket...';
+        _isSearching = false;
+      });
+      // Fallback to WebSocket/HTTP
+      if (_useWebSocket) {
+        _searchWebSocket();
+      } else {
+        _searchHTTP();
+      }
+    }
+  }
+
+  Future<void> _processSearchStream(Stream<SearchResult> stream, String streamType) async {
+    try {
       await for (final result in stream) {
         switch (result.type) {
           case SearchResultType.progress:
             if (result.progress != null) {
               setState(() {
-                _progress = result.progress!.percent;
-                _statusMessage = result.progress!.message;
+                _progress = (result.progress!.percent / 2).toInt();  // Each stream is 50%
+                _statusMessage = '$streamType: ${result.progress!.message}';
               });
             }
             break;
@@ -333,10 +376,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               final adapter = result.partialResult!.adapterName;
               final partialSources = result.partialResult!.sources;
 
-              // Convert partial sources to map format and add to results immediately
+              // Convert partial sources to map format
               final newPartialResults = partialSources.map((source) {
                 return {
-                  'rank': 0,  // Placeholder - will be recalculated after complete
+                  'rank': 0,
                   'source': {
                     'id': source.id,
                     'title': source.title,
@@ -361,24 +404,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               }).toList();
 
               setState(() {
-                // Add partial results immediately
+                // Add to appropriate list based on stream type
+                if (streamType == 'streaming') {
+                  _streamingResults.addAll(newPartialResults);
+                } else {
+                  _torrentResults.addAll(newPartialResults);
+                }
                 _results.addAll(newPartialResults);
-
-                // Update streaming/torrent counts
-                _streamingResults = _results.where((r) {
-                  final source = r['source'] ?? r['torrent'];
-                  final sourceType = source['source_type'] ?? 'torrent';
-                  return ['youtube', 'piped', 'invidious'].contains(sourceType);
-                }).toList();
-
-                _torrentResults = _results.where((r) {
-                  final source = r['source'] ?? r['torrent'];
-                  final sourceType = source['source_type'] ?? 'torrent';
-                  return sourceType == 'torrent';
-                }).toList();
-
-                _applyFilter();
-                _statusMessage = '$adapter: ${partialSources.length} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
               });
             }
             break;
@@ -386,57 +418,38 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           case SearchResultType.complete:
             if (result.completeResult != null) {
               setState(() {
-                // Conditionally sort results by quality_score (only if toggle is ON)
-                if (_reorderByQuality) {
-                  _results.sort((a, b) {
-                    final aScore = (a['source'] ?? a['torrent'])['quality_score'] ?? 0.0;
-                    final bScore = (b['source'] ?? b['torrent'])['quality_score'] ?? 0.0;
-                    return bScore.compareTo(aScore);  // Descending order (highest first)
-                  });
+                if (streamType == 'streaming') {
+                  _streamingLoading = false;
+                } else {
+                  _torrentLoading = false;
                 }
-                // If _reorderByQuality is OFF, results stay in arrival order
-
-                // Recalculate ranks based on position + offset (for internal tracking)
-                for (int i = 0; i < _results.length; i++) {
-                  _results[i]['rank'] = _currentOffset + i + 1;
-                }
-
-                // Finalize the search state
-                _streamingLoading = false;
-                _torrentLoading = false;
-                _isSearching = false;
-                _isLoadingMore = false;
-                _progress = 100;
-
-                // Update pagination state
-                _totalFound = result.completeResult!.totalFound;
-                _hasMoreResults = (_currentOffset + _results.length) < _totalFound;
-
-                // Show both loaded and total available
-                _statusMessage = 'Showing ${_results.length} of ${_totalFound} results (${_streamingResults.length} streaming, ${_torrentResults.length} torrents)';
               });
             }
             break;
 
           case SearchResultType.error:
             if (result.error != null) {
-              throw Exception(result.error!.message);
+              print('[$streamType] Error: ${result.error!.message}');
+              setState(() {
+                if (streamType == 'streaming') {
+                  _streamingLoading = false;
+                } else {
+                  _torrentLoading = false;
+                }
+              });
             }
             break;
         }
       }
     } catch (e) {
-      print('[gRPC] Search failed: $e');
+      print('[$streamType] Stream processing error: $e');
       setState(() {
-        _statusMessage = 'gRPC failed, falling back to WebSocket...';
-        _isSearching = false;
+        if (streamType == 'streaming') {
+          _streamingLoading = false;
+        } else {
+          _torrentLoading = false;
+        }
       });
-      // Fallback to WebSocket/HTTP
-      if (_useWebSocket) {
-        _searchWebSocket();
-      } else {
-        _searchHTTP();
-      }
     }
   }
 
@@ -705,12 +718,12 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     print('[SEARCH] Starting new search, offset reset to: $_currentOffset');
 
     // Try gRPC first (binary protocol, faster), fallback to WebSocket/HTTP
-    print('[SEARCH] useGrpc: $_useGrpc, grpcService: ${_grpcService != null ? 'available' : 'null'}');
-    if (_useGrpc && _grpcService != null) {
+    print('[SEARCH] useGrpc: $_useGrpc');
+    if (_useGrpc) {
       print('[SEARCH] → Using gRPC');
       _searchGrpc();
     } else if (_useWebSocket) {
-      print('[SEARCH] → Using WebSocket (gRPC unavailable)');
+      print('[SEARCH] → Using WebSocket');
       _searchWebSocket();
     } else {
       print('[SEARCH] → Using HTTP');
@@ -1463,20 +1476,41 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     final sourceType = source['source_type'] ?? 'torrent';
     final isStreaming = sourceType == 'youtube' || sourceType == 'piped';
 
+    // DEBUG: Log received values to verify gRPC transmission
+    final title = source['title']?.toString() ?? '';
+    print('🐛 BADGE DEBUG: format="$format", bitrate="$bitrate", codec="$codec" | ${title.substring(0, title.length > 50 ? 50 : title.length)}');
+
     String label = '';
     Color badgeColor = Colors.grey;
 
     if (format == 'FLAC') {
-      // High-res FLAC: Extract bit depth and sample rate from title/metadata
-      if (bitrate.contains('24') && (bitrate.contains('192') || bitrate.contains('196'))) {
-        label = 'FLAC 24/192';
-        badgeColor = Colors.deepPurple;
-      } else if (bitrate.contains('24') && (bitrate.contains('96') || bitrate.contains('88'))) {
-        label = 'FLAC 24/96';
-        badgeColor = Colors.deepPurple.shade400;
-      } else if (bitrate.contains('24')) {
-        label = 'FLAC 24-bit';
-        badgeColor = Colors.purple;
+      // High-res FLAC: Use bitrate field populated by server (format: "24-96", "24-192", etc.)
+      if (bitrate.isNotEmpty) {
+        // Parse bitrate format: "24-192", "24-96", "24-44", "16-44", etc.
+        final parts = bitrate.split('-');
+        if (parts.length == 2) {
+          final bitDepth = int.tryParse(parts[0]) ?? 16;
+          final sampleRate = int.tryParse(parts[1]) ?? 44;
+          label = 'FLAC $bitDepth/$sampleRate';
+
+          // Calculate quality score: (bit_depth * sample_rate)
+          // Higher score = better quality, assign color dynamically
+          final qualityScore = bitDepth * sampleRate;
+
+          if (qualityScore >= 2400) {  // e.g., 24-bit × 192kHz = 4608
+            badgeColor = Colors.deepPurple; // Highest quality
+          } else if (qualityScore >= 1800) {  // e.g., 24-bit × 96kHz = 2304
+            badgeColor = Colors.deepPurple.shade400; // High quality
+          } else if (qualityScore >= 1000) {  // e.g., 24-bit × 44kHz = 1056
+            badgeColor = Colors.purple; // 24-bit standard
+          } else {  // e.g., 16-bit × 44kHz = 704 (CD quality)
+            badgeColor = Colors.purple.shade300;
+          }
+        } else {
+          // Fallback if format doesn't match expected pattern
+          label = 'FLAC $bitrate';
+          badgeColor = Colors.purple;
+        }
       } else {
         label = 'FLAC';
         badgeColor = Colors.purple.shade300;
@@ -1606,16 +1640,27 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   padding: const EdgeInsets.symmetric(horizontal: 8),
                                 ),
+                              // Download/Play button (more visible now!)
+                              ActionChip(
+                                avatar: Icon(
+                                  isStreaming ? Icons.play_arrow : Icons.download,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                label: Text(
+                                  isStreaming ? 'Play' : 'Download',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                backgroundColor: const Color(0xFFA855F7),
+                                onPressed: isStreaming
+                                    ? () => _playStream(source)
+                                    : () => _startDownload(source),
+                              ),
                             ],
                           ),
                         ],
-                      ),
-                      trailing: IconButton(
-                        icon: Icon(isStreaming ? Icons.play_arrow : Icons.download),
-                        onPressed: isStreaming
-                            ? () => _playStream(source)
-                            : () => _startDownload(source),
-                        tooltip: isStreaming ? 'Play Stream' : 'Download',
                       ),
                       isThreeLine: true,
                     ),

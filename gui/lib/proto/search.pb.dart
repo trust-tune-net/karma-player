@@ -34,6 +34,7 @@ class SearchRequest extends $pb.GeneratedMessage {
     $core.String? album,
     $core.int? minBitrate,
     $core.int? maxSizeMb,
+    SourceTypeFilter? sourceTypeFilter,
   }) {
     final result = create();
     if (query != null) result.query = query;
@@ -45,6 +46,7 @@ class SearchRequest extends $pb.GeneratedMessage {
     if (album != null) result.album = album;
     if (minBitrate != null) result.minBitrate = minBitrate;
     if (maxSizeMb != null) result.maxSizeMb = maxSizeMb;
+    if (sourceTypeFilter != null) result.sourceTypeFilter = sourceTypeFilter;
     return result;
   }
 
@@ -71,6 +73,8 @@ class SearchRequest extends $pb.GeneratedMessage {
     ..aOS(7, _omitFieldNames ? '' : 'album')
     ..aI(8, _omitFieldNames ? '' : 'minBitrate')
     ..aI(9, _omitFieldNames ? '' : 'maxSizeMb')
+    ..aE<SourceTypeFilter>(10, _omitFieldNames ? '' : 'sourceTypeFilter',
+        enumValues: SourceTypeFilter.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -174,6 +178,15 @@ class SearchRequest extends $pb.GeneratedMessage {
   $core.bool hasMaxSizeMb() => $_has(8);
   @$pb.TagNumber(9)
   void clearMaxSizeMb() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  SourceTypeFilter get sourceTypeFilter => $_getN(9);
+  @$pb.TagNumber(10)
+  set sourceTypeFilter(SourceTypeFilter value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasSourceTypeFilter() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearSourceTypeFilter() => $_clearField(10);
 }
 
 /// Search response (streamed)

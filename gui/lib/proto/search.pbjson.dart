@@ -50,6 +50,22 @@ final $typed_data.Uint8List sourceTypeDescriptor = $convert.base64Decode(
     'VfVE9SUkVOVBABEhcKE1NPVVJDRV9UWVBFX1lPVVRVQkUQAhIVChFTT1VSQ0VfVFlQRV9QSVBF'
     'RBADEhkKFVNPVVJDRV9UWVBFX0lOVklESU9VUxAE');
 
+@$core.Deprecated('Use sourceTypeFilterDescriptor instead')
+const SourceTypeFilter$json = {
+  '1': 'SourceTypeFilter',
+  '2': [
+    {'1': 'SOURCE_TYPE_FILTER_ALL', '2': 0},
+    {'1': 'SOURCE_TYPE_FILTER_TORRENT', '2': 1},
+    {'1': 'SOURCE_TYPE_FILTER_STREAMING', '2': 2},
+  ],
+};
+
+/// Descriptor for `SourceTypeFilter`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List sourceTypeFilterDescriptor = $convert.base64Decode(
+    'ChBTb3VyY2VUeXBlRmlsdGVyEhoKFlNPVVJDRV9UWVBFX0ZJTFRFUl9BTEwQABIeChpTT1VSQ0'
+    'VfVFlQRV9GSUxURVJfVE9SUkVOVBABEiAKHFNPVVJDRV9UWVBFX0ZJTFRFUl9TVFJFQU1JTkcQ'
+    'Ag==');
+
 @$core.Deprecated('Use searchRequestDescriptor instead')
 const SearchRequest$json = {
   '1': 'SearchRequest',
@@ -87,6 +103,16 @@ const SearchRequest$json = {
       '10': 'maxSizeMb',
       '17': true
     },
+    {
+      '1': 'source_type_filter',
+      '3': 10,
+      '4': 1,
+      '5': 14,
+      '6': '.trusttune.search.SourceTypeFilter',
+      '9': 5,
+      '10': 'sourceTypeFilter',
+      '17': true
+    },
   ],
   '8': [
     {'1': '_format_filter'},
@@ -94,6 +120,7 @@ const SearchRequest$json = {
     {'1': '_album'},
     {'1': '_min_bitrate'},
     {'1': '_max_size_mb'},
+    {'1': '_source_type_filter'},
   ],
 };
 
@@ -104,8 +131,10 @@ final $typed_data.Uint8List searchRequestDescriptor = $convert.base64Decode(
     'cxIUCgVsaW1pdBgEIAEoBVIFbGltaXQSFgoGb2Zmc2V0GAUgASgFUgZvZmZzZXQSGwoGYXJ0aX'
     'N0GAYgASgJSAFSBmFydGlzdIgBARIZCgVhbGJ1bRgHIAEoCUgCUgVhbGJ1bYgBARIkCgttaW5f'
     'Yml0cmF0ZRgIIAEoBUgDUgptaW5CaXRyYXRliAEBEiMKC21heF9zaXplX21iGAkgASgFSARSCW'
-    '1heFNpemVNYogBAUIQCg5fZm9ybWF0X2ZpbHRlckIJCgdfYXJ0aXN0QggKBl9hbGJ1bUIOCgxf'
-    'bWluX2JpdHJhdGVCDgoMX21heF9zaXplX21i');
+    '1heFNpemVNYogBARJVChJzb3VyY2VfdHlwZV9maWx0ZXIYCiABKA4yIi50cnVzdHR1bmUuc2Vh'
+    'cmNoLlNvdXJjZVR5cGVGaWx0ZXJIBVIQc291cmNlVHlwZUZpbHRlcogBAUIQCg5fZm9ybWF0X2'
+    'ZpbHRlckIJCgdfYXJ0aXN0QggKBl9hbGJ1bUIOCgxfbWluX2JpdHJhdGVCDgoMX21heF9zaXpl'
+    'X21iQhUKE19zb3VyY2VfdHlwZV9maWx0ZXI=');
 
 @$core.Deprecated('Use searchResponseDescriptor instead')
 const SearchResponse$json = {

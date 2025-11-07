@@ -70,5 +70,28 @@ class SourceType extends $pb.ProtobufEnum {
   const SourceType._(super.value, super.name);
 }
 
+class SourceTypeFilter extends $pb.ProtobufEnum {
+  static const SourceTypeFilter SOURCE_TYPE_FILTER_ALL =
+      SourceTypeFilter._(0, _omitEnumNames ? '' : 'SOURCE_TYPE_FILTER_ALL');
+  static const SourceTypeFilter SOURCE_TYPE_FILTER_TORRENT =
+      SourceTypeFilter._(1, _omitEnumNames ? '' : 'SOURCE_TYPE_FILTER_TORRENT');
+  static const SourceTypeFilter SOURCE_TYPE_FILTER_STREAMING =
+      SourceTypeFilter._(
+          2, _omitEnumNames ? '' : 'SOURCE_TYPE_FILTER_STREAMING');
+
+  static const $core.List<SourceTypeFilter> values = <SourceTypeFilter>[
+    SOURCE_TYPE_FILTER_ALL,
+    SOURCE_TYPE_FILTER_TORRENT,
+    SOURCE_TYPE_FILTER_STREAMING,
+  ];
+
+  static final $core.List<SourceTypeFilter?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
+  static SourceTypeFilter? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const SourceTypeFilter._(super.value, super.name);
+}
+
 const $core.bool _omitEnumNames =
     $core.bool.fromEnvironment('protobuf.omit_enum_names');
