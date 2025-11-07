@@ -10,7 +10,7 @@ class AppSettings extends ChangeNotifier {
   factory AppSettings() => _instance;
   AppSettings._internal();
 
-  static const String defaultSearchApiUrl = 'https://trust-tune-trust-tune-community-api.62ickh.easypanel.host';
+  static const String defaultSearchApiUrl = 'http://148.230.73.44:50051';
   String searchApiUrl = defaultSearchApiUrl;
   String transmissionRpcUrl = 'http://localhost:9091';
   String? customDownloadDir;

@@ -384,69 +384,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
               tooltip: 'Change download directory',
             ),
           ),
-          const Divider(),
+          // Only show API Configuration in debug mode or when advanced mode is enabled
+          if (kDebugMode || _advancedModeEnabled) ...[
+            const Divider(),
 
-          // API Settings Section
-          ListTile(
-            title: Text(
-              'API Configuration',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-          ListTile(
-            leading: Icon(
-              Icons.search,
-              color: appSettings.isUsingDefaultApi
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.secondary,
-            ),
-            title: Row(
-              children: [
-                const Text('Search API URL'),
-                const SizedBox(width: 8),
-                if (!appSettings.isUsingDefaultApi)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(4),
+            // API Settings Section
+            ListTile(
+              title: Text(
+                'API Configuration',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
                     ),
-                    child: Text(
-                      'CUSTOM',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSecondaryContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.search,
+                color: appSettings.isUsingDefaultApi
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.secondary,
+              ),
+              title: Row(
+                children: [
+                  const Text('Search API URL'),
+                  const SizedBox(width: 8),
+                  if (!appSettings.isUsingDefaultApi)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'CUSTOM',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
+              subtitle: Text(
+                appSettings.displaySearchApiUrl,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: _editSearchApiUrl,
+                tooltip: 'Change search API URL',
+              ),
             ),
-            subtitle: Text(
-              appSettings.displaySearchApiUrl,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                  ),
+            ListTile(
+              leading: const Icon(Icons.cloud),
+              title: const Text('Transmission RPC URL'),
+              subtitle: Text(
+                appSettings.transmissionRpcUrl,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+              ),
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: _editSearchApiUrl,
-              tooltip: 'Change search API URL',
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.cloud),
-            title: const Text('Transmission RPC URL'),
-            subtitle: Text(
-              appSettings.transmissionRpcUrl,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                  ),
-            ),
-          ),
-          const Divider(),
+            const Divider(),
+          ],
 
           // Privacy Section
           ListTile(
@@ -526,6 +529,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: const Icon(Icons.code, color: Color(0xFFA855F7)),
                 title: const Text('Version'),
                 subtitle: Text(version),
+                onTap: () {
+                  setState(() {
+                    _versionTapCount++;
+                    if (_versionTapCount >= 10 && !_advancedModeEnabled) {
+                      _advancedModeEnabled = true;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Advanced mode enabled'),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  });
+                },
               );
             },
           ),
