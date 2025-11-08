@@ -594,14 +594,25 @@ class LibraryScreenState extends State<LibraryScreen> {
   /// Get filtered and sorted albums
   List<Album> get _displayAlbums {
     var albums = List<Album>.from(_albums);
-    
-    // Apply search filter
+
+    // Apply search filter (searches albums AND songs)
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       albums = albums.where((album) {
+        // Search album title and artist
         final title = album.title.toLowerCase();
         final artist = album.artist.toLowerCase();
-        return title.contains(query) || artist.contains(query);
+        if (title.contains(query) || artist.contains(query)) {
+          return true;
+        }
+
+        // Also search song titles within the album
+        final hasSongMatch = album.songs.any((song) {
+          final songTitle = song.title.toLowerCase();
+          final songArtist = song.artist.toLowerCase();
+          return songTitle.contains(query) || songArtist.contains(query);
+        });
+        return hasSongMatch;
       }).toList();
     }
 
@@ -655,6 +666,28 @@ class LibraryScreenState extends State<LibraryScreen> {
       return int.tryParse(match.group(0) ?? '');
     }
     return null;
+  }
+
+  /// Count how many songs match the current search query
+  int _getMatchingSongCount(Album album) {
+    if (_searchQuery.isEmpty) return 0;
+
+    final query = _searchQuery.toLowerCase();
+    return album.songs.where((song) {
+      final songTitle = song.title.toLowerCase();
+      final songArtist = song.artist.toLowerCase();
+      return songTitle.contains(query) || songArtist.contains(query);
+    }).length;
+  }
+
+  /// Check if album title/artist matches (not just songs)
+  bool _albumMatchesSearch(Album album) {
+    if (_searchQuery.isEmpty) return true;
+
+    final query = _searchQuery.toLowerCase();
+    final title = album.title.toLowerCase();
+    final artist = album.artist.toLowerCase();
+    return title.contains(query) || artist.contains(query);
   }
 
   /// Get all unique formats from the album list
@@ -1113,10 +1146,16 @@ class LibraryScreenState extends State<LibraryScreen> {
     final progress = _downloadProgress[album.name] ?? 0.0;
     final showProgress = isDownloading && progress < 1.0;
 
+    // Count matching songs if searching
+    final matchingSongCount = _getMatchingSongCount(album);
+    final albumMatches = _albumMatchesSearch(album);
+
     return _AlbumCardWidget(
       album: album,
       showProgress: showProgress,
       progress: progress,
+      matchingSongCount: matchingSongCount,
+      showSongMatchBadge: _searchQuery.isNotEmpty && !albumMatches && matchingSongCount > 0,
       onTap: () {
         setState(() {
           _selectedAlbum = album;
@@ -1138,8 +1177,8 @@ class LibraryScreenState extends State<LibraryScreen> {
     final discGroups = _groupSongsByDisc(album.songs);
     final hasMultipleDiscs = discGroups.length > 1;
 
-    // Show filter for albums with many songs (>20)
-    final showFilter = album.songs.length > 20;
+    // Show filter for albums with many songs (>15)
+    final showFilter = album.songs.length >= 15;
 
     return CustomScrollView(
       slivers: [
@@ -1290,45 +1329,37 @@ class LibraryScreenState extends State<LibraryScreen> {
                     ],
                   ),
                   const SizedBox(height: 32),
-                  Text(
-                    'Tracks',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Show filter input for albums with many songs
-                  if (showFilter) ...[
-                    TextField(
-                      controller: _albumTrackFilterController,
-                      decoration: InputDecoration(
-                        hintText: 'Filter tracks...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: _albumTrackFilter.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _albumTrackFilterController.clear();
-                                },
-                                tooltip: 'Clear filter',
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: const Color(0xFF1E1E1E),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      style: GoogleFonts.inter(fontSize: 14),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
                 ],
               ),
             ),
           ),
+          // Sticky header with Tracks title and filter bar (only for albums with 15+ songs)
+          if (showFilter)
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _TrackFilterHeaderDelegate(
+                controller: _albumTrackFilterController,
+                filterText: _albumTrackFilter,
+                onClear: () {
+                  _albumTrackFilterController.clear();
+                },
+              ),
+            )
+          else
+            // For smaller albums, just show "Tracks" heading without filter
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Text(
+                  'Tracks',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           // Render tracks with or without disc grouping
           if (hasMultipleDiscs)
             ..._buildDiscGroupedTrackList(album, discGroups, _albumTrackFilter)
@@ -1343,7 +1374,7 @@ class LibraryScreenState extends State<LibraryScreen> {
                           final title = song.title.toLowerCase();
                           final artist = song.artist.toLowerCase();
                           final album = song.album?.toLowerCase() ?? '';
-                          final query = _albumTrackFilter;
+                          final query = _albumTrackFilter.toLowerCase();
                           return title.contains(query) ||
                                  artist.contains(query) ||
                                  album.contains(query);
@@ -1366,7 +1397,7 @@ class LibraryScreenState extends State<LibraryScreen> {
                         final title = song.title.toLowerCase();
                         final artist = song.artist.toLowerCase();
                         final albumName = song.album?.toLowerCase() ?? '';
-                        final query = _albumTrackFilter;
+                        final query = _albumTrackFilter.toLowerCase();
                         return title.contains(query) ||
                                artist.contains(query) ||
                                albumName.contains(query);
@@ -1532,12 +1563,16 @@ class _AlbumCardWidget extends StatefulWidget {
   final Album album;
   final bool showProgress;
   final double progress;
+  final int matchingSongCount;
+  final bool showSongMatchBadge;
   final VoidCallback onTap;
 
   const _AlbumCardWidget({
     required this.album,
     required this.showProgress,
     required this.progress,
+    this.matchingSongCount = 0,
+    this.showSongMatchBadge = false,
     required this.onTap,
   });
 
@@ -1732,6 +1767,29 @@ class _AlbumCardWidgetState extends State<_AlbumCardWidget> {
                             color: const Color(0xFF666666),
                           ),
                         ),
+                        // Show song match badge when only songs match (not album/artist)
+                        if (widget.showSongMatchBadge) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.purple.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppColors.purple.withOpacity(0.4),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              '${widget.matchingSongCount} ${widget.matchingSongCount == 1 ? "song" : "songs"}',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.purple,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -1985,6 +2043,77 @@ class _TrackListItemState extends State<_TrackListItem> with SingleTickerProvide
         ),
       ),
     );
+  }
+}
+
+/// Sticky header delegate for the track filter bar
+class _TrackFilterHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final TextEditingController controller;
+  final String filterText;
+  final VoidCallback onClear;
+
+  _TrackFilterHeaderDelegate({
+    required this.controller,
+    required this.filterText,
+    required this.onClear,
+  });
+
+  @override
+  double get minExtent => 90.0;
+
+  @override
+  double get maxExtent => 90.0;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: const Color(0xFF000000),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tracks',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 36,
+            child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'Filter tracks...',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: filterText.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: onClear,
+                        tooltip: 'Clear filter',
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              style: GoogleFonts.inter(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_TrackFilterHeaderDelegate oldDelegate) {
+    return filterText != oldDelegate.filterText;
   }
 }
 

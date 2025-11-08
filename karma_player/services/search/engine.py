@@ -169,7 +169,7 @@ class SearchEngine:
             else:
                 # Multiple torrents with same title/format/quality, keep the one with most seeders
                 best = max(group, key=lambda x: x.seeders or 0)
-                logger.info(f"   📦 Deduped {len(group)} torrents for key '{dedup_key[:80]}' → keeping best ({best.seeders} seeders)")
+                logger.debug(f"   📦 Deduped {len(group)} torrents for key '{dedup_key[:80]}' → keeping best ({best.seeders} seeders)")
                 unique_results.append(best)
 
         # Filter by minimum seeders (only applies to torrent sources)
