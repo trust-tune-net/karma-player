@@ -378,9 +378,9 @@ class LibraryController extends ChangeNotifier {
         'artwork.jpg'
       ];
       final discPatterns = [
-        RegExp(r'^disc\\s*\\d+$', caseSensitive: false),
-        RegExp(r'^cd\\s*\\d+$', caseSensitive: false),
-        RegExp(r'^disk\\s*\\d+$', caseSensitive: false),
+        RegExp(r'^disc\s*\d+$', caseSensitive: false),
+        RegExp(r'^cd\s*\d+$', caseSensitive: false),
+        RegExp(r'^disk\s*\d+$', caseSensitive: false),
       ];
 
       final List<Map<String, dynamic>> filesToProcess = [];
