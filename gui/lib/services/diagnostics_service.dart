@@ -218,7 +218,7 @@ class DiagnosticsService {
 
   Future<DiagnosticResult> _checkSearchAPI() async {
     try {
-      final url = '${appSettings.searchApiUrl}/health';
+      final url = 'http://148.230.73.44:18080/health';
       final response = await http.get(Uri.parse(url)).timeout(
         const Duration(seconds: 10),
         onTimeout: () => throw TimeoutException('API request timed out'),

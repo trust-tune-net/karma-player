@@ -142,7 +142,7 @@ class AppSettings extends ChangeNotifier {
       final startTime = DateTime.now();
       // Check our API health endpoint
       final response = await http.get(
-        Uri.parse('$searchApiUrl/health'),
+        Uri.parse('http://148.230.73.44:18080/health'),
       ).timeout(const Duration(seconds: 3));
       final endTime = DateTime.now();
 

@@ -287,7 +287,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 letterSpacing: 0.3,
               ),
             ),
-            const StatsBadges(), // No albums count for Settings screen
+            StatsBadges(
+              onConnectionTap: _openDiagnostics,
+            ), // No albums count for Settings screen
           ],
         ),
       ),

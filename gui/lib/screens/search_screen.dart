@@ -19,6 +19,7 @@ import '../services/search_service_grpc.dart';
 import '../services/audio_quality_verification_service.dart';
 import '../proto/search.pb.dart' as pb_search;
 import '../widgets/youtube_download_progress_dialog.dart';
+import '../widgets/diagnostics_dialog.dart';
 import '../main.dart';
 
 enum SourceFilter { all, torrents, streaming }
@@ -125,6 +126,16 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void _verifyYtDlp() async {
     // Run verification in background, don't block UI
     await _youtubeDownloadService.verifyYtDlp();
+  }
+
+  Future<void> _openDiagnostics() async {
+    await showDialog(
+      context: context,
+      builder: (context) => DiagnosticsDialog(
+        daemonManager: daemonManager,
+        appSettings: appSettings,
+      ),
+    );
   }
 
   @override
@@ -1194,7 +1205,9 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                 letterSpacing: 0.3,
               ),
             ),
-            const StatsBadges(), // No albums count for Search screen
+            StatsBadges(
+              onConnectionTap: _openDiagnostics,
+            ), // No albums count for Search screen
           ],
         ),
       ),

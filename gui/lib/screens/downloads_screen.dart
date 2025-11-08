@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/transmission_client.dart';
 import '../services/analytics_service.dart';
+import '../widgets/diagnostics_dialog.dart';
 import '../main.dart';
 
 class DownloadsScreen extends StatefulWidget {
@@ -73,6 +74,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
         _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
       }
     });
+  }
+
+  Future<void> _openDiagnostics() async {
+    await showDialog(
+      context: context,
+      builder: (context) => DiagnosticsDialog(
+        daemonManager: daemonManager,
+        appSettings: appSettings,
+      ),
+    );
   }
 
   @override
@@ -216,7 +227,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
                 letterSpacing: 0.3,
               ),
             ),
-            const StatsBadges(), // No albums count for Downloads screen
+            StatsBadges(
+              onConnectionTap: _openDiagnostics,
+            ), // No albums count for Downloads screen
           ],
         ),
       ),

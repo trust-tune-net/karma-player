@@ -201,10 +201,7 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0A0A0A),
         title: const Text('Audio Settings'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),
