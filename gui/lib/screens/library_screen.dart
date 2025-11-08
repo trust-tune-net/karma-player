@@ -996,6 +996,49 @@ class LibraryScreenState extends State<LibraryScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    // Refresh library button
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: OutlinedButton.icon(
+                        onPressed: _isScanning ? null : refreshLibrary,
+                        icon: _isScanning
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF888888)),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.refresh,
+                                size: 16,
+                                color: Color(0xFF888888),
+                              ),
+                        label: Text(
+                          _isScanning ? 'Scanning...' : 'Refresh',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF888888),
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E1E1E),
+                          side: const BorderSide(
+                            color: Color(0xFF333333),
+                            width: 1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          disabledBackgroundColor: const Color(0xFF1E1E1E),
+                        ),
+                      ),
+                    ),
                     // Clear filters button (only shown when filters are active)
                     if (_hasActiveFormatFilter)
                       Padding(
