@@ -33,6 +33,7 @@ class AdapterJackett(SourceAdapter):
         api_key: str = "",
         indexer_id: str = "all",
         categories: list[int] | None = None,
+        gui_base_url: str | None = None,
     ):
         """Initialize Jackett adapter.
 
@@ -41,6 +42,7 @@ class AdapterJackett(SourceAdapter):
             api_key: Jackett API key (required)
             indexer_id: Indexer ID or 'all' for all configured indexers
             categories: Torznab category IDs (default: all audio categories)
+            gui_base_url: GUI-facing base URL for proxy URL normalization (optional)
         """
         super().__init__()
         self.base_url = base_url.rstrip("/")
@@ -48,6 +50,8 @@ class AdapterJackett(SourceAdapter):
         self.indexer_id = indexer_id
         self.categories = categories if categories is not None else self.DEFAULT_AUDIO_CATEGORIES
         self.timeout = 15  # Jackett queries multiple indexers
+        # GUI base URL for hostname normalization (fallback to base_url if not specified)
+        self.gui_base_url = (gui_base_url.rstrip("/") if gui_base_url else self.base_url)
 
     @property
     def name(self) -> str:
@@ -195,19 +199,19 @@ class AdapterJackett(SourceAdapter):
                             import logging
                             logger = logging.getLogger(__name__)
                             logger.info(f"🔧 Normalizing proxy URL:")
-                            logger.info(f"   base_url: {self.base_url}")
+                            logger.info(f"   gui_base_url: {self.gui_base_url}")
                             logger.info(f"   original: {magnet_link[:80]}...")
 
-                            parsed_jackett = urlparse(self.base_url)
+                            parsed_gui = urlparse(self.gui_base_url)
                             parsed_link = urlparse(magnet_link)
 
-                            logger.info(f"   parsed_jackett.netloc: {parsed_jackett.netloc}")
+                            logger.info(f"   parsed_gui.netloc: {parsed_gui.netloc}")
                             logger.info(f"   parsed_link.netloc: {parsed_link.netloc}")
 
-                            # Replace hostname and scheme with the FQDN from base_url
+                            # Replace hostname and scheme with the FQDN from gui_base_url
                             normalized_link = parsed_link._replace(
-                                scheme=parsed_jackett.scheme,
-                                netloc=parsed_jackett.netloc
+                                scheme=parsed_gui.scheme,
+                                netloc=parsed_gui.netloc
                             )
                             magnet_link = urlunparse(normalized_link)
                             logger.info(f"   normalized: {magnet_link[:80]}...")

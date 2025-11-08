@@ -311,6 +311,7 @@ if __name__ == "__main__":
     # Initialize search infrastructure
     jackett_url = os.getenv("JACKETT_REMOTE_URL") or os.getenv("JACKETT_URL")
     jackett_api_key = os.getenv("JACKETT_REMOTE_API_KEY") or os.getenv("JACKETT_API_KEY")
+    jackett_gui_url = os.getenv("JACKETT_REMOTE_GUI_URL")  # Optional: FQDN for GUI proxy URLs
 
     if not jackett_url or not jackett_api_key:
         logger.error("Missing Jackett configuration")
@@ -319,7 +320,8 @@ if __name__ == "__main__":
     jackett = AdapterJackett(
         base_url=jackett_url,
         api_key=jackett_api_key,
-        indexer_id="all"
+        indexer_id="all",
+        gui_base_url=jackett_gui_url  # Use FQDN for proxy URL normalization
     )
 
     youtube_music = AdapterYouTubeMusic()
