@@ -195,18 +195,8 @@ class AdapterJackett(SourceAdapter):
                         if magnet_link.startswith("http://") or magnet_link.startswith("https://"):
                             from urllib.parse import urlparse, urlunparse
 
-                            # DEBUG: Log normalization
-                            import logging
-                            logger = logging.getLogger(__name__)
-                            logger.info(f"🔧 Normalizing proxy URL:")
-                            logger.info(f"   gui_base_url: {self.gui_base_url}")
-                            logger.info(f"   original: {magnet_link[:80]}...")
-
                             parsed_gui = urlparse(self.gui_base_url)
                             parsed_link = urlparse(magnet_link)
-
-                            logger.info(f"   parsed_gui.netloc: {parsed_gui.netloc}")
-                            logger.info(f"   parsed_link.netloc: {parsed_link.netloc}")
 
                             # Replace hostname and scheme with the FQDN from gui_base_url
                             normalized_link = parsed_link._replace(
@@ -214,7 +204,6 @@ class AdapterJackett(SourceAdapter):
                                 netloc=parsed_gui.netloc
                             )
                             magnet_link = urlunparse(normalized_link)
-                            logger.info(f"   normalized: {magnet_link[:80]}...")
 
                     # Skip if no link at all
                     if not magnet_link:
