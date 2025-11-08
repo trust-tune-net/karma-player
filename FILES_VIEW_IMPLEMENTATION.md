@@ -3,7 +3,15 @@
 ## Overview
 Add a "Files View" toggle to the Library screen to show all audio files as a flat list instead of grouped by albums. This solves the "Unknown Album" clutter problem for users with many loose audio files.
 
-**Target File:** `/Users/fcavalcanti/dev/karma-player/gui/lib/screens/library_screen.dart`
+**Entry Points (post-MVC refactor):**
+
+- Controller: `gui/lib/controllers/library_controller.dart`
+- Screen shell: `gui/lib/screens/library_screen.dart`
+- Widgets: `gui/lib/widgets/library/`
+- Utilities: `gui/lib/utils/library_utils.dart`
+
+The Files view work should interact with these layers rather than embedding new
+logic directly inside the screen widget.
 
 **User Requirements:**
 - ✅ Toggle between Albums ⇄ Files views on Library screen
@@ -18,7 +26,7 @@ Add a "Files View" toggle to the Library screen to show all audio files as a fla
 ---
 
 ## Phase 1: Core Architecture
-**File:** `library_screen.dart` (lines 25-56)
+**File:** `library_controller.dart` (derive state) & `library_screen.dart`
 
 ### Checklist
 - [ ] Add `enum LibraryViewMode { albums, files }` after line 25 (after `enum SortCriteria`)
@@ -39,7 +47,7 @@ bool _groupFilesByFolder = false;
 ---
 
 ## Phase 2: Flatten Songs Data
-**File:** `library_screen.dart` `_scanMusicFolder()` method (around line 450-500)
+**File:** `library_controller.dart` `_scanMusicFolder()` method (around line 450-500)
 
 ### Checklist
 - [ ] Find the end of `_scanMusicFolder()` where albums are finalized
@@ -54,7 +62,7 @@ print('📁 Library scan complete: ${_albums.length} albums, ${_allSongs.length}
 ---
 
 ## Phase 3: View Mode Toggle UI
-**File:** `library_screen.dart` (around line 999, before format filter chips)
+**File:** `library_album_grid.dart` (Albums view controls)
 
 ### Checklist
 - [ ] Find the Row with Refresh button and format filter chips (line 997)
