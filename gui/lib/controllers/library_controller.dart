@@ -14,6 +14,8 @@ import '../utils/library_utils.dart';
 
 enum SortCriteria { title, artist, trackCount, year }
 
+enum LibraryViewMode { albums, files }
+
 class LibraryController extends ChangeNotifier {
   LibraryController({
     TransmissionClient? transmissionClient,
@@ -33,10 +35,13 @@ class LibraryController extends ChangeNotifier {
   final Duration autoRefreshInterval;
 
   final Set<String> _albumsWithMetadata = {};
+  final Set<String> _songsWithMetadata = {};
   List<Album> _albums = [];
+  List<Song> _allSongs = [];
   Map<String, double> _downloadProgress = {};
 
   Album? _selectedAlbum;
+  LibraryViewMode _viewMode = LibraryViewMode.albums;
   bool _isScanning = false;
   bool _isLoadingMetadata = false;
   bool _isInitialized = false;
@@ -56,18 +61,23 @@ class LibraryController extends ChangeNotifier {
   Timer? _autoRefreshTimer;
 
   List<Album> get albums => _albums;
+  List<Song> get allSongs => _allSongs;
+  List<Song> get displaySongs =>
+      _applySongSorting(_applySongFilters(_allSongs));
   Album? get selectedAlbum => _selectedAlbum;
   bool get isScanning => _isScanning;
   bool get isLoadingMetadata => _isLoadingMetadata;
   bool get sortAscending => _sortAscending;
   bool get hasConnectionLostNotification => _connectionLostNotification;
   bool get hasActiveFormatFilter => _selectedFormats.isNotEmpty;
+  bool get hasFiles => _allSongs.isNotEmpty;
 
   Map<String, double> get downloadProgress =>
       Map.unmodifiable(_downloadProgress);
   Set<String> get selectedFormats => Set.unmodifiable(_selectedFormats);
 
   SortCriteria get sortCriteria => _sortCriteria;
+  LibraryViewMode get viewMode => _viewMode;
   String get statusMessage => _statusMessage;
   String get searchQuery => _searchQuery;
   String get albumTrackFilter => _albumTrackFilter;
@@ -76,10 +86,25 @@ class LibraryController extends ChangeNotifier {
   List<Album> get displayAlbums =>
       _applySorting(_applySearchAndFormatFilters(_albums));
 
-  Set<String> get availableFormats => _albums
-      .where((album) => album.format != null)
-      .map((album) => album.format!)
-      .toSet();
+  Set<String> get availableFormats {
+    final formats = <String>{};
+
+    for (final album in _albums) {
+      final format = album.format;
+      if (format != null) {
+        formats.add(format);
+      }
+    }
+
+    for (final song in _allSongs) {
+      final format = _getSongFormat(song);
+      if (format != null) {
+        formats.add(format);
+      }
+    }
+
+    return formats;
+  }
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -109,6 +134,13 @@ class LibraryController extends ChangeNotifier {
     }
   }
 
+  void updateViewMode(LibraryViewMode viewMode) {
+    if (_viewMode != viewMode) {
+      _viewMode = viewMode;
+      _notify();
+    }
+  }
+
   void selectAlbum(Album album) {
     _selectedAlbum = album;
     _notify();
@@ -131,6 +163,8 @@ class LibraryController extends ChangeNotifier {
   @visibleForTesting
   void seedAlbums(List<Album> albums) {
     _albums = albums;
+    _rebuildAllSongs();
+    _songsWithMetadata.clear();
     _notify();
   }
 
@@ -197,6 +231,32 @@ class LibraryController extends ChangeNotifier {
   String getDiscLabel(String folderName) =>
       LibraryUtils.getDiscLabel(folderName);
 
+  Future<Song> ensureSongMetadata(Song song) async {
+    if (_songsWithMetadata.contains(song.id) || song.bitrate != null) {
+      return song;
+    }
+
+    try {
+      final updatedSong = await Song.fromFileWithMetadata(
+        song.filePath,
+        albumName: song.album,
+        artistName: song.artist,
+        artworkPath: song.artworkPath,
+      );
+
+      _songsWithMetadata.add(updatedSong.id);
+      _replaceSongInCollections(updatedSong);
+      return updatedSong;
+    } catch (error, stackTrace) {
+      _analyticsService.captureError(
+        error,
+        stackTrace,
+        context: 'library_lazy_load_song_metadata_error',
+      );
+      return song;
+    }
+  }
+
   Future<void> lazyLoadMetadata(Album album) async {
     if (_albumsWithMetadata.contains(album.id)) return;
     final firstSong = album.songs.isNotEmpty ? album.songs.first : null;
@@ -224,6 +284,12 @@ class LibraryController extends ChangeNotifier {
         }),
       );
 
+      for (final song in updatedSongs) {
+        if (song.bitrate != null) {
+          _songsWithMetadata.add(song.id);
+        }
+      }
+
       final index = _albums.indexWhere((a) => a.id == album.id);
       if (index != -1) {
         _albums[index] = Album(
@@ -240,6 +306,7 @@ class LibraryController extends ChangeNotifier {
       }
 
       _albumsWithMetadata.add(album.id);
+      _rebuildAllSongs();
     } catch (error, stackTrace) {
       _analyticsService.captureError(
         error,
@@ -260,6 +327,9 @@ class LibraryController extends ChangeNotifier {
   }
 
   int formatCount(String format) {
+    if (_viewMode == LibraryViewMode.files) {
+      return _allSongs.where((song) => _getSongFormat(song) == format).length;
+    }
     return _albums.where((album) => album.format == format).length;
   }
 
@@ -270,6 +340,7 @@ class LibraryController extends ChangeNotifier {
 
   Future<void> _scanMusicFolder() async {
     _setScanningState(true, 'Scanning ~/Music folder...');
+    _songsWithMetadata.clear();
 
     try {
       final homeDir =
@@ -403,6 +474,7 @@ class LibraryController extends ChangeNotifier {
           return a.title.compareTo(b.title);
         });
 
+        Song? leadMetadataSong;
         if (songs.isNotEmpty) {
           try {
             final albumMetadata = await _metadataService
@@ -433,6 +505,15 @@ class LibraryController extends ChangeNotifier {
                 isEstimated: firstSong.isEstimated,
               );
             }
+
+            leadMetadataSong = await Song.fromFileWithMetadata(
+              songs.first.filePath,
+              albumName: songs.first.album,
+              artistName: songs.first.artist,
+              artworkPath: songs.first.artworkPath,
+            );
+            _songsWithMetadata.add(leadMetadataSong.id);
+            songs[0] = leadMetadataSong;
           } catch (error) {
             if (kDebugMode) {
               print(
@@ -484,26 +565,10 @@ class LibraryController extends ChangeNotifier {
 
         final songsWithArtwork = songs
             .map(
-              (song) => Song(
-                id: song.id,
-                title: song.title,
-                artist: song.artist,
-                album: song.album,
-                filePath: song.filePath,
-                duration: song.duration,
-                artworkPath: artworkPath,
-                trackNumber: song.trackNumber,
-                bitrate: song.bitrate,
-                sampleRate: song.sampleRate,
-                bitDepth: song.bitDepth,
-                channels: song.channels,
-                channelLayout: song.channelLayout,
-                codecDetails: song.codecDetails,
-                rawMetadata: song.rawMetadata,
-                metadataToolVersion: song.metadataToolVersion,
-                fileSize: song.fileSize,
-                format: song.format,
-                isEstimated: song.isEstimated,
+              (song) => _applyArtworkAndTemplate(
+                song,
+                artworkPath,
+                leadMetadataSong,
               ),
             )
             .toList();
@@ -520,6 +585,8 @@ class LibraryController extends ChangeNotifier {
       }
 
       _albums = albums;
+      _rebuildAllSongs();
+      _songsWithMetadata.clear();
       _downloadProgress = {};
       _statusMessage = albums.isEmpty
           ? 'No music found in ~/Music'
@@ -648,6 +715,59 @@ class LibraryController extends ChangeNotifier {
     return sorted;
   }
 
+  List<Song> _applySongFilters(List<Song> songs) {
+    var filtered = List<Song>.from(songs);
+
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered
+          .where((song) => LibraryUtils.matchesSongQuery(song, _searchQuery))
+          .toList();
+    }
+
+    if (_selectedFormats.isNotEmpty) {
+      filtered = filtered.where((song) {
+        final format = _getSongFormat(song);
+        return format != null && _selectedFormats.contains(format);
+      }).toList();
+    }
+
+    return filtered;
+  }
+
+  List<Song> _applySongSorting(List<Song> songs) {
+    final sorted = List<Song>.from(songs);
+    sorted.sort((a, b) {
+      int comparison = 0;
+      switch (_sortCriteria) {
+        case SortCriteria.title:
+          comparison = a.title.compareTo(b.title);
+          break;
+        case SortCriteria.artist:
+          comparison = a.artist.compareTo(b.artist);
+          break;
+        case SortCriteria.trackCount:
+          comparison = (a.album ?? '').compareTo(b.album ?? '');
+          break;
+        case SortCriteria.year:
+          final aYear = LibraryUtils.extractYear(a.album ?? a.title);
+          final bYear = LibraryUtils.extractYear(b.album ?? b.title);
+          if (aYear != null && bYear != null) {
+            comparison = aYear.compareTo(bYear);
+          } else if (aYear != null) {
+            comparison = -1;
+          } else if (bYear != null) {
+            comparison = 1;
+          } else {
+            comparison = a.title.compareTo(b.title);
+          }
+          break;
+      }
+      return _sortAscending ? comparison : -comparison;
+    });
+
+    return sorted;
+  }
+
   void _setScanningState(bool isScanning, String message,
       {bool clearAlbums = false}) {
     _isScanning = isScanning;
@@ -672,5 +792,87 @@ class LibraryController extends ChangeNotifier {
   void _notify() {
     if (_disposed) return;
     notifyListeners();
+  }
+
+  void _replaceSongInCollections(Song updatedSong) {
+    for (var i = 0; i < _allSongs.length; i++) {
+      if (_allSongs[i].id == updatedSong.id) {
+        _allSongs[i] = updatedSong;
+        break;
+      }
+    }
+
+    for (var i = 0; i < _albums.length; i++) {
+      final album = _albums[i];
+      final songIndex =
+          album.songs.indexWhere((song) => song.id == updatedSong.id);
+      if (songIndex != -1) {
+        final updatedSongs = List<Song>.from(album.songs);
+        updatedSongs[songIndex] = updatedSong;
+        _albums[i] = Album(
+          id: album.id,
+          name: album.name,
+          path: album.path,
+          artworkPath: album.artworkPath,
+          songs: updatedSongs,
+        );
+
+        if (_selectedAlbum?.id == album.id) {
+          _selectedAlbum = _albums[i];
+        }
+        break;
+      }
+    }
+
+    _rebuildAllSongs();
+    _notify();
+  }
+
+  void _rebuildAllSongs() {
+    _allSongs = _albums.expand((album) => album.songs).toList();
+  }
+
+  Song _applyArtworkAndTemplate(
+    Song song,
+    String? artworkPath,
+    Song? template,
+  ) {
+    final mergedFormat =
+        song.format ?? template?.format ?? _getSongFormat(song);
+
+    return Song(
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      filePath: song.filePath,
+      duration: song.duration ?? template?.duration,
+      artworkPath: artworkPath ?? song.artworkPath,
+      trackNumber: song.trackNumber,
+      bitrate: song.bitrate ?? template?.bitrate,
+      sampleRate: song.sampleRate ?? template?.sampleRate,
+      bitDepth: song.bitDepth ?? template?.bitDepth,
+      channels: song.channels ?? template?.channels,
+      channelLayout: song.channelLayout ?? template?.channelLayout,
+      codecDetails: song.codecDetails ?? template?.codecDetails,
+      rawMetadata: song.rawMetadata ?? template?.rawMetadata,
+      metadataToolVersion:
+          song.metadataToolVersion ?? template?.metadataToolVersion,
+      fileSize: song.fileSize ?? template?.fileSize,
+      format: mergedFormat,
+      isEstimated: song.isEstimated || (template?.isEstimated ?? false),
+      httpHeaders: song.httpHeaders,
+    );
+  }
+
+  String? _getSongFormat(Song song) {
+    final explicitFormat = song.format;
+    if (explicitFormat != null && explicitFormat.isNotEmpty) {
+      return explicitFormat.toUpperCase();
+    }
+
+    final ext = path.extension(song.filePath);
+    if (ext.isEmpty) return null;
+    return ext.replaceFirst('.', '').toUpperCase();
   }
 }

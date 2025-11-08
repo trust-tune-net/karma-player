@@ -10,6 +10,7 @@ import '../services/audio_quality_verification_service.dart';
 import '../services/analytics_service.dart';
 import '../widgets/library/library_album_detail.dart';
 import '../widgets/library/library_album_grid.dart';
+import '../widgets/library/library_files_view.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -177,14 +178,313 @@ class LibraryScreenState extends State<LibraryScreen> {
           ],
         ),
       ),
-      body: LibraryAlbumGrid(
-        controller: _controller,
-        searchController: _searchController,
-        onAlbumSelected: (album) {
-          _controller.selectAlbum(album);
-          _albumTrackFilterController.clear();
-        },
+      body: Column(
+        children: [
+          if (_controller.statusMessage.isNotEmpty) _buildStatusBanner(context),
+          _buildControlSection(context),
+          Expanded(
+            child: _controller.viewMode == LibraryViewMode.albums
+                ? LibraryAlbumGrid(
+                    controller: _controller,
+                    onAlbumSelected: (album) {
+                      _controller.selectAlbum(album);
+                      _albumTrackFilterController.clear();
+                    },
+                  )
+                : LibraryFilesView(
+                    controller: _controller,
+                    songs: _controller.displaySongs,
+                    currentSong: widget.currentSong,
+                    onSongTap: (song) => _handleFileSongTap(song),
+                    onVerifySong: _verifySongQuality,
+                    onOpenFolder: _openFileLocation,
+                  ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildStatusBanner(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        children: [
+          if (_controller.isScanning)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          if (_controller.isScanning) const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _controller.statusMessage,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlSection(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildSearchField(context)),
+              const SizedBox(width: 16),
+              _buildSortMenu(context),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildViewToggle(context),
+              const SizedBox(width: 16),
+              Expanded(child: _buildFormatFilters(context)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: const Color(0xFF333333),
+          width: 1,
+        ),
+      ),
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          color: Colors.white,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Search albums, artists, or songs...',
+          hintStyle:
+              GoogleFonts.inter(fontSize: 14, color: const Color(0xFF888888)),
+          prefixIcon:
+              const Icon(Icons.search, size: 20, color: Color(0xFF888888)),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  color: const Color(0xFF888888),
+                  onPressed: () {
+                    _searchController.clear();
+                    _controller.updateSearchQuery('');
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortMenu(BuildContext context) {
+    final sortCriteria = _controller.sortCriteria;
+    final sortAscending = _controller.sortAscending;
+
+    final trackLabel =
+        _controller.viewMode == LibraryViewMode.files ? 'Album' : 'Tracks';
+
+    String label;
+    switch (sortCriteria) {
+      case SortCriteria.title:
+        label = 'Title';
+        break;
+      case SortCriteria.artist:
+        label = 'Artist';
+        break;
+      case SortCriteria.trackCount:
+        label = trackLabel;
+        break;
+      case SortCriteria.year:
+        label = 'Year';
+        break;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PopupMenuButton<SortCriteria>(
+          tooltip: 'Change sort order',
+          initialValue: sortCriteria,
+          onSelected: _controller.updateSortCriteria,
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+                value: SortCriteria.title, child: Text('Title')),
+            const PopupMenuItem(
+                value: SortCriteria.artist, child: Text('Artist')),
+            PopupMenuItem(
+                value: SortCriteria.trackCount, child: Text(trackLabel)),
+            const PopupMenuItem(value: SortCriteria.year, child: Text('Year')),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF333333), width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sort, size: 18),
+                const SizedBox(width: 8),
+                Text('Sort: $label', style: GoogleFonts.inter(fontSize: 13)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: sortAscending ? 'Sort descending' : 'Sort ascending',
+          icon: Icon(sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+              size: 18),
+          onPressed: _controller.toggleSortOrder,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormatFilters(BuildContext context) {
+    final formats = _controller.availableFormats.toList()..sort();
+
+    if (formats.isEmpty && !_controller.hasActiveFormatFilter) {
+      return const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (_controller.hasActiveFormatFilter)
+          ActionChip(
+            label: const Text('Clear format filters'),
+            onPressed: _controller.clearFormatFilters,
+            avatar: const Icon(Icons.clear, size: 16),
+          ),
+        ...formats.map(
+          (format) => FilterChip(
+            selected: _controller.selectedFormats.contains(format),
+            label: Text('$format (${_controller.formatCount(format)})'),
+            onSelected: (_) => _controller.toggleFormatSelection(format),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildViewToggle(BuildContext context) {
+    final viewMode = _controller.viewMode;
+
+    Widget buildSegment({
+      required LibraryViewMode mode,
+      required IconData icon,
+      required String label,
+      BorderRadius? radius,
+    }) {
+      final isActive = viewMode == mode;
+      return InkWell(
+        borderRadius: radius,
+        onTap: () => _controller.updateViewMode(mode),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive
+                ? const Color(0xFFA855F7).withOpacity(0.2)
+                : Colors.transparent,
+            borderRadius: radius,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isActive
+                    ? const Color(0xFFA855F7)
+                    : const Color(0xFF888888),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isActive
+                      ? const Color(0xFFA855F7)
+                      : const Color(0xFF888888),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF333333),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          buildSegment(
+            mode: LibraryViewMode.albums,
+            icon: Icons.grid_view,
+            label: 'Albums',
+            radius: const BorderRadius.only(
+              topLeft: Radius.circular(19),
+              bottomLeft: Radius.circular(19),
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 28,
+            color: const Color(0xFF333333),
+          ),
+          buildSegment(
+            mode: LibraryViewMode.files,
+            icon: Icons.list,
+            label: 'Files',
+            radius: const BorderRadius.only(
+              topRight: Radius.circular(19),
+              bottomRight: Radius.circular(19),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleFileSongTap(Song song) async {
+    final updatedSong = await _controller.ensureSongMetadata(song);
+    widget.onSongTap(
+      updatedSong,
+      queue: _controller.displaySongs,
     );
   }
 }

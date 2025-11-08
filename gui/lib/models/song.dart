@@ -22,7 +22,8 @@ class Song {
   final String? metadataToolVersion; // "FFprobe 7.1"
   final int? fileSize; // in bytes
   final String? format; // FLAC, MP3, ALAC, etc.
-  final bool isEstimated; // false = exact from FFprobe, true = estimated from file size
+  final bool
+      isEstimated; // false = exact from FFprobe, true = estimated from file size
 
   // HTTP headers for streaming URLs (e.g., YouTube requires User-Agent)
   final Map<String, String>? httpHeaders;
@@ -50,7 +51,8 @@ class Song {
     this.httpHeaders,
   });
 
-  factory Song.fromFile(String path, {String? albumName, String? artistName, String? artworkPath}) {
+  factory Song.fromFile(String path,
+      {String? albumName, String? artistName, String? artworkPath}) {
     // Extract basic info from file path
     final parts = path.split('/');
     final fileName = parts.last;
@@ -96,6 +98,10 @@ class Song {
       }
     }
 
+    final extension = fileName.contains('.')
+        ? fileName.substring(fileName.lastIndexOf('.') + 1).toUpperCase()
+        : null;
+
     return Song(
       id: path.hashCode.toString(),
       title: trackTitle,
@@ -104,6 +110,7 @@ class Song {
       filePath: path,
       trackNumber: trackNum,
       artworkPath: artworkPath,
+      format: extension,
     );
   }
 
@@ -118,12 +125,12 @@ class Song {
   }) async {
     // Create metadata service instance to read ID3 tags + FFprobe data
     final metadataService = MetadataService();
-    
+
     if (useRealMetadata) {
       try {
         // REAL METADATA EXTRACTION
         final metadata = await metadataService.extractSongMetadata(path);
-        
+
         return Song(
           id: path.hashCode.toString(),
           title: metadata.title ?? _extractTitleFromFilename(path),
@@ -133,29 +140,33 @@ class Song {
           trackNumber: metadata.trackNumber,
           duration: metadata.duration,
           artworkPath: artworkPath,
-          bitrate: metadata.bitrate,      // EXACT or estimated from FFprobe
-          sampleRate: metadata.sampleRate,  // EXACT or estimated from FFprobe
-          bitDepth: metadata.bitDepth,      // EXACT or estimated from FFprobe
-          channels: metadata.channels,      // 2, 6, 8
-          channelLayout: metadata.channelLayout,  // "stereo", "5.1", "7.1(side)"
-          codecDetails: metadata.codecDetails,    // "FLAC (Free Lossless Audio Codec)"
-          rawMetadata: metadata.rawMetadata,      // Raw FFprobe JSON
+          bitrate: metadata.bitrate, // EXACT or estimated from FFprobe
+          sampleRate: metadata.sampleRate, // EXACT or estimated from FFprobe
+          bitDepth: metadata.bitDepth, // EXACT or estimated from FFprobe
+          channels: metadata.channels, // 2, 6, 8
+          channelLayout: metadata.channelLayout, // "stereo", "5.1", "7.1(side)"
+          codecDetails:
+              metadata.codecDetails, // "FLAC (Free Lossless Audio Codec)"
+          rawMetadata: metadata.rawMetadata, // Raw FFprobe JSON
           metadataToolVersion: metadata.metadataToolVersion, // "FFprobe 7.1"
           fileSize: metadata.fileSize,
           format: metadata.format,
-          isEstimated: metadata.isEstimated, // Track if quality is exact or estimated
+          isEstimated:
+              metadata.isEstimated, // Track if quality is exact or estimated
         );
       } catch (e) {
-        print('[METADATA] WARNING: Failed to read metadata, falling back to estimation: $e');
+        print(
+            '[METADATA] WARNING: Failed to read metadata, falling back to estimation: $e');
         // Fall through to estimation logic
       }
     }
-    
+
     // FALLBACK: Use estimation (old behavior)
     print('[METADATA] Using estimation for: $path');
 
     // Get basic info first
-    final basicSong = Song.fromFile(path, albumName: albumName, artistName: artistName, artworkPath: artworkPath);
+    final basicSong = Song.fromFile(path,
+        albumName: albumName, artistName: artistName, artworkPath: artworkPath);
 
     try {
       // Get file size
@@ -242,7 +253,7 @@ class Song {
     final parts = path.split('/');
     final fileName = parts.last;
     final nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
-    
+
     // Try to parse track number and title
     if (nameWithoutExt.contains(' - ')) {
       final splitParts = nameWithoutExt.split(' - ');
@@ -260,7 +271,9 @@ class Song {
     if (sampleRate == null) return null;
     if (sampleRate! >= 1000) {
       final khz = sampleRate! / 1000;
-      return khz % 1 == 0 ? '${khz.toInt()} kHz' : '${khz.toStringAsFixed(1)} kHz';
+      return khz % 1 == 0
+          ? '${khz.toInt()} kHz'
+          : '${khz.toStringAsFixed(1)} kHz';
     }
     return '$sampleRate Hz';
   }
@@ -289,6 +302,9 @@ class Song {
 
   // Check if this is lossless audio
   bool get isLossless {
-    return format == 'FLAC' || format == 'ALAC' || format == 'APE' || format == 'WAV';
+    return format == 'FLAC' ||
+        format == 'ALAC' ||
+        format == 'APE' ||
+        format == 'WAV';
   }
 }

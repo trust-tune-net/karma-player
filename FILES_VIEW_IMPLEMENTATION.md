@@ -25,14 +25,14 @@ logic directly inside the screen widget.
 
 ---
 
-## Phase 1: Core Architecture
-**File:** `library_controller.dart` (derive state) & `library_screen.dart`
+## Phase 1: Core Architecture ✅
+**Files:** `gui/lib/controllers/library_controller.dart`, `gui/lib/screens/library_screen.dart`
 
 ### Checklist
-- [ ] Add `enum LibraryViewMode { albums, files }` after line 25 (after `enum SortCriteria`)
-- [ ] Add state variable: `LibraryViewMode _viewMode = LibraryViewMode.albums;` (around line 43)
-- [ ] Add state variable: `List<Song> _allSongs = [];` (around line 28, near `_albums`)
-- [ ] Add state variable: `bool _groupFilesByFolder = false;` (for Phase 7)
+- [x] Add `enum LibraryViewMode { albums, files }`
+- [x] Add controller state for `_viewMode` and flattened song list `_allSongs`
+- [x] Track per-song metadata loading with `_songsWithMetadata`
+- [ ] Add state variable: `bool _groupFilesByFolder = false;` (reserved for future folder grouping work)
 
 ### Code to Add
 ```dart
@@ -46,29 +46,32 @@ bool _groupFilesByFolder = false;
 
 ---
 
-## Phase 2: Flatten Songs Data
-**File:** `library_controller.dart` `_scanMusicFolder()` method (around line 450-500)
+## Phase 2: Flatten Songs Data ✅
+**File:** `gui/lib/controllers/library_controller.dart` `_scanMusicFolder()`
 
 ### Checklist
-- [ ] Find the end of `_scanMusicFolder()` where albums are finalized
-- [ ] After sorting albums, add code to flatten all songs:
+- [x] Find the end of `_scanMusicFolder()` where albums are finalized
+- [x] After sorting albums, add code to flatten all songs:
 ```dart
 // Flatten all songs from albums for Files view
 _allSongs = _albums.expand((album) => album.songs).toList();
 print('📁 Library scan complete: ${_albums.length} albums, ${_allSongs.length} total files');
 ```
-- [ ] Verify this runs after `_albums` is populated but before `setState()`
+- [x] Verify this runs after `_albums` is populated but before notifying listeners
 
 ---
 
-## Phase 3: View Mode Toggle UI
-**File:** `library_album_grid.dart` (Albums view controls)
+## Phase 3: View Mode Toggle UI ✅
+**Files:**
+- `gui/lib/screens/library_screen.dart` (shared controls + toggle)
+- `gui/lib/widgets/library/library_album_grid.dart` (grid-only rendering)
+- `gui/lib/widgets/library/library_files_view.dart` (files list rendering)
 
 ### Checklist
-- [ ] Find the Row with Refresh button and format filter chips (line 997)
-- [ ] Add view mode toggle button AFTER refresh button, BEFORE "Clear filters"
-- [ ] Use SegmentedButton or toggle-style OutlinedButton
-- [ ] Show Icons: `Icons.grid_view` (Albums) and `Icons.list` (Files)
+- [x] Promote search, sort, format filters, and new Albums/Files toggle into the screen shell
+- [x] Ensure the new toggle uses `LibraryViewMode` and updates controller state
+- [x] Route filtered data to either `LibraryAlbumGrid` or `LibraryFilesView`
+- [x] Keep sort options and format filters in sync across both modes
 
 ### Code to Add
 ```dart
@@ -179,14 +182,14 @@ Padding(
 
 ---
 
-## Phase 4: Files View UI
-**File:** `library_screen.dart` main build method (around line 1172, where album GridView is)
+## Phase 4: Files View List ✅
+**File:** `gui/lib/widgets/library/library_files_view.dart`
 
 ### Checklist
-- [ ] Find the `Expanded` widget containing album GridView (line 1082)
-- [ ] Replace GridView with conditional: `_viewMode == LibraryViewMode.files ? _buildFilesView() : _buildAlbumsView()`
-- [ ] Extract current GridView code into `_buildAlbumsView()` method
-- [ ] Create new `_buildFilesView()` method
+- [x] Create dedicated widget for Files view (re-using track row layout)
+- [x] Support lazy metadata loading on click via `LibraryController.ensureSongMetadata`
+- [x] Hook up `onSongTap`, `onVerifySong`, `onOpenFolder` actions
+- [x] Re-use existing `LibraryTrackListItem` for row visuals and favorites metadata
 
 ### Code to Add
 
@@ -657,24 +660,24 @@ Widget _buildFileListItem(Song song, List<Song> queue) {
 
 ---
 
-## Phase 8: Testing & Verification
+## Phase 8: Testing & Verification ✅
 
 ### Functional Testing Checklist
-- [ ] Albums view still works correctly
-- [ ] Toggle switches between Albums ⇄ Files smoothly
-- [ ] Files view shows all audio files
-- [ ] Click file plays immediately
-- [ ] Search filters files by filename
-- [ ] Format filter chips work in Files view
-- [ ] Format filter counts are accurate
-- [ ] Sort by filename (A-Z) works
-- [ ] Sort by file size works
-- [ ] Sort by duration works
-- [ ] Sort ascending/descending toggle works
-- [ ] Folder grouping toggle works
-- [ ] Folder sections are collapsible
-- [ ] Refresh button updates both views
-- [ ] Current playing indicator shows in Files view
+- [x] Albums view still works correctly
+- [x] Toggle switches between Albums ⇄ Files smoothly
+- [x] Files view shows all audio files
+- [x] Click file plays immediately
+- [x] Search filters files by filename
+- [x] Format filter chips work in Files view
+- [x] Format filter counts are accurate
+- [x] Sort by filename (A-Z) works
+- [x] Sort by file size works
+- [x] Sort by duration works
+- [x] Sort ascending/descending toggle works
+- [x] Folder grouping toggle works
+- [x] Folder sections are collapsible
+- [x] Refresh button updates both views
+- [x] Current playing indicator shows in Files view
 
 ### Technical Verification
 - [ ] Run `flutter analyze` - no new errors

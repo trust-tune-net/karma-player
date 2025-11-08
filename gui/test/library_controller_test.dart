@@ -91,5 +91,29 @@ void main() {
       expect(controller.displayAlbums, hasLength(1));
       expect(controller.displayAlbums.first.id, equals('b'));
     });
+
+    test('files view exposes filtered, sorted songs', () {
+      controller.updateViewMode(LibraryViewMode.files);
+      expect(controller.displaySongs, hasLength(3));
+      expect(controller.displaySongs.first.format, isNotNull);
+
+      controller.updateSearchQuery('intro');
+      expect(controller.displaySongs, hasLength(1));
+      expect(controller.displaySongs.first.id, equals('a1'));
+
+      controller.updateSortCriteria(SortCriteria.artist);
+      expect(controller.displaySongs.first.artist, equals('Alpha'));
+    });
+
+    test('format count in files view counts songs', () {
+      controller.updateViewMode(LibraryViewMode.files);
+      expect(controller.formatCount('FLAC'), equals(2));
+      expect(controller.formatCount('MP3'), equals(1));
+    });
+
+    test('available formats includes formats from individual songs', () {
+      controller.updateViewMode(LibraryViewMode.files);
+      expect(controller.availableFormats, containsAll({'FLAC', 'MP3'}));
+    });
   });
 }

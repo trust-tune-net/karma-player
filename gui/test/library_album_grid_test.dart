@@ -34,7 +34,6 @@ void main() {
   testWidgets('LibraryAlbumGrid renders albums and handles tap',
       (tester) async {
     final controller = LibraryController();
-    final searchController = TextEditingController();
     final albums = [
       _album('a', 'Artist A - First Album'),
       _album('b', 'Artist B - Second Album'),
@@ -48,7 +47,6 @@ void main() {
         home: Scaffold(
           body: LibraryAlbumGrid(
             controller: controller,
-            searchController: searchController,
             onAlbumSelected: (album) => selected = album,
           ),
         ),
