@@ -185,6 +185,22 @@ class AdapterJackett(SourceAdapter):
                     if not magnet_link:
                         magnet_link = link
 
+                        # Normalize Jackett proxy URLs with short hostnames
+                        # Jackett may return internal URLs like http://trust-tune-trust-tune-jack:9117/dl/...
+                        # We need to replace with the full FQDN for DNS resolution
+                        if magnet_link.startswith("http://") or magnet_link.startswith("https://"):
+                            from urllib.parse import urlparse, urlunparse
+
+                            parsed_jackett = urlparse(self.base_url)
+                            parsed_link = urlparse(magnet_link)
+
+                            # Replace hostname and scheme with the FQDN from base_url
+                            normalized_link = parsed_link._replace(
+                                scheme=parsed_jackett.scheme,
+                                netloc=parsed_jackett.netloc
+                            )
+                            magnet_link = urlunparse(normalized_link)
+
                     # Skip if no link at all
                     if not magnet_link:
                         continue
