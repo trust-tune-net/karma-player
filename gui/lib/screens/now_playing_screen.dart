@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/playback_service.dart';
 import '../services/analytics_service.dart';
 import '../services/audio_quality_verification_service.dart';
+import '../widgets/technical_details_helper.dart';
 import '../main.dart';
 
 class NowPlayingScreen extends StatefulWidget {
@@ -620,20 +621,20 @@ class _DetailedFileInfoState extends State<_DetailedFileInfo> {
           const SizedBox(height: 12),
           // Show formatted details OR raw data
           if (!_showRawData) ...[
-            _buildInfoRow('Format', widget.song.format ?? 'Unknown'),
+            TechnicalDetailsHelper.buildInfoRow('Format', widget.song.format ?? 'Unknown'),
             if (widget.song.bitDepth != null && widget.song.sampleRate != null)
-              _buildInfoRow('Quality', '${widget.song.bitDepth}-bit / ${widget.song.sampleRate! ~/ 1000} kHz${widget.song.isEstimated ? " (est.)" : ""}'),
+              TechnicalDetailsHelper.buildInfoRow('Quality', '${widget.song.bitDepth}-bit / ${widget.song.sampleRate! ~/ 1000} kHz${widget.song.isEstimated ? " (est.)" : ""}'),
             if (widget.song.channels != null || widget.song.channelLayout != null)
-              _buildInfoRow('Channels', _formatChannels(widget.song.channelLayout, widget.song.channels)),
+              TechnicalDetailsHelper.buildInfoRow('Channels', TechnicalDetailsHelper.formatChannels(widget.song.channelLayout, widget.song.channels)),
             if (widget.song.codecDetails != null)
-              _buildInfoRow('Codec', widget.song.codecDetails!),
+              TechnicalDetailsHelper.buildInfoRow('Codec', widget.song.codecDetails!),
             if (widget.song.bitrate != null)
-              _buildInfoRow('Bitrate', '${widget.song.bitrate} kbps${widget.song.isEstimated ? " (est.)" : ""}'),
+              TechnicalDetailsHelper.buildInfoRow('Bitrate', '${widget.song.bitrate} kbps${widget.song.isEstimated ? " (est.)" : ""}'),
             if (widget.song.fileSize != null)
-              _buildInfoRow('File Size', widget.song.fileSizeDisplay ?? 'Unknown'),
-            _buildInfoRow('Type', widget.song.isLossless ? 'Lossless' : 'Lossy'),
+              TechnicalDetailsHelper.buildInfoRow('File Size', widget.song.fileSizeDisplay ?? 'Unknown'),
+            TechnicalDetailsHelper.buildInfoRow('Type', widget.song.isLossless ? 'Lossless' : 'Lossy'),
             const SizedBox(height: 8),
-            _buildClickablePathRow('Path', widget.song.filePath),
+            TechnicalDetailsHelper.buildClickablePathRow('Path', widget.song.filePath),
           ] else ...[
             // Raw FFprobe output - Always show tool info
             Padding(
@@ -681,26 +682,6 @@ class _DetailedFileInfoState extends State<_DetailedFileInfo> {
     );
   }
 
-  String _formatChannels(String? layout, int? channels) {
-    if (layout == null && channels == null) return 'Unknown';
-    if (layout != null && channels != null) {
-      return '${_capitalizeLayout(layout)} ($channels.0)'; // "Stereo (2.0)"
-    }
-    if (channels != null) return '$channels.0';
-    return _capitalizeLayout(layout!);
-  }
-
-  String _capitalizeLayout(String layout) {
-    if (layout == 'stereo') return 'Stereo';
-    if (layout == '5.1') return '5.1 Surround';
-    if (layout == '5.1(side)') return '5.1 Surround';
-    if (layout == '7.1') return '7.1 Surround';
-    if (layout == '7.1(side)') return '7.1 Surround';
-    if (layout == 'mono') return 'Mono';
-    // Capitalize first letter for unknown layouts
-    return layout[0].toUpperCase() + layout.substring(1);
-  }
-
   String _prettyPrintJson(String json) {
     try {
       final decoded = jsonDecode(json);
@@ -709,125 +690,5 @@ class _DetailedFileInfoState extends State<_DetailedFileInfo> {
     } catch (e) {
       return json;
     }
-  }
-
-  Widget _buildInfoRow(String label, String value, {bool mono = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF888888),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white,
-                fontFamily: mono ? 'monospace' : null,
-              ),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _truncatePath(String path) {
-    if (path.length <= 50) return path;
-    return '...${path.substring(path.length - 47)}';
-  }
-
-  Widget _buildClickablePathRow(String label, String fullPath) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () async {
-          // Open file manager and select the file (platform-specific)
-          try {
-            if (Platform.isMacOS) {
-              await Process.run('open', ['-R', fullPath]);
-            } else if (Platform.isWindows) {
-              await Process.run('explorer', ['/select,', fullPath]);
-            } else if (Platform.isLinux) {
-              // Try nautilus first (GNOME), fallback to xdg-open with directory
-              final dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
-              try {
-                await Process.run('nautilus', ['--select', fullPath]);
-              } catch (_) {
-                await Process.run('xdg-open', [dir]);
-              }
-            }
-          } catch (e, stackTrace) {
-            print('Error opening file location: $e');
-            AnalyticsService().captureError(
-              e,
-              stackTrace,
-              context: 'open_file_location',
-              extras: {
-                'platform': Platform.operatingSystem,
-                'path': fullPath,
-              },
-            );
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                width: 80,
-                child: Text(
-                  'Path',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF888888),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _truncatePath(fullPath),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFA855F7),
-                          fontFamily: 'monospace',
-                          decoration: TextDecoration.underline,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 2,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.folder_open,
-                      size: 14,
-                      color: Color(0xFFA855F7),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

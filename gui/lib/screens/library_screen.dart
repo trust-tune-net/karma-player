@@ -8,6 +8,8 @@ import '../models/album.dart';
 import '../services/transmission_client.dart';
 import '../services/analytics_service.dart';
 import '../services/metadata_service.dart';
+import '../services/audio_quality_verification_service.dart';
+import '../widgets/technical_details_helper.dart';
 import '../main.dart'; // Already imports favoritesService
 
 class LibraryScreen extends StatefulWidget {
@@ -49,6 +51,9 @@ class LibraryScreenState extends State<LibraryScreen> {
   // Album detail track filter state
   final TextEditingController _albumTrackFilterController = TextEditingController();
   String _albumTrackFilter = '';
+
+  // Expanded song detail tracking
+  String? _expandedSongId;
 
   @override
   void initState() {
@@ -1225,20 +1230,37 @@ class LibraryScreenState extends State<LibraryScreen> {
                     (280 - kToolbarHeight);
 
                 return FlexibleSpaceBar(
-                  title: Text(
-                    album.title,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      shadows: expandRatio > 0.3 ? [
-                        const Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 3.0,
-                          color: Color.fromARGB(128, 0, 0, 0),
+                  title: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          album.title,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            shadows: expandRatio > 0.3 ? [
+                              const Shadow(
+                                offset: Offset(0, 1),
+                                blurRadius: 3.0,
+                                color: Color.fromARGB(128, 0, 0, 0),
+                              ),
+                            ] : null,
+                          ),
                         ),
-                      ] : null,
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.folder_open, size: 18),
+                        iconSize: 18,
+                        color: Colors.white70,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Open album folder',
+                        onPressed: () => _openFileLocation(album.path),
+                      ),
+                    ],
                   ),
                   titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
                   background: Stack(
@@ -1384,11 +1406,20 @@ class LibraryScreenState extends State<LibraryScreen> {
 
                   final song = filteredSongs[index];
                   final isPlaying = widget.currentSong?.id == song.id;
+                  final isExpanded = _expandedSongId == song.id;
 
                   return _TrackListItem(
                     song: song,
                     isPlaying: isPlaying,
+                    isExpanded: isExpanded,
                     onTap: () => widget.onSongTap(song, queue: album.songs),
+                    onToggleExpanded: () {
+                      setState(() {
+                        _expandedSongId = isExpanded ? null : song.id;
+                      });
+                    },
+                    onVerify: () => _verifySongQuality(song),
+                    onOpenFolder: () => _openFileLocation(song.filePath),
                   );
                 },
                 childCount: _albumTrackFilter.isEmpty
@@ -1532,11 +1563,20 @@ class LibraryScreenState extends State<LibraryScreen> {
             (context, index) {
               final song = songs[index];
               final isPlaying = widget.currentSong?.id == song.id;
+              final isExpanded = _expandedSongId == song.id;
 
               return _TrackListItem(
                 song: song,
                 isPlaying: isPlaying,
+                isExpanded: isExpanded,
                 onTap: () => widget.onSongTap(song, queue: album.songs),
+                onToggleExpanded: () {
+                  setState(() {
+                    _expandedSongId = isExpanded ? null : song.id;
+                  });
+                },
+                onVerify: () => _verifySongQuality(song),
+                onOpenFolder: () => _openFileLocation(song.filePath),
               );
             },
             childCount: songs.length,
@@ -1555,6 +1595,51 @@ class LibraryScreenState extends State<LibraryScreen> {
     }
 
     return slivers;
+  }
+
+  // Helper method to verify song quality using AudioQualityVerificationService
+  void _verifySongQuality(Song song) {
+    final source = <String, dynamic>{
+      'format': song.format,
+      'bitrate': song.bitrate?.toString(),
+    };
+
+    final verificationService = AudioQualityVerificationService();
+    verificationService.verifyAudioQuality(
+      context,
+      source,
+      filePath: song.filePath,
+    );
+  }
+
+  // Helper method to open file location in system file manager
+  Future<void> _openFileLocation(String filePath) async {
+    try {
+      if (Platform.isMacOS) {
+        await Process.run('open', ['-R', filePath]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', ['/select,', filePath]);
+      } else if (Platform.isLinux) {
+        // Try nautilus first (GNOME), fallback to xdg-open with directory
+        final dir = filePath.substring(0, filePath.lastIndexOf('/'));
+        try {
+          await Process.run('nautilus', ['--select', filePath]);
+        } catch (_) {
+          await Process.run('xdg-open', [dir]);
+        }
+      }
+    } catch (e, stackTrace) {
+      print('Error opening file location: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'open_file_location_library',
+        extras: {
+          'platform': Platform.operatingSystem,
+          'path': filePath,
+        },
+      );
+    }
   }
 }
 
@@ -1807,12 +1892,20 @@ class _AlbumCardWidgetState extends State<_AlbumCardWidget> {
 class _TrackListItem extends StatefulWidget {
   final Song song;
   final bool isPlaying;
+  final bool isExpanded;
   final VoidCallback onTap;
+  final VoidCallback onToggleExpanded;
+  final VoidCallback onVerify;
+  final VoidCallback onOpenFolder;
 
   const _TrackListItem({
     required this.song,
     required this.isPlaying,
+    required this.isExpanded,
     required this.onTap,
+    required this.onToggleExpanded,
+    required this.onVerify,
+    required this.onOpenFolder,
   });
 
   @override
@@ -1946,18 +2039,22 @@ class _TrackListItemState extends State<_TrackListItem> with SingleTickerProvide
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: widget.isPlaying
-              ? AppColors.purple.withOpacity(0.15)
-              : _isHovered
-                  ? AppColors.darkGray.withOpacity(0.5)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        child: ListTile(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Main track item
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color: widget.isPlaying
+                  ? AppColors.purple.withOpacity(0.15)
+                  : _isHovered
+                      ? AppColors.darkGray.withOpacity(0.5)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            child: ListTile(
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 4,
@@ -2007,6 +2104,56 @@ class _TrackListItemState extends State<_TrackListItem> with SingleTickerProvide
             children: [
               // Heart & Stars
               _buildRatingDisplay(),
+
+              // Action buttons (visible on hover)
+              if (_isHovered) ...[
+                const SizedBox(width: 8),
+                // Info button - toggles expandable detail panel
+                IconButton(
+                  icon: Icon(
+                    widget.isExpanded ? Icons.info : Icons.info_outline,
+                    size: 16,
+                  ),
+                  iconSize: 16,
+                  color: widget.isExpanded ? AppColors.purple : AppColors.gray,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                  tooltip: widget.isExpanded ? 'Hide details' : 'Show details',
+                  onPressed: widget.onToggleExpanded,
+                ),
+                const SizedBox(width: 4),
+                // Verify button - runs FFprobe quality validation
+                IconButton(
+                  icon: const Icon(Icons.verified_outlined, size: 16),
+                  iconSize: 16,
+                  color: AppColors.gray,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                  tooltip: 'Verify audio quality',
+                  onPressed: widget.onVerify,
+                ),
+                const SizedBox(width: 4),
+                // Folder button - opens file location
+                IconButton(
+                  icon: const Icon(Icons.folder_open, size: 16),
+                  iconSize: 16,
+                  color: AppColors.gray,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                  tooltip: 'Open file location',
+                  onPressed: widget.onOpenFolder,
+                ),
+              ],
+
               if (widget.song.duration != null || widget.isPlaying)
                 const SizedBox(width: 12),
               if (widget.song.duration != null) ...[
@@ -2039,8 +2186,58 @@ class _TrackListItemState extends State<_TrackListItem> with SingleTickerProvide
                 ),
             ],
           ),
-          onTap: widget.onTap,
+              onTap: widget.onTap,
+            ),
+          ),
+
+          // Expandable detail panel
+          if (widget.isExpanded)
+            _buildExpandedDetailPanel(),
+        ],
+      ),
+    );
+  }
+
+  // Build expandable detail panel showing song metadata
+  Widget _buildExpandedDetailPanel() {
+    return Container(
+      margin: const EdgeInsets.only(left: 28, right: 28, bottom: 8, top: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.darkGray.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: AppColors.purple.withOpacity(0.3),
+          width: 1,
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Audio Details',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.purple,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TechnicalDetailsHelper.buildInfoRow('Format', widget.song.format ?? 'Unknown'),
+          if (widget.song.bitDepth != null && widget.song.sampleRate != null)
+            TechnicalDetailsHelper.buildInfoRow('Quality', '${widget.song.bitDepth}-bit / ${widget.song.sampleRate! ~/ 1000} kHz${widget.song.isEstimated ? " (est.)" : ""}'),
+          if (widget.song.channels != null || widget.song.channelLayout != null)
+            TechnicalDetailsHelper.buildInfoRow('Channels', TechnicalDetailsHelper.formatChannels(widget.song.channelLayout, widget.song.channels)),
+          if (widget.song.codecDetails != null)
+            TechnicalDetailsHelper.buildInfoRow('Codec', widget.song.codecDetails!),
+          if (widget.song.bitrate != null)
+            TechnicalDetailsHelper.buildInfoRow('Bitrate', '${widget.song.bitrate} kbps${widget.song.isEstimated ? " (est.)" : ""}'),
+          if (widget.song.fileSize != null)
+            TechnicalDetailsHelper.buildInfoRow('File Size', widget.song.fileSizeDisplay ?? 'Unknown'),
+          TechnicalDetailsHelper.buildInfoRow('Type', widget.song.isLossless ? 'Lossless' : 'Lossy'),
+          const SizedBox(height: 8),
+          TechnicalDetailsHelper.buildClickablePathRow('Path', widget.song.filePath),
+        ],
       ),
     );
   }
