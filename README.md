@@ -14,7 +14,7 @@
 
 *Search naturally or query like a database. Own your music. Pay artists fairly.*
 
-**[Download](#-installation)** • **[Quick Start](#-quick-start)** • **[Roadmap](ROADMAP.md)** • **[Documentation](docs/VISION.md)**
+**[Download](#1-download)** • **[How It Works](#-how-it-works)** • **[Roadmap](ROADMAP.md)** • **[Documentation](docs/VISION.md)**
 
 <br/>
 
