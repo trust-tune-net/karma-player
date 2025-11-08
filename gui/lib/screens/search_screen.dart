@@ -1089,7 +1089,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   }
 
   void _startDownload(Map<String, dynamic> torrent) async {
-    final magnetLink = torrent['magnet_link'] ?? torrent['url'];
+    var magnetLink = torrent['magnet_link'] ?? torrent['url'];
     final title = torrent['title'];
 
     // Validate magnet link exists and is properly formatted
@@ -1104,7 +1104,68 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       return;
     }
 
-    // Validate it starts with magnet:
+    // Sanitize magnet link early - remove spaces that Jackett sometimes includes
+    // This handles both direct magnet links and proxy URLs
+    var magnetLinkStr = magnetLink.toString();
+    if (magnetLinkStr.startsWith('magnet:')) {
+      magnetLinkStr = magnetLinkStr.replaceAll(' ', '');
+      magnetLink = magnetLinkStr;
+    }
+
+    // If it's a Jackett proxy URL (http/https), resolve it to get the actual magnet link
+    if (magnetLinkStr.startsWith('http://') || magnetLinkStr.startsWith('https://')) {
+      print('[Download] Resolving Jackett proxy URL: ${magnetLinkStr.substring(0, 60)}...');
+
+      try {
+        // Create HTTP client with manual redirect handling (don't follow redirects automatically)
+        // This is needed because Jackett may redirect to magnet: URIs which can't be parsed as HTTP
+        final client = http.Client();
+        try {
+          final request = http.Request('GET', Uri.parse(magnetLinkStr));
+          request.followRedirects = false;  // CRITICAL: Don't auto-follow redirects to magnet: URIs
+          final streamedResponse = await client.send(request).timeout(
+            const Duration(seconds: 10),
+          );
+
+          // Check for redirect status codes
+          if (streamedResponse.statusCode >= 300 && streamedResponse.statusCode < 400) {
+            // Check Location header for magnet link
+            final location = streamedResponse.headers['location'];
+            if (location != null && location.startsWith('magnet:')) {
+              // Sanitize magnet link by removing spaces (Jackett sometimes returns malformed links)
+              magnetLink = location.replaceAll(' ', '');
+              print('[Download] Resolved via redirect (Location header): ${magnetLink.toString().substring(0, 60)}...');
+            }
+          } else if (streamedResponse.statusCode == 200) {
+            // Read response body to check for magnet link
+            final response = await http.Response.fromStream(streamedResponse);
+            if (response.body.contains('magnet:')) {
+              final magnetMatch = RegExp(r'magnet:\?[^"<>\s]+').firstMatch(response.body);
+              if (magnetMatch != null) {
+                // Sanitize magnet link by removing spaces
+                magnetLink = magnetMatch.group(0)!.replaceAll(' ', '');
+                print('[Download] Resolved from response body: ${magnetLink.toString().substring(0, 60)}...');
+              }
+            }
+          }
+        } finally {
+          client.close();
+        }
+
+      } catch (e) {
+        print('[Download] Error resolving proxy URL: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to resolve download link: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Validate it starts with magnet: (after proxy resolution)
     if (!magnetLink.toString().startsWith('magnet:')) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1113,7 +1174,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
           duration: const Duration(seconds: 5),
         ),
       );
-      print('Invalid magnet link: $magnetLink');
+      print('Invalid magnet link after proxy resolution: $magnetLink');
       return;
     }
 
