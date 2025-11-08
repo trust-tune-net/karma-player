@@ -5,5 +5,5 @@ This is the Python backend service that powers TrustTune.
 It handles AI-powered search, torrent management, and audio playback.
 """
 
-__version__ = "0.9.6"
+__version__ = "0.9.7"
 __app_name__ = "karma_player"
