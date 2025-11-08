@@ -246,6 +246,8 @@ class LibraryScreenState extends State<LibraryScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildRefreshChip(context),
+              const SizedBox(width: 12),
               _buildViewToggle(context),
               const SizedBox(width: 16),
               Expanded(child: _buildFormatFilters(context)),
@@ -320,47 +322,69 @@ class LibraryScreenState extends State<LibraryScreen> {
         break;
     }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        PopupMenuButton<SortCriteria>(
-          tooltip: 'Change sort order',
-          initialValue: sortCriteria,
-          onSelected: _controller.updateSortCriteria,
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-                value: SortCriteria.title, child: Text('Title')),
-            const PopupMenuItem(
-                value: SortCriteria.artist, child: Text('Artist')),
-            PopupMenuItem(
-                value: SortCriteria.trackCount, child: Text(trackLabel)),
-            const PopupMenuItem(value: SortCriteria.year, child: Text('Year')),
+    return _SortChip(
+      label: label,
+      ascending: sortAscending,
+      onToggleDirection: _controller.toggleSortOrder,
+      onSelect: (criteria) {
+        _controller.updateSortCriteria(criteria);
+      },
+      trackLabel: trackLabel,
+      selected: true,
+    );
+  }
+
+  Widget _buildRefreshChip(BuildContext context) {
+    final isScanning = _controller.isScanning;
+    final textColor =
+        isScanning ? const Color(0xFF888888) : const Color(0xFFA855F7);
+    final backgroundColor = isScanning
+        ? const Color(0xFF1E1E1E)
+        : const Color(0xFFA855F7).withOpacity(0.15);
+    final borderColor = isScanning
+        ? const Color(0xFF333333)
+        : const Color(0xFFA855F7).withOpacity(0.4);
+
+    return GestureDetector(
+      onTap: isScanning ? null : _controller.refreshLibrary,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isScanning)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            else
+              Icon(
+                Icons.refresh,
+                size: 16,
+                color: textColor,
+              ),
+            const SizedBox(width: 6),
+            Text(
+              isScanning ? 'Refreshing…' : 'Refresh',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
           ],
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF333333), width: 1),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.sort, size: 18),
-                const SizedBox(width: 8),
-                Text('Sort: $label', style: GoogleFonts.inter(fontSize: 13)),
-              ],
-            ),
-          ),
         ),
-        const SizedBox(width: 8),
-        IconButton(
-          tooltip: sortAscending ? 'Sort descending' : 'Sort ascending',
-          icon: Icon(sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
-              size: 18),
-          onPressed: _controller.toggleSortOrder,
-        ),
-      ],
+      ),
     );
   }
 
@@ -485,6 +509,251 @@ class LibraryScreenState extends State<LibraryScreen> {
     widget.onSongTap(
       updatedSong,
       queue: _controller.displaySongs,
+    );
+  }
+}
+
+class _SortChip extends StatefulWidget {
+  const _SortChip({
+    required this.label,
+    required this.ascending,
+    required this.onToggleDirection,
+    required this.onSelect,
+    required this.trackLabel,
+    required this.selected,
+  });
+
+  final String label;
+  final bool ascending;
+  final VoidCallback onToggleDirection;
+  final ValueChanged<SortCriteria> onSelect;
+  final String trackLabel;
+  final bool selected;
+
+  @override
+  State<_SortChip> createState() => _SortChipState();
+}
+
+class _SortChipState extends State<_SortChip> {
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  bool _isMenuOpen = false;
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _toggleMenu() {
+    if (_isMenuOpen) {
+      _removeOverlay();
+    } else {
+      _showOverlay();
+    }
+  }
+
+  void _showOverlay() {
+    _overlayEntry = _buildOverlay();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() {
+      _isMenuOpen = true;
+    });
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    if (_isMenuOpen) {
+      setState(() {
+        _isMenuOpen = false;
+      });
+    }
+  }
+
+  OverlayEntry _buildOverlay() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _removeOverlay,
+          child: Stack(
+            children: [
+              Positioned(
+                width: size.width,
+                child: CompositedTransformFollower(
+                  link: _layerLink,
+                  offset: Offset(0, size.height + 8),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF333333)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildMenuItem(
+                            label: 'Title',
+                            criteria: SortCriteria.title,
+                          ),
+                          _buildMenuItem(
+                            label: 'Artist',
+                            criteria: SortCriteria.artist,
+                          ),
+                          _buildMenuItem(
+                            label: widget.trackLabel,
+                            criteria: SortCriteria.trackCount,
+                          ),
+                          _buildMenuItem(
+                            label: 'Year',
+                            criteria: SortCriteria.year,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMenuItem({
+    required String label,
+    required SortCriteria criteria,
+  }) {
+    final isSelected = widget.label == label;
+    return InkWell(
+      onTap: () {
+        widget.onSelect(criteria);
+        _removeOverlay();
+      },
+      child: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: const Color(0xFF333333),
+              width: criteria == SortCriteria.year ? 0 : 1,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected)
+              const Icon(Icons.check, size: 16, color: Color(0xFFA855F7))
+            else
+              const SizedBox(width: 16),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? const Color(0xFFA855F7)
+                    : const Color(0xFFDDDDDD),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chipColor = widget.selected
+        ? const Color(0xFFA855F7).withOpacity(0.15)
+        : const Color(0xFF1E1E1E);
+    final borderColor = widget.selected
+        ? const Color(0xFFA855F7).withOpacity(0.4)
+        : const Color(0xFF333333);
+    final textColor =
+        widget.selected ? const Color(0xFFA855F7) : const Color(0xFFDDDDDD);
+
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: _toggleMenu,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: chipColor,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sort,
+                    size: 16,
+                    color: textColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.label,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Transform.rotate(
+                    angle: _isMenuOpen ? 3.1416 : 0,
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 18,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: widget.onToggleDirection,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: chipColor,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: borderColor),
+              ),
+              child: Icon(
+                widget.ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                size: 16,
+                color: textColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
