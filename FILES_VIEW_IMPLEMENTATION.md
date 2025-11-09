@@ -21,6 +21,7 @@ logic directly inside the screen widget.
 - ✅ Filter by format (MP3, FLAC, etc.)
 - ✅ Sort by various criteria (filename, size, date, etc.)
 - ✅ Optional folder grouping (collapsible sections)
+- ✅ Manual “Scan Metadata” action with progress panel to pre-load tags and stop song reordering
 - ❌ MIDI support (deferred to future work)
 
 ---
@@ -201,6 +202,13 @@ Expanded(
       : _buildAlbumsView(),
 )
 ```
+
+---
+
+## Metadata Scan Workflow ✅
+- Added stable ordering via per-song `libraryOrder` so Files view never shuffles when tags arrive.
+- Exposed `LibraryController.scanAllMetadata()` which walks every song and hydrates tags using the lazy loader. This run is _fully manual_—refresh stays quick and simply rescan the library.
+- Library screen now includes a `Scan Metadata` chip and a bottom progress panel with cancel support so users can run a one-time deep scan without leaving the page.
 
 #### Add _buildFilesView() method (add after build method):
 ```dart

@@ -202,6 +202,9 @@ class LibraryScreenState extends State<LibraryScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: _controller.isMetadataScanRunning
+          ? _buildMetadataScanPanel(context)
+          : null,
     );
   }
 
@@ -247,6 +250,8 @@ class LibraryScreenState extends State<LibraryScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildRefreshChip(context),
+              const SizedBox(width: 12),
+              _buildScanMetadataChip(context),
               const SizedBox(width: 12),
               _buildViewToggle(context),
               const SizedBox(width: 16),
@@ -388,6 +393,62 @@ class LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  Widget _buildScanMetadataChip(BuildContext context) {
+    final isRunning = _controller.isMetadataScanRunning;
+    final isDisabled = isRunning || !_controller.hasFiles;
+    final textColor = isDisabled
+        ? const Color(0xFF888888)
+        : const Color(0xFF36CFC9); // teal accent
+    final backgroundColor = isDisabled
+        ? const Color(0xFF1E1E1E)
+        : const Color(0xFF36CFC9).withOpacity(0.15);
+    final borderColor = isDisabled
+        ? const Color(0xFF333333)
+        : const Color(0xFF36CFC9).withOpacity(0.4);
+
+    return GestureDetector(
+      onTap: isDisabled ? null : () => _controller.scanAllMetadata(),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isRunning)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            else
+              Icon(
+                Icons.graphic_eq,
+                size: 16,
+                color: textColor,
+              ),
+            const SizedBox(width: 6),
+            Text(
+              isRunning ? 'Scanning…' : 'Scan Metadata',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFormatFilters(BuildContext context) {
     final formats = _controller.availableFormats.toList()..sort();
 
@@ -509,6 +570,97 @@ class LibraryScreenState extends State<LibraryScreen> {
     widget.onSongTap(
       updatedSong,
       queue: _controller.displaySongs,
+    );
+  }
+
+  Widget _buildMetadataScanPanel(BuildContext context) {
+    final completed = _controller.metadataScanCompleted;
+    final total = _controller.metadataScanTotal;
+    if (total == 0) {
+      return const SizedBox.shrink();
+    }
+
+    final progress = _controller.metadataScanProgress.clamp(0.0, 1.0);
+    final currentSong = _controller.metadataScanCurrentSong;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: const BoxDecoration(
+          color: Color(0xFF141414),
+          border: Border(
+            top: BorderSide(color: Color(0xFF2B2B2B), width: 1),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.graphic_eq,
+                    size: 20, color: Color(0xFF36CFC9)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Scanning metadata ($completed / $total)',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (currentSong != null)
+                        Text(
+                          currentSong.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFFCCCCCC),
+                          ),
+                        ),
+                      Text(
+                        'Refreshing tags may briefly reorder songs while running.',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF888888),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: _controller.isMetadataScanRunning
+                      ? _controller.cancelMetadataScan
+                      : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF36CFC9),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress.isNaN ? null : progress,
+                minHeight: 6,
+                backgroundColor: const Color(0xFF1F1F1F),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(Color(0xFF36CFC9)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -59,6 +59,11 @@ class LibraryController extends ChangeNotifier {
 
   Timer? _downloadPollTimer;
   Timer? _autoRefreshTimer;
+  bool _isMetadataScanRunning = false;
+  bool _metadataScanCancelRequested = false;
+  int _metadataScanCompleted = 0;
+  int _metadataScanTotal = 0;
+  Song? _metadataScanCurrentSong;
 
   List<Album> get albums => _albums;
   List<Song> get allSongs => _allSongs;
@@ -71,6 +76,12 @@ class LibraryController extends ChangeNotifier {
   bool get hasConnectionLostNotification => _connectionLostNotification;
   bool get hasActiveFormatFilter => _selectedFormats.isNotEmpty;
   bool get hasFiles => _allSongs.isNotEmpty;
+  bool get isMetadataScanRunning => _isMetadataScanRunning;
+  int get metadataScanCompleted => _metadataScanCompleted;
+  int get metadataScanTotal => _metadataScanTotal;
+  double get metadataScanProgress =>
+      _metadataScanTotal == 0 ? 0 : _metadataScanCompleted / _metadataScanTotal;
+  Song? get metadataScanCurrentSong => _metadataScanCurrentSong;
 
   Map<String, double> get downloadProgress =>
       Map.unmodifiable(_downloadProgress);
@@ -162,10 +173,30 @@ class LibraryController extends ChangeNotifier {
 
   @visibleForTesting
   void seedAlbums(List<Album> albums) {
-    _albums = albums;
+    var orderCounter = 0;
+    _albums = albums
+        .map(
+          (album) => Album(
+            id: album.id,
+            name: album.name,
+            path: album.path,
+            artworkPath: album.artworkPath,
+            songs: album.songs
+                .map((song) =>
+                    song.copyWith(libraryOrder: orderCounter++))
+                .toList(),
+          ),
+        )
+        .toList();
     _rebuildAllSongs();
     _songsWithMetadata.clear();
+    _albumsWithMetadata.clear();
     _notify();
+  }
+
+  @visibleForTesting
+  void setScanningForTest(bool value) {
+    _isScanning = value;
   }
 
   void toggleSortOrder() {
@@ -242,6 +273,8 @@ class LibraryController extends ChangeNotifier {
         albumName: song.album,
         artistName: song.artist,
         artworkPath: song.artworkPath,
+        metadataService: _metadataService,
+        libraryOrder: song.libraryOrder,
       );
 
       _songsWithMetadata.add(updatedSong.id);
@@ -254,6 +287,46 @@ class LibraryController extends ChangeNotifier {
         context: 'library_lazy_load_song_metadata_error',
       );
       return song;
+    }
+  }
+
+  Future<void> scanAllMetadata() async {
+    if (_isMetadataScanRunning || _allSongs.isEmpty || _isScanning) {
+      return;
+    }
+
+    final songsSnapshot = List<Song>.from(_allSongs);
+    _isMetadataScanRunning = true;
+    _metadataScanCancelRequested = false;
+    _metadataScanCompleted = 0;
+    _metadataScanTotal = songsSnapshot.length;
+    _metadataScanCurrentSong = null;
+    _notify();
+
+    for (final song in songsSnapshot) {
+      if (_metadataScanCancelRequested) {
+        break;
+      }
+
+      _metadataScanCurrentSong = song;
+      if (song.bitrate == null) {
+        await ensureSongMetadata(song);
+      }
+      _metadataScanCompleted += 1;
+      _notify();
+    }
+
+    _metadataScanCurrentSong = null;
+    _isMetadataScanRunning = false;
+    _metadataScanCancelRequested = false;
+    _metadataScanCompleted = 0;
+    _metadataScanTotal = 0;
+    _notify();
+  }
+
+  void cancelMetadataScan() {
+    if (_isMetadataScanRunning) {
+      _metadataScanCancelRequested = true;
     }
   }
 
@@ -277,6 +350,8 @@ class LibraryController extends ChangeNotifier {
               albumName: song.album,
               artistName: song.artist,
               artworkPath: song.artworkPath,
+              metadataService: _metadataService,
+              libraryOrder: song.libraryOrder,
             );
           } catch (_) {
             return song;
@@ -341,6 +416,7 @@ class LibraryController extends ChangeNotifier {
   Future<void> _scanMusicFolder() async {
     _setScanningState(true, 'Scanning ~/Music folder...');
     _songsWithMetadata.clear();
+    _albumsWithMetadata.clear();
 
     try {
       final homeDir =
@@ -462,6 +538,7 @@ class LibraryController extends ChangeNotifier {
       }
 
       final albums = <Album>[];
+      var libraryOrderCounter = 0;
 
       for (final entry in albumMap.entries) {
         final albumPath = entry.key;
@@ -474,52 +551,8 @@ class LibraryController extends ChangeNotifier {
           return a.title.compareTo(b.title);
         });
 
-        Song? leadMetadataSong;
-        if (songs.isNotEmpty) {
-          try {
-            final albumMetadata = await _metadataService
-                .extractAlbumMetadata(songs.first.filePath);
-            if (albumMetadata.albumArtist != null &&
-                albumMetadata.albumArtist!.isNotEmpty &&
-                !LibraryUtils.isYear(albumMetadata.albumArtist!)) {
-              final firstSong = songs.first;
-              songs[0] = Song(
-                id: firstSong.id,
-                title: firstSong.title,
-                artist: albumMetadata.albumArtist!,
-                album: albumMetadata.albumName ?? firstSong.album,
-                filePath: firstSong.filePath,
-                duration: firstSong.duration,
-                artworkPath: firstSong.artworkPath,
-                trackNumber: firstSong.trackNumber,
-                bitrate: firstSong.bitrate,
-                sampleRate: firstSong.sampleRate,
-                bitDepth: firstSong.bitDepth,
-                channels: firstSong.channels,
-                channelLayout: firstSong.channelLayout,
-                codecDetails: firstSong.codecDetails,
-                rawMetadata: firstSong.rawMetadata,
-                metadataToolVersion: firstSong.metadataToolVersion,
-                fileSize: firstSong.fileSize,
-                format: firstSong.format,
-                isEstimated: firstSong.isEstimated,
-              );
-            }
-
-            leadMetadataSong = await Song.fromFileWithMetadata(
-              songs.first.filePath,
-              albumName: songs.first.album,
-              artistName: songs.first.artist,
-              artworkPath: songs.first.artworkPath,
-            );
-            _songsWithMetadata.add(leadMetadataSong.id);
-            songs[0] = leadMetadataSong;
-          } catch (error) {
-            if (kDebugMode) {
-              print(
-                  '[Library] Could not read quick metadata for ${path.basename(albumPath)}: $error');
-            }
-          }
+        for (var i = 0; i < songs.length; i++) {
+          songs[i] = songs[i].copyWith(libraryOrder: libraryOrderCounter++);
         }
 
         String? artworkPath;
@@ -568,7 +601,7 @@ class LibraryController extends ChangeNotifier {
               (song) => _applyArtworkAndTemplate(
                 song,
                 artworkPath,
-                leadMetadataSong,
+                null,
               ),
             )
             .toList();
@@ -762,6 +795,9 @@ class LibraryController extends ChangeNotifier {
           }
           break;
       }
+      if (comparison == 0) {
+        comparison = a.libraryOrder.compareTo(b.libraryOrder);
+      }
       return _sortAscending ? comparison : -comparison;
     });
 
@@ -840,15 +876,9 @@ class LibraryController extends ChangeNotifier {
     final mergedFormat =
         song.format ?? template?.format ?? _getSongFormat(song);
 
-    return Song(
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      filePath: song.filePath,
+    return song.copyWith(
       duration: song.duration ?? template?.duration,
       artworkPath: artworkPath ?? song.artworkPath,
-      trackNumber: song.trackNumber,
       bitrate: song.bitrate ?? template?.bitrate,
       sampleRate: song.sampleRate ?? template?.sampleRate,
       bitDepth: song.bitDepth ?? template?.bitDepth,
@@ -861,7 +891,6 @@ class LibraryController extends ChangeNotifier {
       fileSize: song.fileSize ?? template?.fileSize,
       format: mergedFormat,
       isEstimated: song.isEstimated || (template?.isEstimated ?? false),
-      httpHeaders: song.httpHeaders,
     );
   }
 

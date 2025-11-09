@@ -7,6 +7,7 @@ class Song {
   final String artist;
   final String? album;
   final String filePath;
+  final int libraryOrder;
   final Duration? duration;
   final String? artworkPath;
   final int? trackNumber;
@@ -34,6 +35,7 @@ class Song {
     required this.artist,
     this.album,
     required this.filePath,
+    this.libraryOrder = 0,
     this.duration,
     this.artworkPath,
     this.trackNumber,
@@ -52,7 +54,10 @@ class Song {
   });
 
   factory Song.fromFile(String path,
-      {String? albumName, String? artistName, String? artworkPath}) {
+      {String? albumName,
+      String? artistName,
+      String? artworkPath,
+      int libraryOrder = 0}) {
     // Extract basic info from file path
     final parts = path.split('/');
     final fileName = parts.last;
@@ -108,6 +113,7 @@ class Song {
       artist: artistName ?? 'Unknown Artist',
       album: albumName,
       filePath: path,
+      libraryOrder: libraryOrder,
       trackNumber: trackNum,
       artworkPath: artworkPath,
       format: extension,
@@ -121,15 +127,18 @@ class Song {
     String? albumName,
     String? artistName,
     String? artworkPath,
+    int libraryOrder = 0,
     bool useRealMetadata = true, // New flag to enable/disable metadata reading
+    MetadataService? metadataService,
   }) async {
     // Create metadata service instance to read ID3 tags + FFprobe data
-    final metadataService = MetadataService();
+    final metadataServiceInstance = metadataService ?? MetadataService();
 
     if (useRealMetadata) {
       try {
         // REAL METADATA EXTRACTION
-        final metadata = await metadataService.extractSongMetadata(path);
+        final metadata =
+            await metadataServiceInstance.extractSongMetadata(path);
 
         return Song(
           id: path.hashCode.toString(),
@@ -137,6 +146,7 @@ class Song {
           artist: metadata.artist ?? artistName ?? 'Unknown Artist',
           album: metadata.album ?? albumName,
           filePath: path,
+          libraryOrder: libraryOrder,
           trackNumber: metadata.trackNumber,
           duration: metadata.duration,
           artworkPath: artworkPath,
@@ -166,7 +176,10 @@ class Song {
 
     // Get basic info first
     final basicSong = Song.fromFile(path,
-        albumName: albumName, artistName: artistName, artworkPath: artworkPath);
+        albumName: albumName,
+        artistName: artistName,
+        artworkPath: artworkPath,
+        libraryOrder: libraryOrder);
 
     try {
       // Get file size
@@ -221,6 +234,7 @@ class Song {
         artist: basicSong.artist,
         album: basicSong.album,
         filePath: basicSong.filePath,
+        libraryOrder: basicSong.libraryOrder,
         duration: basicSong.duration,
         artworkPath: basicSong.artworkPath,
         trackNumber: basicSong.trackNumber,
@@ -239,6 +253,7 @@ class Song {
         artist: basicSong.artist,
         album: basicSong.album,
         filePath: basicSong.filePath,
+        libraryOrder: basicSong.libraryOrder,
         duration: basicSong.duration,
         artworkPath: basicSong.artworkPath,
         trackNumber: basicSong.trackNumber,
@@ -306,5 +321,53 @@ class Song {
         format == 'ALAC' ||
         format == 'APE' ||
         format == 'WAV';
+  }
+
+  Song copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    String? album,
+    String? filePath,
+    int? libraryOrder,
+    Duration? duration,
+    String? artworkPath,
+    int? trackNumber,
+    int? bitrate,
+    int? sampleRate,
+    int? bitDepth,
+    int? channels,
+    String? channelLayout,
+    String? codecDetails,
+    String? rawMetadata,
+    String? metadataToolVersion,
+    int? fileSize,
+    String? format,
+    bool? isEstimated,
+    Map<String, String>? httpHeaders,
+  }) {
+    return Song(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      filePath: filePath ?? this.filePath,
+      libraryOrder: libraryOrder ?? this.libraryOrder,
+      duration: duration ?? this.duration,
+      artworkPath: artworkPath ?? this.artworkPath,
+      trackNumber: trackNumber ?? this.trackNumber,
+      bitrate: bitrate ?? this.bitrate,
+      sampleRate: sampleRate ?? this.sampleRate,
+      bitDepth: bitDepth ?? this.bitDepth,
+      channels: channels ?? this.channels,
+      channelLayout: channelLayout ?? this.channelLayout,
+      codecDetails: codecDetails ?? this.codecDetails,
+      rawMetadata: rawMetadata ?? this.rawMetadata,
+      metadataToolVersion: metadataToolVersion ?? this.metadataToolVersion,
+      fileSize: fileSize ?? this.fileSize,
+      format: format ?? this.format,
+      isEstimated: isEstimated ?? this.isEstimated,
+      httpHeaders: httpHeaders ?? this.httpHeaders,
+    );
   }
 }
