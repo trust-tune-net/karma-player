@@ -84,7 +84,7 @@ class SearchEngine:
                             result.codec = codec
                         if bitrate and not result.bitrate:
                             result.bitrate = bitrate
-                            logger.info(f"✓ Extracted bitrate '{bitrate}' from: {result.title[:60]}")
+                            logger.debug(f"✓ Extracted bitrate '{bitrate}' from: {result.title[:60]}")
 
                 # Send partial results immediately if callback provided
                 if partial_result_callback and results:

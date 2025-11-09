@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package trusttune.auth;
+
+import "common.proto";
+
+// Auth/User service
+service AuthService {
+  // Get user identity (username + device_id)
+  rpc GetUserIdentity(GetUserIdentityRequest) returns (GetUserIdentityResponse);
+}
+
+// Request to get user identity
+message GetUserIdentityRequest {
+  // Authentication (passed via metadata in gRPC)
+  // device_id and api_key will be in call metadata
+}
+
+// Response with user identity
+message GetUserIdentityResponse {
+  // User identity
+  UserIdentity identity = 1;
+
+  // Error if any
+  optional trusttune.common.Error error = 2;
+}
+
+// User identity (device + generated username)
+message UserIdentity {
+  // Raw device ID (UUID v4)
+  string device_id = 1;
+
+  // Generated Reddit-style username (e.g., "Feisty-Sky-6018")
+  string username = 2;
+
+  // Individual username components (for UI flexibility)
+  UsernameComponents components = 3;
+}
+
+// Username components
+message UsernameComponents {
+  string adjective = 1;  // e.g., "Feisty"
+  string noun = 2;       // e.g., "Sky"
+  int32 number = 3;      // e.g., 6018
+}

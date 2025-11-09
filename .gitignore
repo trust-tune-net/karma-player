@@ -52,6 +52,9 @@ Thumbs.db
 *.db
 *.db-journal
 
+# Local development scripts (user-specific)
+dev-backend.sh
+
 # Environment files (contains secrets)
 .env
 .env.local

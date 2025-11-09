@@ -22,11 +22,12 @@ from karma_player.services.search.adapter_jackett import AdapterJackett
 from karma_player.services.search.adapter_youtube_music import AdapterYouTubeMusic
 from karma_player.api.middleware import verify_api_key, verify_websocket_auth, log_request_middleware
 from karma_player.api.rate_limit import limiter
+from karma_player.config import Config
 
 
-# Configure logging
+# Configure logging - respect LOG_LEVEL environment variable
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)

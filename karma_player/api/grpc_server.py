@@ -12,8 +12,9 @@ import grpc
 from grpc import aio
 
 from karma_player import __version__, __app_name__
-from karma_player.proto import search_pb2, search_pb2_grpc
+from karma_player.proto import search_pb2, search_pb2_grpc, auth_pb2_grpc
 from karma_player.api.auth import validate_api_key, validate_device_id_format
+from karma_player.api.auth_service import AuthServicer
 from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
@@ -280,8 +281,13 @@ async def serve_grpc(port: int = 50051):
         ]
     )
 
+    # Register services
     search_pb2_grpc.add_SearchServiceServicer_to_server(
         SearchServiceServicer(),
+        server
+    )
+    auth_pb2_grpc.add_AuthServiceServicer_to_server(
+        AuthServicer(),
         server
     )
 
@@ -302,9 +308,10 @@ async def serve_grpc(port: int = 50051):
 if __name__ == "__main__":
     # Standalone gRPC server for testing
     import sys
+    from karma_player.config import Config
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 

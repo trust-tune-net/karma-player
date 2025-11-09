@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../username_badge.dart';
 
 class PrimaryScreenHeader extends StatelessWidget implements PreferredSizeWidget {
   const PrimaryScreenHeader({
@@ -9,6 +10,7 @@ class PrimaryScreenHeader extends StatelessWidget implements PreferredSizeWidget
     this.bottom,
     this.backgroundColor = const Color(0xFF090909),
     this.minHeight = 72,
+    this.showUsernameBadge = true,
   });
 
   final String title;
@@ -16,6 +18,7 @@ class PrimaryScreenHeader extends StatelessWidget implements PreferredSizeWidget
   final PreferredSizeWidget? bottom;
   final Color backgroundColor;
   final double minHeight;
+  final bool showUsernameBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -40,9 +43,16 @@ class PrimaryScreenHeader extends StatelessWidget implements PreferredSizeWidget
                       letterSpacing: 0.25,
                     ),
                   ),
+                  const Spacer(),
                   if (trailing != null) ...[
-                    const SizedBox(width: 24),
-                    Expanded(child: trailing!),
+                    trailing!,
+                    const SizedBox(width: 16),
+                  ],
+                  if (showUsernameBadge && trailing == null)
+                    const UsernameBadge(),
+                  if (showUsernameBadge && trailing != null) ...[
+                    const SizedBox(width: 12),
+                    const UsernameBadge(),
                   ],
                 ],
               ),

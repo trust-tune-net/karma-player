@@ -14,16 +14,18 @@ from slowapi.errors import RateLimitExceeded
 import json
 
 from karma_player import __version__, __app_name__
+from karma_player.config import Config
 from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
+from karma_player.services.username_generator import generate_username_with_parts
 from karma_player.api.middleware import verify_api_key, verify_websocket_auth, log_request_middleware
 from karma_player.api.rate_limit import limiter
 
 
-# Configure logging
+# Configure logging - respect LOG_LEVEL environment variable
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
@@ -151,6 +153,18 @@ class HealthResponse(BaseModel):
     search_ready: bool
 
 
+class UsernameComponents(BaseModel):
+    adjective: str
+    noun: str
+    number: int
+
+
+class UserIdentityResponse(BaseModel):
+    device_id: str
+    username: str
+    components: UsernameComponents
+
+
 # Routes
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -171,6 +185,44 @@ async def root():
         "status": "running",
         "search_ready": search_service is not None
     }
+
+
+@app.get("/api/user/identity", response_model=UserIdentityResponse)
+async def get_user_identity(device_id: str = Depends(verify_api_key)):
+    """
+    Get user identity (username + device_id)
+
+    Requires authentication via X-Device-ID and X-API-Key headers.
+    Generates a deterministic Reddit-style username (e.g., "Feisty-Sky-6018")
+    based on the device_id.
+
+    Args:
+        device_id: Authenticated device ID (from dependency)
+
+    Returns:
+        UserIdentityResponse with device_id, username, and components
+    """
+    try:
+        # Generate username deterministically from device_id
+        username, adjective, noun, number = generate_username_with_parts(device_id)
+
+        # Return user identity
+        return UserIdentityResponse(
+            device_id=device_id,
+            username=username,
+            components=UsernameComponents(
+                adjective=adjective,
+                noun=noun,
+                number=number
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to generate username for device {device_id[:8]}...: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate user identity"
+        )
 
 
 @app.post("/api/search", response_model=SearchResponse)

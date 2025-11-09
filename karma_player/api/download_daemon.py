@@ -12,13 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from karma_player import __version__, __app_name__
-from karma_player.config import config
+from karma_player.config import config, Config
 from karma_player.services.torrent.download_manager import DownloadManager, DownloadStatus
 
 
-# Configure logging
+# Configure logging - respect LOG_LEVEL environment variable
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)

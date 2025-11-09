@@ -58,6 +58,7 @@ def parse_flac_quality(title: str) -> Optional[str]:
         if bit_depth in ['16', '24', '32'] and sample_rate in ['44', '48', '88', '96', '176', '192']:
             return f"{bit_depth}-{sample_rate}"
 
+    # All patterns failed
     return None
 
 
@@ -136,6 +137,11 @@ def extract_quality_metadata(title: str, format: Optional[str]) -> Tuple[Optiona
         quality = parse_flac_quality(title)
         if quality:
             bitrate = quality
+        else:
+            # We KNOW it's FLAC (from metadata) but couldn't extract quality specs
+            logger.warning(
+                f"Failed to parse FLAC bitrate from known FLAC torrent: {title}"
+            )
     elif codec == "MP3":
         # Look for MP3 bitrate markers
         if "320" in title_upper:
