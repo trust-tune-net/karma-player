@@ -21,43 +21,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const List<_OnboardingPage> _pages = [
     _OnboardingPage(
-      icon: '🎵',
-      title: 'Welcome to KarmaPlayer',
-      subtitle: 'Your AI-powered music companion',
-      description: 'Discover, organize, and enjoy music\nwith audiophile-grade quality\n\nTotally open source, pluggable architecture',
+      icon: '🌐',
+      title: 'Trust Tune Network',
+      subtitle: 'A public trust layer for music',
+      description: 'Trust Tune keeps audio quality, provenance, and\n'
+          'reputation open. KarmaPlayer connects you straight to that\n'
+          'shared truth — creators, curators, and listeners aligned.',
     ),
     _OnboardingPage(
-      icon: '📚',
-      title: 'Your Music, Organized',
-      subtitle: 'Automatically scans ~/Music',
-      description: 'Real metadata. No estimates.\nExact bit depth, sample rates, codec details.\n\nCheck Settings for more details.',
+      icon: '🛠️',
+      title: 'Verified Audio Quality',
+      subtitle: 'FLAC Mode, engineered ears-first',
+      description: 'Every file you add is fingerprinted, checked for lossless.\n'
+          'Switch on FLAC Mode, plug in reference headphones or a solid stereo,\n'
+          'and line up a favorite track — you will hear the headroom, depth,\n'
+          'and dynamics most streaming services shave off.\n\n'
+          'Waveform stats, bit depth, sample rate, and codec details surface\n'
+          'instantly so you know exactly what you have.',
     ),
     _OnboardingPage(
-      icon: '🔍',
-      title: 'Discover & Download',
-      subtitle: 'Search remore, and download via torrents or stream via YouTube',
-      description: 'Community-powered quality rankings\nFind what you love, support what matters',
+      icon: '🎯',
+      title: 'Dialed-In Discovery',
+      subtitle: 'Filters built for crate diggers',
+      description: 'Toggle filters — format, bit depth.\n'
+          'Hog Mode takes exclusive control of your audio stack, silences\n'
+          'system intrusions, keeps the DAC bit-perfect, and routes output\n'
+          'solely through KarmaPlayer.\n\n'
+          'Everything you keep ends up in your local library for instant,\n'
+          'offline playback — zero dependency on the internet.',
     ),
     _OnboardingPage(
-      icon: '🔒',
-      title: 'Privacy by Design',
-      subtitle: 'Your data stays yours',
-      description: 'No tracking. No middlemen.\nJust music, the way it should be.\n\nIf we get traction, economic model 95% to artists.',
+      icon: '🤝',
+      title: 'Community Proof, Private Playback',
+      subtitle: 'Anonymous listeners, shared trust',
+      description: 'Upcoming releases get vetted by anonymous listeners who\n'
+          'sign for quality without revealing identity.\n\n'
+          'Consensus lands in your library; your playback stays local.\n'
+          'Streams take a breath because we fingerprint, fetch proofs,\n'
+          'and buffer lossless before a single sample plays.',
     ),
     _OnboardingPage(
-      icon: '⚡️',
-      title: 'Power to Creators, Privacy to Listeners',
-      subtitle: 'The Trust Tune Vision',
-      description: 'Trust Tune Network is building a public trust layer\n'
-          'for digital media — where quality, reputation, and\n'
-          'provenance are verifiable by anyone, not controlled\n'
-          'by corporations.\n\n'
-          'Karma Player is the first app powered by this vision:\n'
-          'community-owned curation, transparent rewards,\n'
-          'and fair economics for creators.\n\n'
-          'Because trust should be public, not proprietary.\n'
-          'Because creators deserve fair economics.\n'
-          'Because you deserve transparency.',
+      icon: '🚀',
+      title: 'Sharing, Scaled by Trust Tune',
+      subtitle: 'Future-ready apps and exchanges',
+      description: 'New apps are coming alive on the Trust Tune Network —\n'
+          'provenance-tracked playlists and collaborative drops ready to explore.\n\n'
+          'Share a link and friends inherit the validation trail and audio proofs.\n'
+          'Trust, quality, and community follow every share.',
     ),
   ];
 
@@ -107,8 +117,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button (only on first 4 pages)
-            if (_currentPage < 4)
+            // Skip button (hidden on final page)
+            if (_currentPage < _pages.length - 1)
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(

@@ -1257,7 +1257,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     super.build(context);  // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       appBar: PrimaryScreenHeader(
-        title: 'Discover Music',
+        title: 'Audiophile Search',
         trailing: Align(
           alignment: Alignment.centerRight,
           child: StatsBadges(),
