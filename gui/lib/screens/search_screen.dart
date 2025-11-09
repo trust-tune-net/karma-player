@@ -43,7 +43,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   WebSocketChannel? _channel;
   SearchServiceGrpc? _grpcService;
 
-  String _statusMessage = 'Enter a search query';
+  String _statusMessage = '';
   int _progress = 0;
   List<Map<String, dynamic>> _results = [];
   List<Map<String, dynamic>> _filteredResults = [];
@@ -54,6 +54,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   bool _torrentLoading = false;
   bool _useGrpc = true;  // Feature flag: try gRPC first, fallback to WebSocket/HTTP
   bool _useWebSocket = true;  // Feature flag: false = HTTP, true = WebSocket (when gRPC fails)
+  bool _hasSearched = false;
   SourceFilter _sourceFilter = SourceFilter.all;
 
   // Quality and source toggles
@@ -705,6 +706,16 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   }
 
   void _search() {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _statusMessage = '';
+        _isSearching = false;
+        _hasSearched = false;
+      });
+      return;
+    }
+
     // Reset pagination for new search
     setState(() {
       _currentOffset = 0;
@@ -714,6 +725,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       _streamingResults = [];
       _torrentResults = [];
       _filteredResults = [];
+      _hasSearched = true;
     });
 
     print('[SEARCH] Starting new search, offset reset to: $_currentOffset');
@@ -1286,7 +1298,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
             // Quality and Source Controls (Collapsible)
             ExpansionTile(
-              initiallyExpanded: true,
+              initiallyExpanded: false,
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
               childrenPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               title: const Text(
@@ -1379,12 +1391,16 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               LinearProgressIndicator(value: _progress / 100),
               const SizedBox(height: 8),
             ],
-            Text(
-              _statusMessage,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
+            if ((_isSearching || _hasSearched) && _statusMessage.isNotEmpty) ...[
+              Text(
+                _statusMessage,
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              const SizedBox(height: 16),
+            ],
 
             // Source Filter Chips (above results)
             if (_results.isNotEmpty) ...[
@@ -1468,7 +1484,11 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                   ],
 
                   // No results
-                  if (_filteredResults.isEmpty && !_isSearching && !_streamingLoading && !_torrentLoading) ...[
+                  if (_hasSearched &&
+                      _filteredResults.isEmpty &&
+                      !_isSearching &&
+                      !_streamingLoading &&
+                      !_torrentLoading) ...[
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
