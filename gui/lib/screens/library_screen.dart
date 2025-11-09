@@ -249,6 +249,10 @@ class LibraryScreenState extends State<LibraryScreen> {
               _buildRefreshChip(context),
               const SizedBox(width: 12),
               _buildViewToggle(context),
+              if (_controller.hasUnknownAlbums) ...[
+                const SizedBox(width: 12),
+                _buildUnknownGroupingToggle(context),
+              ],
               const SizedBox(width: 16),
               Expanded(child: _buildFormatFilters(context)),
             ],
@@ -376,6 +380,52 @@ class LibraryScreenState extends State<LibraryScreen> {
             const SizedBox(width: 6),
             Text(
               isScanning ? 'Refreshing…' : 'Refresh',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnknownGroupingToggle(BuildContext context) {
+    final isActive = _controller.groupUnknownAlbums;
+    final chipColor = isActive
+        ? const Color(0xFFA855F7).withOpacity(0.15)
+        : const Color(0xFF1E1E1E);
+    final borderColor = isActive
+        ? const Color(0xFFA855F7).withOpacity(0.4)
+        : const Color(0xFF333333);
+    final textColor =
+        isActive ? const Color(0xFFA855F7) : const Color(0xFFDDDDDD);
+
+    return GestureDetector(
+      onTap: () {
+        _controller.groupUnknownAlbums = !isActive;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: chipColor,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActive ? Icons.layers : Icons.layers_clear,
+              size: 16,
+              color: textColor,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isActive ? 'Group Untagged' : 'Split Untagged',
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

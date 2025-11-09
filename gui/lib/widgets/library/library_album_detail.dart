@@ -63,6 +63,8 @@ class _LibraryAlbumDetailState extends State<LibraryAlbumDetail> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final album = widget.album;
+    final canOpenFolder =
+        album.path.isNotEmpty && !album.path.startsWith('__virtual');
     final discGroups = controller.groupSongsByDisc(album.songs);
     final hasMultipleDiscs = discGroups.length > 1;
     final filter = controller.albumTrackFilter;
@@ -130,15 +132,16 @@ class _LibraryAlbumDetailState extends State<LibraryAlbumDetail> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.folder_open, size: 18),
-                      iconSize: 18,
-                      color: Colors.white70,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: 'Open album folder',
-                      onPressed: () => widget.onOpenFolder(album.path),
-                    ),
+                    if (canOpenFolder)
+                      IconButton(
+                        icon: const Icon(Icons.folder_open, size: 18),
+                        iconSize: 18,
+                        color: Colors.white70,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Open album folder',
+                        onPressed: () => widget.onOpenFolder(album.path),
+                      ),
                   ],
                 ),
                 titlePadding: const EdgeInsets.only(left: 56, bottom: 16),

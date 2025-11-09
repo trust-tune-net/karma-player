@@ -23,12 +23,29 @@ void main() {
     required String title,
     required String artist,
     required String format,
+    String albumName = 'Test Album',
   }) {
     return Song(
       id: id,
       title: title,
       artist: artist,
-      album: 'Test Album',
+      album: albumName,
+      filePath: '/music/$id.$format',
+      format: format,
+      duration: const Duration(minutes: 3),
+    );
+  }
+
+  Song _createUnknownSong({
+    required String id,
+    required String format,
+    String albumName = 'Audio Files',
+  }) {
+    return Song(
+      id: id,
+      title: id,
+      artist: albumName,
+      album: albumName,
       filePath: '/music/$id.$format',
       format: format,
       duration: const Duration(minutes: 3),
@@ -114,6 +131,44 @@ void main() {
     test('available formats includes formats from individual songs', () {
       controller.updateViewMode(LibraryViewMode.files);
       expect(controller.availableFormats, containsAll({'FLAC', 'MP3'}));
+    });
+
+    test('groups unknown albums when toggle is active', () {
+      final unknownAlbum = _createAlbum(
+        id: 'u',
+        name: 'Audio Files',
+        songs: [
+          _createUnknownSong(id: 'u1', format: 'wav'),
+          _createUnknownSong(id: 'u2', format: 'wav'),
+        ],
+      );
+
+      bool manualUnknown = unknownAlbum.songs.every((song) {
+        final artist = song.artist.trim().toLowerCase();
+        final albumName = 'audio files';
+        final songAlbum = song.album?.trim().toLowerCase() ?? '';
+        final artistUnknown =
+            artist.isEmpty || artist == 'unknown artist' || artist == albumName;
+        final albumUnknown = songAlbum.isEmpty ||
+            songAlbum == 'unknown album' ||
+            songAlbum == albumName;
+        return artistUnknown && albumUnknown;
+      });
+
+      expect(manualUnknown, isTrue);
+
+      controller.seedAlbums([albumA, unknownAlbum]);
+      expect(controller.hasUnknownAlbums, isTrue,
+          reason: 'hasUnknown: ${controller.hasUnknownAlbums}');
+      expect(controller.groupUnknownAlbums, isTrue);
+      final grouped = controller.displayAlbums;
+      final ids = grouped.map((album) => album.id).toList();
+      expect(ids, contains('__unknown_group__'));
+
+      controller.groupUnknownAlbums = false;
+      final splitIds =
+          controller.displayAlbums.map((album) => album.id).toList();
+      expect(splitIds, isNot(contains('__unknown_group__')));
     });
   });
 }

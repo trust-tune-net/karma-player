@@ -49,6 +49,8 @@ class LibraryController extends ChangeNotifier {
   bool _connectionLostNotification = false;
   bool _disposed = false;
   bool _lastKnownHealth = appSettings.apiHealthy;
+  bool _groupUnknownAlbums = true;
+  bool _hasUnknownAlbums = false;
 
   SortCriteria _sortCriteria = SortCriteria.title;
   String _statusMessage = 'No music loaded';
@@ -70,6 +72,20 @@ class LibraryController extends ChangeNotifier {
   bool get sortAscending => _sortAscending;
   bool get hasConnectionLostNotification => _connectionLostNotification;
   bool get hasActiveFormatFilter => _selectedFormats.isNotEmpty;
+  bool get hasUnknownAlbums => _hasUnknownAlbums;
+  bool get groupUnknownAlbums => _groupUnknownAlbums && _hasUnknownAlbums;
+
+  set groupUnknownAlbums(bool value) {
+    if (_groupUnknownAlbums != value) {
+      _groupUnknownAlbums = value;
+      if (!_groupUnknownAlbums && _selectedAlbum?.id == '__unknown_group__') {
+        _selectedAlbum = null;
+        _albumTrackFilter = '';
+      }
+      _notify();
+    }
+  }
+
   bool get hasFiles => _allSongs.isNotEmpty;
 
   Map<String, double> get downloadProgress =>
@@ -83,8 +99,12 @@ class LibraryController extends ChangeNotifier {
   String get albumTrackFilter => _albumTrackFilter;
   String? get expandedSongId => _expandedSongId;
 
-  List<Album> get displayAlbums =>
-      _applySorting(_applySearchAndFormatFilters(_albums));
+  List<Album> get displayAlbums {
+    final grouped = _groupUnknownAlbums && _hasUnknownAlbums
+        ? _withGroupedUnknownAlbums(_albums)
+        : List<Album>.from(_albums);
+    return _applySorting(_applySearchAndFormatFilters(grouped));
+  }
 
   Set<String> get availableFormats {
     final formats = <String>{};
@@ -163,6 +183,10 @@ class LibraryController extends ChangeNotifier {
   @visibleForTesting
   void seedAlbums(List<Album> albums) {
     _albums = albums;
+    _hasUnknownAlbums = albums.any((album) => _isUnknownAlbum(album));
+    if (!_hasUnknownAlbums) {
+      _groupUnknownAlbums = true;
+    }
     _rebuildAllSongs();
     _songsWithMetadata.clear();
     _notify();
@@ -585,6 +609,10 @@ class LibraryController extends ChangeNotifier {
       }
 
       _albums = albums;
+      _hasUnknownAlbums = albums.any((album) => _isUnknownAlbum(album));
+      if (!_hasUnknownAlbums) {
+        _groupUnknownAlbums = true;
+      }
       _rebuildAllSongs();
       _songsWithMetadata.clear();
       _downloadProgress = {};
@@ -672,10 +700,15 @@ class LibraryController extends ChangeNotifier {
     }
 
     if (_selectedFormats.isNotEmpty) {
-      filtered = filtered
-          .where((album) =>
-              album.format != null && _selectedFormats.contains(album.format))
-          .toList();
+      filtered = filtered.where((album) {
+        if (album.id == '__unknown_group__') {
+          return album.songs.any((song) {
+            final format = _getSongFormat(song);
+            return format != null && _selectedFormats.contains(format);
+          });
+        }
+        return album.format != null && _selectedFormats.contains(album.format);
+      }).toList();
     }
 
     return filtered;
@@ -874,5 +907,59 @@ class LibraryController extends ChangeNotifier {
     final ext = path.extension(song.filePath);
     if (ext.isEmpty) return null;
     return ext.replaceFirst('.', '').toUpperCase();
+  }
+
+  bool _isUnknownAlbum(Album album) {
+    final lowerAlbumName = album.name.trim().toLowerCase();
+    final albumArtist = album.artist.trim().toLowerCase();
+
+    final allUnknownArtists = album.songs.every((song) {
+      final artist = song.artist.trim().toLowerCase();
+      return artist.isEmpty ||
+          artist == 'unknown artist' ||
+          artist == lowerAlbumName;
+    });
+
+    if (!allUnknownArtists) return false;
+
+    final allUnknownAlbums = album.songs.every((song) {
+      final songAlbum = song.album?.trim().toLowerCase() ?? '';
+      if (songAlbum.isEmpty || songAlbum == 'unknown album') {
+        return true;
+      }
+      return songAlbum == lowerAlbumName;
+    });
+
+    if (!allUnknownAlbums) return false;
+
+    return albumArtist == 'unknown artist' || albumArtist == lowerAlbumName;
+  }
+
+  List<Album> _withGroupedUnknownAlbums(List<Album> source) {
+    final known = <Album>[];
+    final unknown = <Album>[];
+
+    for (final album in source) {
+      if (_isUnknownAlbum(album)) {
+        unknown.add(album);
+      } else {
+        known.add(album);
+      }
+    }
+
+    if (unknown.isEmpty) return List<Album>.from(source);
+
+    final aggregatedSongs = unknown.expand((album) => album.songs).toList();
+    if (aggregatedSongs.isEmpty) return List<Album>.from(source);
+
+    final aggregatedAlbum = Album(
+      id: '__unknown_group__',
+      name: 'Unsorted Audio Files',
+      path: '__virtual_unknown__',
+      artworkPath: null,
+      songs: aggregatedSongs,
+    );
+
+    return [...known, aggregatedAlbum];
   }
 }
