@@ -22,6 +22,7 @@ You don't need to install or configure anything!
 2. **Launch the app** - It will auto-start Transmission in the background
 3. **Search for music** - Try: "radiohead ok computer flac"
 4. **Click Download** - Your music will start downloading automatically!
+5. **Find the files in your Music folder** (`~/Music` on macOS/Linux, `%USERPROFILE%\Music` on Windows)
 
 That's it! The app handles everything else.
 
