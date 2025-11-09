@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:media_kit/media_kit.dart';
 import '../main.dart';
 import '../widgets/diagnostics_dialog.dart';
+import '../widgets/common/primary_screen_header.dart';
 import '../services/analytics_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -275,22 +275,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 52,
-        title: Row(
-          children: [
-            Text(
-              'Settings',
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-            ),
-            StatsBadges(
-              onConnectionTap: _openDiagnostics,
-            ), // No albums count for Settings screen
-          ],
+      appBar: PrimaryScreenHeader(
+        title: 'Settings',
+        trailing: Align(
+          alignment: Alignment.centerRight,
+          child: StatsBadges(),
         ),
       ),
       body: ListView(

@@ -3,6 +3,8 @@ import '../services/audio_device_service.dart';
 import '../services/platform/audio_device_platform.dart';
 import '../services/app_settings.dart';
 import 'dart:io';
+import '../main.dart';
+import '../widgets/common/primary_screen_header.dart';
 
 /// Dedicated audio settings screen for audiophile features
 /// Phase 2: Exclusive mode, device selection, format info
@@ -198,10 +200,13 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
-      appBar: AppBar(
+      appBar: PrimaryScreenHeader(
+        title: 'Audio Settings',
         backgroundColor: const Color(0xFF0A0A0A),
-        title: const Text('Audio Settings'),
-        automaticallyImplyLeading: false,
+        trailing: Align(
+          alignment: Alignment.centerRight,
+          child: StatsBadges(),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),

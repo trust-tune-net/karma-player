@@ -19,8 +19,8 @@ import '../services/search_service_grpc.dart';
 import '../services/audio_quality_verification_service.dart';
 import '../proto/search.pb.dart' as pb_search;
 import '../widgets/youtube_download_progress_dialog.dart';
-import '../widgets/diagnostics_dialog.dart';
 import '../main.dart';
+import '../widgets/common/primary_screen_header.dart';
 
 enum SourceFilter { all, torrents, streaming }
 
@@ -126,16 +126,6 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   void _verifyYtDlp() async {
     // Run verification in background, don't block UI
     await _youtubeDownloadService.verifyYtDlp();
-  }
-
-  Future<void> _openDiagnostics() async {
-    await showDialog(
-      context: context,
-      builder: (context) => DiagnosticsDialog(
-        daemonManager: daemonManager,
-        appSettings: appSettings,
-      ),
-    );
   }
 
   @override
@@ -1254,22 +1244,11 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   Widget build(BuildContext context) {
     super.build(context);  // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 52,
-        title: Row(
-          children: [
-            Text(
-              'Discover Music',
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-            ),
-            StatsBadges(
-              onConnectionTap: _openDiagnostics,
-            ), // No albums count for Search screen
-          ],
+      appBar: PrimaryScreenHeader(
+        title: 'Discover Music',
+        trailing: Align(
+          alignment: Alignment.centerRight,
+          child: StatsBadges(),
         ),
       ),
       body: Padding(

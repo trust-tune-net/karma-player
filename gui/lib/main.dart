@@ -531,7 +531,13 @@ class StatsBadges extends StatelessWidget {
 
         // Connection badge (clickable)
         InkWell(
-          onTap: onConnectionTap,
+          onTap: () {
+            if (onConnectionTap != null) {
+              onConnectionTap!();
+            } else {
+              appSettings.checkApiHealth();
+            }
+          },
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

@@ -66,55 +66,49 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Row(
-              children: [
-                const Text('Now Playing'),
-                const Spacer(),
-                // #7 Favorite & Rating - Top Bar (aligned)
-                Builder(
-                  builder: (context) {
-                    final songKey = song.filePath;
-                    final isFavorite = favoritesService.isFavorite(songKey);
-                    final rating = favoritesService.getRating(songKey);
+            title: const Text('Now Playing'),
+            actions: [
+              Builder(
+                builder: (context) {
+                  final songKey = song.filePath;
+                  final isFavorite = favoritesService.isFavorite(songKey);
+                  final rating = favoritesService.getRating(songKey);
 
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Favorite heart button
-                        IconButton(
-                          icon: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            color: isFavorite ? Colors.red : const Color(0xFF888888),
-                          ),
-                          iconSize: 22,
-                          onPressed: () {
-                            favoritesService.toggleFavorite(songKey);
-                            setState(() {}); // Rebuild
-                          },
-                          tooltip: 'Favorite',
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorite ? Colors.red : const Color(0xFF888888),
                         ),
-                        // Star rating (0-5)
-                        ...List.generate(5, (index) {
-                          return IconButton(
-                            icon: Icon(
-                              index < rating ? Icons.star : Icons.star_border,
-                              color: index < rating ? const Color(0xFFFFC107) : const Color(0xFF888888),
-                            ),
-                            iconSize: 18,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                            onPressed: () {
-                              favoritesService.setRating(songKey, index + 1);
-                              setState(() {}); // Rebuild
-                            },
-                          );
-                        }),
-                      ],
-                    );
-                  }
-                ),
-              ],
-            ),
+                        iconSize: 22,
+                        onPressed: () {
+                          favoritesService.toggleFavorite(songKey);
+                          setState(() {});
+                        },
+                        tooltip: 'Favorite',
+                      ),
+                      ...List.generate(5, (index) {
+                        return IconButton(
+                          icon: Icon(
+                            index < rating ? Icons.star : Icons.star_border,
+                            color: index < rating ? const Color(0xFFFFC107) : const Color(0xFF888888),
+                          ),
+                          iconSize: 18,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: () {
+                            favoritesService.setRating(songKey, index + 1);
+                            setState(() {});
+                          },
+                        );
+                      }),
+                    ],
+                  );
+                },
+              ),
+            ],
             automaticallyImplyLeading: false,
           ),
           body: SafeArea(

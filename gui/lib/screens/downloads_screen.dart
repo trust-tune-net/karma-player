@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/transmission_client.dart';
 import '../services/analytics_service.dart';
-import '../widgets/diagnostics_dialog.dart';
 import '../main.dart';
+import '../widgets/common/primary_screen_header.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -74,16 +74,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
         _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloads());
       }
     });
-  }
-
-  Future<void> _openDiagnostics() async {
-    await showDialog(
-      context: context,
-      builder: (context) => DiagnosticsDialog(
-        daemonManager: daemonManager,
-        appSettings: appSettings,
-      ),
-    );
   }
 
   @override
@@ -215,22 +205,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> with AutomaticKeepAli
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 52,
-        title: Row(
-          children: [
-            Text(
-              'Downloads',
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-            ),
-            StatsBadges(
-              onConnectionTap: _openDiagnostics,
-            ), // No albums count for Downloads screen
-          ],
+      appBar: PrimaryScreenHeader(
+        title: 'Downloads',
+        trailing: Align(
+          alignment: Alignment.centerRight,
+          child: StatsBadges(),
         ),
       ),
       body: _isLoading

@@ -11,6 +11,7 @@ import '../services/analytics_service.dart';
 import '../widgets/library/library_album_detail.dart';
 import '../widgets/library/library_album_grid.dart';
 import '../widgets/library/library_files_view.dart';
+import '../widgets/common/primary_screen_header.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -160,28 +161,19 @@ class LibraryScreenState extends State<LibraryScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 52,
-        title: Row(
-          children: [
-            Text(
-              'Library',
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-            ),
-            StatsBadges(
-              onConnectionTap: _controller.checkHealth,
-            ),
-          ],
+      appBar: PrimaryScreenHeader(
+        title: 'Library',
+        trailing: Align(
+          alignment: Alignment.centerRight,
+          child: StatsBadges(
+            onConnectionTap: _controller.checkHealth,
+          ),
         ),
+        bottom: _buildControlSection(context),
       ),
       body: Column(
         children: [
           if (_controller.statusMessage.isNotEmpty) _buildStatusBanner(context),
-          _buildControlSection(context),
           Expanded(
             child: _controller.viewMode == LibraryViewMode.albums
                 ? LibraryAlbumGrid(
@@ -231,34 +223,38 @@ class LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildControlSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _buildSearchField(context)),
-              const SizedBox(width: 16),
-              _buildSortMenu(context),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildRefreshChip(context),
-              const SizedBox(width: 12),
-              _buildScanMetadataChip(context),
-              const SizedBox(width: 12),
-              _buildViewToggle(context),
-              const SizedBox(width: 16),
-              Expanded(child: _buildFormatFilters(context)),
-            ],
-          ),
-        ],
+  PreferredSizeWidget _buildControlSection(BuildContext context) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(124),
+      child: Container(
+        color: const Color(0xFF090909),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 14.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildSearchField(context)),
+                const SizedBox(width: 18),
+                _buildSortMenu(context),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildRefreshChip(context),
+                const SizedBox(width: 12),
+                _buildScanMetadataChip(context),
+                const SizedBox(width: 12),
+                _buildViewToggle(context),
+                const SizedBox(width: 18),
+                Expanded(child: _buildFormatFilters(context)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
