@@ -78,18 +78,10 @@ This is **Phase 0.5** of a larger vision. See **[ROADMAP.md](ROADMAP.md)** for t
 
 Two ways to search - your choice:
 
-**Natural Language:**
 ```
 radiohead ok computer flac
 miles davis kind of blue 24-bit
 pink floyd dark side vinyl rip
-```
-
-**SQL-Like:**
-```sql
-SELECT album WHERE artist="Radiohead" AND format="FLAC"
-SELECT track WHERE title="Paranoid Android" ORDER BY seeders DESC
-SELECT album WHERE artist="Miles Davis" AND year BETWEEN 1955 AND 1965
 ```
 
 ### 3. Play
@@ -145,19 +137,9 @@ Choose your download mode:
 
 ## 🎯 Key Features
 
-### Two Search Modes
+### High-Quality Search
 
-**Natural Language** - For everyone (even grandma):
-```
-radiohead ok computer flac
-```
-
-**SQL-Like** - For power users:
-```sql
-SELECT album WHERE artist="Radiohead" AND format="FLAC"
-```
-
-Both modes produce the same quality-ranked results, just different input styles.
+Search naturally (“radiohead ok computer flac”) and TrustTune returns quality-ranked results ready for download.
 
 ### Dual Download Modes
 
@@ -232,9 +214,6 @@ cd karma-player && pip install -e .
 ```bash
 # Natural language
 karma-player search "radiohead ok computer flac"
-
-# SQL-like
-karma-player query 'SELECT album WHERE artist="Radiohead" AND format="FLAC"'
 
 # Advanced options
 karma-player search "miles davis" --full-ai --min-seeders 10 --skip-musicbrainz
