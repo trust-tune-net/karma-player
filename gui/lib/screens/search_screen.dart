@@ -1745,92 +1745,175 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
     return Card(
                     margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: _buildQualityBadge(source),
-                      title: Text(
-                        source['title'],
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    color: const Color(0xFF1E1E1E),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 4),
-                          if (!isStreaming) Text(result['explanation']),
-                          if (!isStreaming) const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: [
-                              // Source type badge
-                              Chip(
-                                avatar: Icon(
-                                  isStreaming ? Icons.stream : Icons.storage,
-                                  size: 16,
+                          // Badge on the left
+                          _buildQualityBadge(source),
+                          const SizedBox(width: 16),
+                          // Content in the middle
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Title
+                                Text(
+                                  source['title'],
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                label: Text(isStreaming ? 'Streaming' : 'Torrent'),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                backgroundColor: isStreaming
-                                    ? Colors.blue.withOpacity(0.2)
-                                    : Colors.green.withOpacity(0.2),
-                              ),
-                              if (!isStreaming && source['format'] != null)
-                                Chip(
-                                  label: Text(source['format']),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                const SizedBox(height: 8),
+                                // Explanation for torrents only
+                                if (!isStreaming) ...[
+                                  Text(
+                                    result['explanation'],
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: const Color(0xFF888888),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                                // Chips row
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    // Source type badge
+                                    Chip(
+                                      avatar: Icon(
+                                        isStreaming ? Icons.stream : Icons.storage,
+                                        size: 16,
+                                        color: const Color(0xFFA855F7),
+                                      ),
+                                      label: Text(
+                                        isStreaming ? 'Streaming' : 'Torrent',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      backgroundColor: const Color(0xFF2A2A2A),
+                                      side: const BorderSide(color: Color(0xFF3A3A3A), width: 1),
+                                    ),
+                                    if (!isStreaming && source['format'] != null)
+                                      Chip(
+                                        label: Text(
+                                          source['format'],
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        backgroundColor: const Color(0xFF2A2A2A),
+                                        side: const BorderSide(color: Color(0xFF3A3A3A), width: 1),
+                                      ),
+                                    // Show seeders for torrents, codec for streaming
+                                    if (!isStreaming && source['seeders'] != null)
+                                      Chip(
+                                        label: Text(
+                                          '${source['seeders']} seeders',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        backgroundColor: const Color(0xFF2A2A2A),
+                                        side: const BorderSide(color: Color(0xFF3A3A3A), width: 1),
+                                      ),
+                                    if (isStreaming && source['codec'] != null)
+                                      Chip(
+                                        label: Text(
+                                          source['codec'],
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        backgroundColor: const Color(0xFF2A2A2A),
+                                        side: const BorderSide(color: Color(0xFF3A3A3A), width: 1),
+                                      ),
+                                    // Show bitrate for both
+                                    if (source['bitrate'] != null)
+                                      Chip(
+                                        label: Text(
+                                          source['bitrate'],
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        backgroundColor: const Color(0xFF2A2A2A),
+                                        side: const BorderSide(color: Color(0xFF3A3A3A), width: 1),
+                                      ),
+                                    // Show size for torrents only
+                                    if (!isStreaming && source['size_formatted'] != null)
+                                      Chip(
+                                        label: Text(
+                                          source['size_formatted'],
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        backgroundColor: const Color(0xFF2A2A2A),
+                                        side: const BorderSide(color: Color(0xFF3A3A3A), width: 1),
+                                      ),
+                                    // Download/Play button
+                                    ActionChip(
+                                      avatar: Icon(
+                                        isStreaming ? Icons.play_arrow : Icons.download,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
+                                      label: Text(
+                                        isStreaming ? 'Play' : 'Download',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      backgroundColor: const Color(0xFFA855F7),
+                                      onPressed: isStreaming
+                                          ? () => _playStream(source)
+                                          : () => _startDownload(source),
+                                    ),
+                                  ],
                                 ),
-                              // Show seeders for torrents, codec for streaming
-                              if (!isStreaming && source['seeders'] != null)
-                                Chip(
-                                  label: Text('${source['seeders']} seeders'),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                ),
-                              if (isStreaming && source['codec'] != null)
-                                Chip(
-                                  label: Text(source['codec']),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                ),
-                              // Show bitrate for both
-                              if (source['bitrate'] != null)
-                                Chip(
-                                  label: Text(source['bitrate']),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                ),
-                              // Show size for torrents only
-                              if (!isStreaming && source['size_formatted'] != null)
-                                Chip(
-                                  label: Text(source['size_formatted']),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                ),
-                              // Download/Play button (more visible now!)
-                              ActionChip(
-                                avatar: Icon(
-                                  isStreaming ? Icons.play_arrow : Icons.download,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                                label: Text(
-                                  isStreaming ? 'Play' : 'Download',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                backgroundColor: const Color(0xFFA855F7),
-                                onPressed: isStreaming
-                                    ? () => _playStream(source)
-                                    : () => _startDownload(source),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      isThreeLine: true,
                     ),
                   );
   }
