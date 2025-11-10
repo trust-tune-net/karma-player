@@ -294,7 +294,7 @@ class LibraryScreenState extends State<LibraryScreen> {
               : null,
           border: InputBorder.none,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
       ),
     );
