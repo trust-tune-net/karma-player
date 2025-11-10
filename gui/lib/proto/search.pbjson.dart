@@ -113,6 +113,8 @@ const SearchRequest$json = {
       '10': 'sourceTypeFilter',
       '17': true
     },
+    {'1': 'use_dedup', '3': 11, '4': 1, '5': 8, '10': 'useDedup'},
+    {'1': 'max_results', '3': 12, '4': 1, '5': 5, '10': 'maxResults'},
   ],
   '8': [
     {'1': '_format_filter'},
@@ -132,9 +134,10 @@ final $typed_data.Uint8List searchRequestDescriptor = $convert.base64Decode(
     'N0GAYgASgJSAFSBmFydGlzdIgBARIZCgVhbGJ1bRgHIAEoCUgCUgVhbGJ1bYgBARIkCgttaW5f'
     'Yml0cmF0ZRgIIAEoBUgDUgptaW5CaXRyYXRliAEBEiMKC21heF9zaXplX21iGAkgASgFSARSCW'
     '1heFNpemVNYogBARJVChJzb3VyY2VfdHlwZV9maWx0ZXIYCiABKA4yIi50cnVzdHR1bmUuc2Vh'
-    'cmNoLlNvdXJjZVR5cGVGaWx0ZXJIBVIQc291cmNlVHlwZUZpbHRlcogBAUIQCg5fZm9ybWF0X2'
-    'ZpbHRlckIJCgdfYXJ0aXN0QggKBl9hbGJ1bUIOCgxfbWluX2JpdHJhdGVCDgoMX21heF9zaXpl'
-    'X21iQhUKE19zb3VyY2VfdHlwZV9maWx0ZXI=');
+    'cmNoLlNvdXJjZVR5cGVGaWx0ZXJIBVIQc291cmNlVHlwZUZpbHRlcogBARIbCgl1c2VfZGVkdX'
+    'AYCyABKAhSCHVzZURlZHVwEh8KC21heF9yZXN1bHRzGAwgASgFUgptYXhSZXN1bHRzQhAKDl9m'
+    'b3JtYXRfZmlsdGVyQgkKB19hcnRpc3RCCAoGX2FsYnVtQg4KDF9taW5fYml0cmF0ZUIOCgxfbW'
+    'F4X3NpemVfbWJCFQoTX3NvdXJjZV90eXBlX2ZpbHRlcg==');
 
 @$core.Deprecated('Use searchResponseDescriptor instead')
 const SearchResponse$json = {

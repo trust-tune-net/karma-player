@@ -35,6 +35,8 @@ class SearchRequest extends $pb.GeneratedMessage {
     $core.int? minBitrate,
     $core.int? maxSizeMb,
     SourceTypeFilter? sourceTypeFilter,
+    $core.bool? useDedup,
+    $core.int? maxResults,
   }) {
     final result = create();
     if (query != null) result.query = query;
@@ -47,6 +49,8 @@ class SearchRequest extends $pb.GeneratedMessage {
     if (minBitrate != null) result.minBitrate = minBitrate;
     if (maxSizeMb != null) result.maxSizeMb = maxSizeMb;
     if (sourceTypeFilter != null) result.sourceTypeFilter = sourceTypeFilter;
+    if (useDedup != null) result.useDedup = useDedup;
+    if (maxResults != null) result.maxResults = maxResults;
     return result;
   }
 
@@ -75,6 +79,8 @@ class SearchRequest extends $pb.GeneratedMessage {
     ..aI(9, _omitFieldNames ? '' : 'maxSizeMb')
     ..aE<SourceTypeFilter>(10, _omitFieldNames ? '' : 'sourceTypeFilter',
         enumValues: SourceTypeFilter.values)
+    ..aOB(11, _omitFieldNames ? '' : 'useDedup')
+    ..aI(12, _omitFieldNames ? '' : 'maxResults')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -187,6 +193,25 @@ class SearchRequest extends $pb.GeneratedMessage {
   $core.bool hasSourceTypeFilter() => $_has(9);
   @$pb.TagNumber(10)
   void clearSourceTypeFilter() => $_clearField(10);
+
+  /// Deduplication and limits
+  @$pb.TagNumber(11)
+  $core.bool get useDedup => $_getBF(10);
+  @$pb.TagNumber(11)
+  set useDedup($core.bool value) => $_setBool(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasUseDedup() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearUseDedup() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.int get maxResults => $_getIZ(11);
+  @$pb.TagNumber(12)
+  set maxResults($core.int value) => $_setSignedInt32(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasMaxResults() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearMaxResults() => $_clearField(12);
 }
 
 /// Search response (streamed)

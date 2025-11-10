@@ -129,9 +129,9 @@ class AdapterYouTubeMusic(SourceAdapter):
             # Filter types: songs, videos, albums, artists, playlists
             # We'll focus on songs for music streaming
             # ytmusicapi is synchronous, so run in thread pool
-            # Fetch many results to support pagination (YouTube API max is typically 100)
+            # Fetch 300 results to match torrent result count (uses continuation internally)
             results = await asyncio.to_thread(
-                self.client.search, query, filter="songs", limit=100
+                self.client.search, query, filter="songs", limit=300
             )
 
             sources = []

@@ -82,6 +82,9 @@ dependencies:
   # Metadata Extraction (ID3 tags, audio format details)
   metadata_god: ^1.1.0  # Read ID3/FLAC tags and audio quality metadata
 
+  # String Similarity (for deduplication)
+  string_similarity: ^2.1.1  # Dice's Coefficient algorithm for fuzzy string matching
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
