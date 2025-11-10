@@ -1756,8 +1756,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 4),
-                          Text(result['explanation']),
-                          const SizedBox(height: 4),
+                          if (!isStreaming) Text(result['explanation']),
+                          if (!isStreaming) const SizedBox(height: 4),
                           Wrap(
                             spacing: 4,
                             runSpacing: 4,
@@ -1775,7 +1775,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                                     ? Colors.blue.withOpacity(0.2)
                                     : Colors.green.withOpacity(0.2),
                               ),
-                              if (source['format'] != null)
+                              if (!isStreaming && source['format'] != null)
                                 Chip(
                                   label: Text(source['format']),
                                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
