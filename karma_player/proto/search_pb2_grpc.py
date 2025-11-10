@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import search_pb2 as search__pb2
+from karma_player.proto import search_pb2 as search__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__

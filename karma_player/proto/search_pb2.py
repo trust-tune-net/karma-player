@@ -22,10 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from . import common_pb2 as common__pb2
+from karma_player.proto import common_pb2 as common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0csearch.proto\x12\x10trusttune.search\x1a\x0c\x63ommon.proto\"\xee\x02\n\rSearchRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x1a\n\rformat_filter\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x13\n\x0bmin_seeders\x18\x03 \x01(\x05\x12\r\n\x05limit\x18\x04 \x01(\x05\x12\x0e\n\x06offset\x18\x05 \x01(\x05\x12\x13\n\x06\x61rtist\x18\x06 \x01(\tH\x01\x88\x01\x01\x12\x12\n\x05\x61lbum\x18\x07 \x01(\tH\x02\x88\x01\x01\x12\x18\n\x0bmin_bitrate\x18\x08 \x01(\x05H\x03\x88\x01\x01\x12\x18\n\x0bmax_size_mb\x18\t \x01(\x05H\x04\x88\x01\x01\x12\x43\n\x12source_type_filter\x18\n \x01(\x0e\x32\".trusttune.search.SourceTypeFilterH\x05\x88\x01\x01\x42\x10\n\x0e_format_filterB\t\n\x07_artistB\x08\n\x06_albumB\x0e\n\x0c_min_bitrateB\x0e\n\x0c_max_size_mbB\x15\n\x13_source_type_filter\"\xe0\x02\n\x0eSearchResponse\x12,\n\x04type\x18\x01 \x01(\x0e\x32\x1e.trusttune.search.ResponseType\x12\x37\n\x08progress\x18\x02 \x01(\x0b\x32 .trusttune.search.ProgressUpdateH\x00\x88\x01\x01\x12<\n\x0epartial_result\x18\x03 \x01(\x0b\x32\x1f.trusttune.search.PartialResultH\x01\x88\x01\x01\x12>\n\x0f\x63omplete_result\x18\x04 \x01(\x0b\x32 .trusttune.search.CompleteResultH\x02\x88\x01\x01\x12+\n\x05\x65rror\x18\x05 \x01(\x0b\x32\x17.trusttune.common.ErrorH\x03\x88\x01\x01\x42\x0b\n\t_progressB\x11\n\x0f_partial_resultB\x12\n\x10_complete_resultB\x08\n\x06_error\"2\n\x0eProgressUpdate\x12\x0f\n\x07percent\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\"d\n\rPartialResult\x12\x14\n\x0c\x61\x64\x61pter_name\x18\x01 \x01(\t\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12.\n\x07sources\x18\x03 \x03(\x0b\x32\x1d.trusttune.search.MusicSource\"u\n\x0e\x43ompleteResult\x12\x13\n\x0btotal_found\x18\x01 \x01(\x05\x12\x16\n\x0esearch_time_ms\x18\x02 \x01(\x05\x12\x36\n\x0eranked_sources\x18\x03 \x03(\x0b\x32\x1e.trusttune.search.RankedSource\"\x9a\x04\n\x0bMusicSource\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0b\n\x03url\x18\x03 \x01(\t\x12\x31\n\x0bsource_type\x18\x04 \x01(\x0e\x32\x1c.trusttune.search.SourceType\x12\x13\n\x06\x66ormat\x18\x05 \x01(\tH\x00\x88\x01\x01\x12\x15\n\rquality_score\x18\x06 \x01(\x02\x12\x0f\n\x07indexer\x18\x07 \x01(\t\x12\x18\n\x0bmagnet_link\x18\x08 \x01(\tH\x01\x88\x01\x01\x12\x17\n\nsize_bytes\x18\t \x01(\x03H\x02\x88\x01\x01\x12\x1b\n\x0esize_formatted\x18\n \x01(\tH\x03\x88\x01\x01\x12\x14\n\x07seeders\x18\x0b \x01(\x05H\x04\x88\x01\x01\x12\x15\n\x08leechers\x18\x0c \x01(\x05H\x05\x88\x01\x01\x12\x12\n\x05\x63odec\x18\r \x01(\tH\x06\x88\x01\x01\x12\x14\n\x07\x62itrate\x18\x0e \x01(\tH\x07\x88\x01\x01\x12\x1a\n\rthumbnail_url\x18\x0f \x01(\tH\x08\x88\x01\x01\x12\x1d\n\x10\x64uration_seconds\x18\x10 \x01(\x05H\t\x88\x01\x01\x42\t\n\x07_formatB\x0e\n\x0c_magnet_linkB\r\n\x0b_size_bytesB\x11\n\x0f_size_formattedB\n\n\x08_seedersB\x0b\n\t_leechersB\x08\n\x06_codecB\n\n\x08_bitrateB\x10\n\x0e_thumbnail_urlB\x13\n\x11_duration_seconds\"n\n\x0cRankedSource\x12\x0c\n\x04rank\x18\x01 \x01(\x05\x12-\n\x06source\x18\x02 \x01(\x0b\x32\x1d.trusttune.search.MusicSource\x12\x13\n\x0b\x65xplanation\x18\x03 \x01(\t\x12\x0c\n\x04tags\x18\x04 \x03(\t\"`\n\x12SearchStatsRequest\x12\x17\n\nstart_time\x18\x01 \x01(\x03H\x00\x88\x01\x01\x12\x15\n\x08\x65nd_time\x18\x02 \x01(\x03H\x01\x88\x01\x01\x42\r\n\x0b_start_timeB\x0b\n\t_end_time\"\x82\x02\n\x13SearchStatsResponse\x12\x16\n\x0etotal_searches\x18\x01 \x01(\x03\x12\x1e\n\x16total_results_returned\x18\x02 \x01(\x03\x12\x1e\n\x16\x61verage_search_time_ms\x18\x03 \x01(\x02\x12Y\n\x13searches_by_adapter\x18\x04 \x03(\x0b\x32<.trusttune.search.SearchStatsResponse.SearchesByAdapterEntry\x1a\x38\n\x16SearchesByAdapterEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01*\xa0\x01\n\x0cResponseType\x12\x1d\n\x19RESPONSE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n\x16RESPONSE_TYPE_PROGRESS\x10\x01\x12 \n\x1cRESPONSE_TYPE_PARTIAL_RESULT\x10\x02\x12\x1a\n\x16RESPONSE_TYPE_COMPLETE\x10\x03\x12\x17\n\x13RESPONSE_TYPE_ERROR\x10\x04*\x8d\x01\n\nSourceType\x12\x1b\n\x17SOURCE_TYPE_UNSPECIFIED\x10\x00\x12\x17\n\x13SOURCE_TYPE_TORRENT\x10\x01\x12\x17\n\x13SOURCE_TYPE_YOUTUBE\x10\x02\x12\x15\n\x11SOURCE_TYPE_PIPED\x10\x03\x12\x19\n\x15SOURCE_TYPE_INVIDIOUS\x10\x04*p\n\x10SourceTypeFilter\x12\x1a\n\x16SOURCE_TYPE_FILTER_ALL\x10\x00\x12\x1e\n\x1aSOURCE_TYPE_FILTER_TORRENT\x10\x01\x12 \n\x1cSOURCE_TYPE_FILTER_STREAMING\x10\x02\x32\xbd\x01\n\rSearchService\x12M\n\x06Search\x12\x1f.trusttune.search.SearchRequest\x1a .trusttune.search.SearchResponse0\x01\x12]\n\x0eGetSearchStats\x12$.trusttune.search.SearchStatsRequest\x1a%.trusttune.search.SearchStatsResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0csearch.proto\x12\x10trusttune.search\x1a\x0c\x63ommon.proto\"\xbe\x03\n\rSearchRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x1a\n\rformat_filter\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x13\n\x0bmin_seeders\x18\x03 \x01(\x05\x12\r\n\x05limit\x18\x04 \x01(\x05\x12\x0e\n\x06offset\x18\x05 \x01(\x05\x12\x13\n\x06\x61rtist\x18\x06 \x01(\tH\x01\x88\x01\x01\x12\x12\n\x05\x61lbum\x18\x07 \x01(\tH\x02\x88\x01\x01\x12\x18\n\x0bmin_bitrate\x18\x08 \x01(\x05H\x03\x88\x01\x01\x12\x18\n\x0bmax_size_mb\x18\t \x01(\x05H\x04\x88\x01\x01\x12\x43\n\x12source_type_filter\x18\n \x01(\x0e\x32\".trusttune.search.SourceTypeFilterH\x05\x88\x01\x01\x12\x16\n\tuse_dedup\x18\x0b \x01(\x08H\x06\x88\x01\x01\x12\x18\n\x0bmax_results\x18\x0c \x01(\x05H\x07\x88\x01\x01\x42\x10\n\x0e_format_filterB\t\n\x07_artistB\x08\n\x06_albumB\x0e\n\x0c_min_bitrateB\x0e\n\x0c_max_size_mbB\x15\n\x13_source_type_filterB\x0c\n\n_use_dedupB\x0e\n\x0c_max_results\"\xe0\x02\n\x0eSearchResponse\x12,\n\x04type\x18\x01 \x01(\x0e\x32\x1e.trusttune.search.ResponseType\x12\x37\n\x08progress\x18\x02 \x01(\x0b\x32 .trusttune.search.ProgressUpdateH\x00\x88\x01\x01\x12<\n\x0epartial_result\x18\x03 \x01(\x0b\x32\x1f.trusttune.search.PartialResultH\x01\x88\x01\x01\x12>\n\x0f\x63omplete_result\x18\x04 \x01(\x0b\x32 .trusttune.search.CompleteResultH\x02\x88\x01\x01\x12+\n\x05\x65rror\x18\x05 \x01(\x0b\x32\x17.trusttune.common.ErrorH\x03\x88\x01\x01\x42\x0b\n\t_progressB\x11\n\x0f_partial_resultB\x12\n\x10_complete_resultB\x08\n\x06_error\"2\n\x0eProgressUpdate\x12\x0f\n\x07percent\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\"d\n\rPartialResult\x12\x14\n\x0c\x61\x64\x61pter_name\x18\x01 \x01(\t\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12.\n\x07sources\x18\x03 \x03(\x0b\x32\x1d.trusttune.search.MusicSource\"u\n\x0e\x43ompleteResult\x12\x13\n\x0btotal_found\x18\x01 \x01(\x05\x12\x16\n\x0esearch_time_ms\x18\x02 \x01(\x05\x12\x36\n\x0eranked_sources\x18\x03 \x03(\x0b\x32\x1e.trusttune.search.RankedSource\"\x9a\x04\n\x0bMusicSource\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0b\n\x03url\x18\x03 \x01(\t\x12\x31\n\x0bsource_type\x18\x04 \x01(\x0e\x32\x1c.trusttune.search.SourceType\x12\x13\n\x06\x66ormat\x18\x05 \x01(\tH\x00\x88\x01\x01\x12\x15\n\rquality_score\x18\x06 \x01(\x02\x12\x0f\n\x07indexer\x18\x07 \x01(\t\x12\x18\n\x0bmagnet_link\x18\x08 \x01(\tH\x01\x88\x01\x01\x12\x17\n\nsize_bytes\x18\t \x01(\x03H\x02\x88\x01\x01\x12\x1b\n\x0esize_formatted\x18\n \x01(\tH\x03\x88\x01\x01\x12\x14\n\x07seeders\x18\x0b \x01(\x05H\x04\x88\x01\x01\x12\x15\n\x08leechers\x18\x0c \x01(\x05H\x05\x88\x01\x01\x12\x12\n\x05\x63odec\x18\r \x01(\tH\x06\x88\x01\x01\x12\x14\n\x07\x62itrate\x18\x0e \x01(\tH\x07\x88\x01\x01\x12\x1a\n\rthumbnail_url\x18\x0f \x01(\tH\x08\x88\x01\x01\x12\x1d\n\x10\x64uration_seconds\x18\x10 \x01(\x05H\t\x88\x01\x01\x42\t\n\x07_formatB\x0e\n\x0c_magnet_linkB\r\n\x0b_size_bytesB\x11\n\x0f_size_formattedB\n\n\x08_seedersB\x0b\n\t_leechersB\x08\n\x06_codecB\n\n\x08_bitrateB\x10\n\x0e_thumbnail_urlB\x13\n\x11_duration_seconds\"n\n\x0cRankedSource\x12\x0c\n\x04rank\x18\x01 \x01(\x05\x12-\n\x06source\x18\x02 \x01(\x0b\x32\x1d.trusttune.search.MusicSource\x12\x13\n\x0b\x65xplanation\x18\x03 \x01(\t\x12\x0c\n\x04tags\x18\x04 \x03(\t\"`\n\x12SearchStatsRequest\x12\x17\n\nstart_time\x18\x01 \x01(\x03H\x00\x88\x01\x01\x12\x15\n\x08\x65nd_time\x18\x02 \x01(\x03H\x01\x88\x01\x01\x42\r\n\x0b_start_timeB\x0b\n\t_end_time\"\x82\x02\n\x13SearchStatsResponse\x12\x16\n\x0etotal_searches\x18\x01 \x01(\x03\x12\x1e\n\x16total_results_returned\x18\x02 \x01(\x03\x12\x1e\n\x16\x61verage_search_time_ms\x18\x03 \x01(\x02\x12Y\n\x13searches_by_adapter\x18\x04 \x03(\x0b\x32<.trusttune.search.SearchStatsResponse.SearchesByAdapterEntry\x1a\x38\n\x16SearchesByAdapterEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01*\xa0\x01\n\x0cResponseType\x12\x1d\n\x19RESPONSE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n\x16RESPONSE_TYPE_PROGRESS\x10\x01\x12 \n\x1cRESPONSE_TYPE_PARTIAL_RESULT\x10\x02\x12\x1a\n\x16RESPONSE_TYPE_COMPLETE\x10\x03\x12\x17\n\x13RESPONSE_TYPE_ERROR\x10\x04*\x8d\x01\n\nSourceType\x12\x1b\n\x17SOURCE_TYPE_UNSPECIFIED\x10\x00\x12\x17\n\x13SOURCE_TYPE_TORRENT\x10\x01\x12\x17\n\x13SOURCE_TYPE_YOUTUBE\x10\x02\x12\x15\n\x11SOURCE_TYPE_PIPED\x10\x03\x12\x19\n\x15SOURCE_TYPE_INVIDIOUS\x10\x04*p\n\x10SourceTypeFilter\x12\x1a\n\x16SOURCE_TYPE_FILTER_ALL\x10\x00\x12\x1e\n\x1aSOURCE_TYPE_FILTER_TORRENT\x10\x01\x12 \n\x1cSOURCE_TYPE_FILTER_STREAMING\x10\x02\x32\xbd\x01\n\rSearchService\x12M\n\x06Search\x12\x1f.trusttune.search.SearchRequest\x1a .trusttune.search.SearchResponse0\x01\x12]\n\x0eGetSearchStats\x12$.trusttune.search.SearchStatsRequest\x1a%.trusttune.search.SearchStatsResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,32 +34,32 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_SEARCHSTATSRESPONSE_SEARCHESBYADAPTERENTRY']._loaded_options = None
   _globals['_SEARCHSTATSRESPONSE_SEARCHESBYADAPTERENTRY']._serialized_options = b'8\001'
-  _globals['_RESPONSETYPE']._serialized_start=2058
-  _globals['_RESPONSETYPE']._serialized_end=2218
-  _globals['_SOURCETYPE']._serialized_start=2221
-  _globals['_SOURCETYPE']._serialized_end=2362
-  _globals['_SOURCETYPEFILTER']._serialized_start=2364
-  _globals['_SOURCETYPEFILTER']._serialized_end=2476
+  _globals['_RESPONSETYPE']._serialized_start=2138
+  _globals['_RESPONSETYPE']._serialized_end=2298
+  _globals['_SOURCETYPE']._serialized_start=2301
+  _globals['_SOURCETYPE']._serialized_end=2442
+  _globals['_SOURCETYPEFILTER']._serialized_start=2444
+  _globals['_SOURCETYPEFILTER']._serialized_end=2556
   _globals['_SEARCHREQUEST']._serialized_start=49
-  _globals['_SEARCHREQUEST']._serialized_end=415
-  _globals['_SEARCHRESPONSE']._serialized_start=418
-  _globals['_SEARCHRESPONSE']._serialized_end=770
-  _globals['_PROGRESSUPDATE']._serialized_start=772
-  _globals['_PROGRESSUPDATE']._serialized_end=822
-  _globals['_PARTIALRESULT']._serialized_start=824
-  _globals['_PARTIALRESULT']._serialized_end=924
-  _globals['_COMPLETERESULT']._serialized_start=926
-  _globals['_COMPLETERESULT']._serialized_end=1043
-  _globals['_MUSICSOURCE']._serialized_start=1046
-  _globals['_MUSICSOURCE']._serialized_end=1584
-  _globals['_RANKEDSOURCE']._serialized_start=1586
-  _globals['_RANKEDSOURCE']._serialized_end=1696
-  _globals['_SEARCHSTATSREQUEST']._serialized_start=1698
-  _globals['_SEARCHSTATSREQUEST']._serialized_end=1794
-  _globals['_SEARCHSTATSRESPONSE']._serialized_start=1797
-  _globals['_SEARCHSTATSRESPONSE']._serialized_end=2055
-  _globals['_SEARCHSTATSRESPONSE_SEARCHESBYADAPTERENTRY']._serialized_start=1999
-  _globals['_SEARCHSTATSRESPONSE_SEARCHESBYADAPTERENTRY']._serialized_end=2055
-  _globals['_SEARCHSERVICE']._serialized_start=2479
-  _globals['_SEARCHSERVICE']._serialized_end=2668
+  _globals['_SEARCHREQUEST']._serialized_end=495
+  _globals['_SEARCHRESPONSE']._serialized_start=498
+  _globals['_SEARCHRESPONSE']._serialized_end=850
+  _globals['_PROGRESSUPDATE']._serialized_start=852
+  _globals['_PROGRESSUPDATE']._serialized_end=902
+  _globals['_PARTIALRESULT']._serialized_start=904
+  _globals['_PARTIALRESULT']._serialized_end=1004
+  _globals['_COMPLETERESULT']._serialized_start=1006
+  _globals['_COMPLETERESULT']._serialized_end=1123
+  _globals['_MUSICSOURCE']._serialized_start=1126
+  _globals['_MUSICSOURCE']._serialized_end=1664
+  _globals['_RANKEDSOURCE']._serialized_start=1666
+  _globals['_RANKEDSOURCE']._serialized_end=1776
+  _globals['_SEARCHSTATSREQUEST']._serialized_start=1778
+  _globals['_SEARCHSTATSREQUEST']._serialized_end=1874
+  _globals['_SEARCHSTATSRESPONSE']._serialized_start=1877
+  _globals['_SEARCHSTATSRESPONSE']._serialized_end=2135
+  _globals['_SEARCHSTATSRESPONSE_SEARCHESBYADAPTERENTRY']._serialized_start=2079
+  _globals['_SEARCHSTATSRESPONSE_SEARCHESBYADAPTERENTRY']._serialized_end=2135
+  _globals['_SEARCHSERVICE']._serialized_start=2559
+  _globals['_SEARCHSERVICE']._serialized_end=2748
 # @@protoc_insertion_point(module_scope)

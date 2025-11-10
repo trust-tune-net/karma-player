@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import auth_pb2 as auth__pb2
+from karma_player.proto import auth_pb2 as auth__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__

@@ -65,6 +65,8 @@ class SearchServiceGrpc {
     int limit = 50,
     int offset = 0,
     pb_search.SourceTypeFilter? sourceTypeFilter,
+    bool useDedup = true,
+    int maxResults = 30,
   }) async* {
     _ensureClient();
 
@@ -90,6 +92,8 @@ class SearchServiceGrpc {
         limit: limit,
         offset: offset,
         sourceTypeFilter: sourceTypeFilter,
+        useDedup: useDedup,
+        maxResults: maxResults,
       );
 
       // Execute streaming RPC

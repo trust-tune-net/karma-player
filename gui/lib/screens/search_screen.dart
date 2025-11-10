@@ -58,9 +58,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
   SourceFilter _sourceFilter = SourceFilter.all;
 
   // Quality and source toggles
-  bool _reorderByQuality = true;  // Default: ON - sort results by quality score
+  bool _reorderByQuality = true;  // Default: ON - BACKEND deduplication (OFF = raw results)
   bool _showTorrents = true;      // Show torrent results
   bool _showYouTube = true;        // Show YouTube/streaming results
+  int _maxResults = 30;           // Max results to fetch (default: 30)
 
   // Pagination state
   final ScrollController _scrollController = ScrollController();
@@ -83,7 +84,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     // No longer initialize gRPC here - do it dynamically in _searchGrpc()
     _loadFilterPreference();
     _verifyYtDlp();
-    _scrollController.addListener(_onScroll);
+    // ATOMIC SEARCH: Infinite scroll disabled - all results fetched at once
+    // _scrollController.addListener(_onScroll);
   }
 
   void _onScroll() {
@@ -194,14 +196,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         return true;
       }).toList();
 
-      // Apply quality sorting if toggle is ON
-      if (_reorderByQuality) {
-        filtered.sort((a, b) {
-          final aScore = (a['source'] ?? a['torrent'])['quality_score'] ?? 0.0;
-          final bScore = (b['source'] ?? b['torrent'])['quality_score'] ?? 0.0;
-          return bScore.compareTo(aScore);  // Descending order (highest first)
-        });
-      }
+      // REMOVED: Frontend sorting logic - toggle now controls BACKEND deduplication only
+      // Backend already handles sorting when dedup is enabled
 
       _filteredResults = filtered;
     });
@@ -312,20 +308,25 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
       );
 
       // Execute 2 parallel gRPC searches - one for streaming, one for torrents
+      // ATOMIC SEARCH: No pagination, fetch all results at once based on user's maxResults setting
       final streamingStream = _grpcService!.search(
         query: _searchController.text,
         minSeeders: 1,
-        limit: 10,
-        offset: _currentOffset,
+        limit: _maxResults,  // Fetch all at once, no pagination
+        offset: 0,  // Always start from 0, no pagination
         sourceTypeFilter: pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_STREAMING,
+        useDedup: _reorderByQuality,
+        maxResults: _maxResults,
       );
 
       final torrentStream = _grpcService!.search(
         query: _searchController.text,
         minSeeders: 1,
-        limit: 10,
-        offset: _currentOffset,
+        limit: _maxResults,  // Fetch all at once, no pagination
+        offset: 0,  // Always start from 0, no pagination
         sourceTypeFilter: pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_TORRENT,
+        useDedup: _reorderByQuality,
+        maxResults: _maxResults,
       );
 
       // Process both streams concurrently
@@ -419,13 +420,34 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
           case SearchResultType.complete:
             if (result.completeResult != null) {
+              // Use final deduplicated results from backend
+              final finalResults = result.completeResult!.rankedSources
+                  .map((ranked) => _convertGrpcSourceToMap(ranked))
+                  .toList();
+
               setState(() {
                 if (streamType == 'streaming') {
                   _streamingLoading = false;
+                  // Replace accumulated partials with final results
+                  _streamingResults.clear();
+                  _streamingResults.addAll(finalResults);
                 } else {
                   _torrentLoading = false;
+                  // Replace accumulated partials with final results
+                  _torrentResults.clear();
+                  _torrentResults.addAll(finalResults);
                 }
+
+                // Rebuild combined results
+                _results.clear();
+                _results.addAll(_torrentResults);
+                _results.addAll(_streamingResults);
+
+                print('[$streamType] Final deduplicated: ${finalResults.length} results (total_found: ${result.completeResult!.totalFound})');
               });
+
+              // Reapply filters to update displayed results immediately
+              _applyFilter();
             }
             break;
 
@@ -1319,7 +1341,7 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Sort by quality score when search completes',
+                          'Deduplicate and sort by quality (OFF = raw results)',
                           style: TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                       ],
@@ -1334,6 +1356,45 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                           }
                         });
                       },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                // Max results slider
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Max Results',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          _maxResults >= 500 ? '∞' : _maxResults.toString(),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Slider(
+                      value: _maxResults.toDouble(),
+                      min: 25,
+                      max: 500,
+                      divisions: 475,
+                      label: _maxResults >= 500 ? '∞' : _maxResults.toString(),
+                      onChanged: (value) {
+                        setState(() {
+                          _maxResults = value.toInt();
+                        });
+                      },
+                    ),
+                    const Text(
+                      'Maximum results to fetch and cache from server',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
                 ),

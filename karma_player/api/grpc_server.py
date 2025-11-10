@@ -174,6 +174,14 @@ class SearchServiceServicer(search_pb2_grpc.SearchServiceServicer):
                     source_type_filter = "streaming"
                 # SOURCE_TYPE_FILTER_ALL or unspecified = None (all sources)
 
+            # Extract deduplication and max_results parameters with defaults
+            use_dedup = request.use_dedup if request.HasField('use_dedup') else True
+            max_results = request.max_results if request.HasField('max_results') and request.max_results > 0 else 30
+            # Cap max_results at server limit to prevent abuse
+            max_results = min(max_results, 1000)
+
+            logger.info(f"gRPC search params: use_dedup={use_dedup}, max_results={max_results}")
+
             # Execute search
             result = await _search_service.search(
                 query=request.query,
@@ -183,6 +191,8 @@ class SearchServiceServicer(search_pb2_grpc.SearchServiceServicer):
                 offset=request.offset,
                 use_ai_parsing=False,
                 source_type_filter=source_type_filter,
+                use_dedup=use_dedup,
+                max_results=max_results,
                 progress_callback=send_progress,
                 partial_result_callback=send_partial_results
             )

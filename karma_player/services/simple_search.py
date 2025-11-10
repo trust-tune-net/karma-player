@@ -49,6 +49,8 @@ class SimpleSearch:
         offset: int = 0,
         use_ai_parsing: bool = False,
         source_type_filter: Optional[str] = None,
+        use_dedup: bool = True,
+        max_results: int = 30,
         progress_callback: Optional[Callable] = None,
         partial_result_callback: Optional[Callable[[str, List[MusicSource]], Awaitable[None]]] = None
     ) -> SimpleSearchResult:
@@ -63,7 +65,10 @@ class SimpleSearch:
             offset: Number of results to skip (for pagination)
             use_ai_parsing: Enable AI query parsing (default: False for performance)
             source_type_filter: Filter by source type: "torrent", "streaming", or None (all)
+            use_dedup: Apply deduplication to results (default: True)
+            max_results: Maximum number of results to fetch and cache (default: 30)
             progress_callback: Optional progress updates
+            partial_result_callback: Optional partial result streaming
 
         Returns:
             SimpleSearchResult with ranked results
@@ -147,7 +152,7 @@ class SimpleSearch:
             # Direct pass-through: use original query as-is
             search_str = query
 
-        logger.info(f"   → Searching: '{search_str}' (min_seeders={min_seeders}, limit={limit})")
+        logger.info(f"   → Searching: '{search_str}' (min_seeders={min_seeders}, limit={limit}, use_dedup={use_dedup}, max_results={max_results})")
 
         # Search
         torrents = await self.search_engine.search(
@@ -155,6 +160,8 @@ class SimpleSearch:
             format_filter=music_query.format,
             min_seeders=music_query.min_seeders,
             source_type_filter=source_type_filter,
+            use_dedup=use_dedup,
+            max_results=max_results,
             partial_result_callback=partial_result_callback
         )
 

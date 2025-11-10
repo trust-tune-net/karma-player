@@ -194,7 +194,7 @@ class SearchRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(10)
   void clearSourceTypeFilter() => $_clearField(10);
 
-  /// Deduplication and limits
+  /// Deduplication and result limits
   @$pb.TagNumber(11)
   $core.bool get useDedup => $_getBF(10);
   @$pb.TagNumber(11)

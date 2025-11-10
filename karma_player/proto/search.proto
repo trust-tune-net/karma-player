@@ -31,6 +31,10 @@ message SearchRequest {
   optional int32 min_bitrate = 8;
   optional int32 max_size_mb = 9;
   optional SourceTypeFilter source_type_filter = 10;  // Filter by torrent/streaming
+
+  // Deduplication and result limits
+  optional bool use_dedup = 11;  // Apply deduplication (default: true)
+  optional int32 max_results = 12;  // Max results to fetch and cache (default: 30, server caps at 1000)
 }
 
 // Search response (streamed)

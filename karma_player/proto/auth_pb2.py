@@ -22,7 +22,7 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from . import common_pb2 as common__pb2
+from karma_player.proto import common_pb2 as common__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nauth.proto\x12\x0etrusttune.auth\x1a\x0c\x63ommon.proto\"\x18\n\x16GetUserIdentityRequest\"\x80\x01\n\x17GetUserIdentityResponse\x12.\n\x08identity\x18\x01 \x01(\x0b\x32\x1c.trusttune.auth.UserIdentity\x12+\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x17.trusttune.common.ErrorH\x00\x88\x01\x01\x42\x08\n\x06_error\"k\n\x0cUserIdentity\x12\x11\n\tdevice_id\x18\x01 \x01(\t\x12\x10\n\x08username\x18\x02 \x01(\t\x12\x36\n\ncomponents\x18\x03 \x01(\x0b\x32\".trusttune.auth.UsernameComponents\"E\n\x12UsernameComponents\x12\x11\n\tadjective\x18\x01 \x01(\t\x12\x0c\n\x04noun\x18\x02 \x01(\t\x12\x0e\n\x06number\x18\x03 \x01(\x05\x32q\n\x0b\x41uthService\x12\x62\n\x0fGetUserIdentity\x12&.trusttune.auth.GetUserIdentityRequest\x1a\'.trusttune.auth.GetUserIdentityResponseb\x06proto3')

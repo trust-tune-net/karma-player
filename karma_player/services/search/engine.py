@@ -32,6 +32,8 @@ class SearchEngine:
         min_seeders: int = 5,
         timeout_per_adapter: float = 60.0,
         source_type_filter: Optional[str] = None,
+        use_dedup: bool = True,
+        max_results: int = 30,
         partial_result_callback: Optional[Callable[[str, List[MusicSource]], Awaitable[None]]] = None,
     ) -> List[MusicSource]:
         """Search all healthy sources and return deduplicated, sorted results.
@@ -42,10 +44,12 @@ class SearchEngine:
             min_seeders: Minimum number of seeders (applies to torrent sources only)
             timeout_per_adapter: Maximum time (seconds) to wait for each adapter (default: 60s)
             source_type_filter: Filter by source type: "torrent", "streaming", or None (all)
+            use_dedup: Apply deduplication to results (default: True)
+            max_results: Maximum number of results to return (default: 30)
             partial_result_callback: Optional callback for progressive results (adapter_name, results)
 
         Returns:
-            List of MusicSource objects, deduplicated and sorted by quality
+            List of MusicSource objects, optionally deduplicated and sorted by quality
         """
         # Filter to healthy adapters only
         healthy_adapters = [a for a in self.adapters if a.is_healthy]
@@ -115,62 +119,80 @@ class SearchEngine:
             logger.info(f"   ✓ {adapter.name}: {len(results)} {source_type} results")
             all_results.extend(results)
 
-        # Step 1: Deduplicate by infohash (exact torrent matches)
-        seen_hashes = set()
-        infohash_deduped = []
-        for result in all_results:
-            infohash = result.infohash
-            if not infohash:
-                # No infohash (non-torrent sources), include anyway
-                infohash_deduped.append(result)
-            elif infohash not in seen_hashes:
-                seen_hashes.add(infohash)
-                infohash_deduped.append(result)
-            # else: duplicate infohash, skip
+        # Conditional deduplication based on use_dedup parameter
+        if use_dedup:
+            logger.info(f"🔧 Deduplication: ENABLED (processing {len(all_results)} raw results)")
 
-        # Step 2: Parse quality metadata from torrent titles (needed for dedup key)
-        for result in infohash_deduped:
-            if result.source_type == SourceType.TORRENT and result.format:
-                codec, bitrate = extract_quality_metadata(result.title, result.format)
-                if codec and not result.codec:
-                    result.codec = codec
-                if bitrate and not result.bitrate:
-                    result.bitrate = bitrate
-                    logger.info(f"✓ Extracted bitrate '{bitrate}' from: {result.title[:60]}")
+            # Step 1: Deduplicate by infohash (exact torrent matches)
+            seen_hashes = set()
+            infohash_deduped = []
+            for result in all_results:
+                infohash = result.infohash
+                if not infohash:
+                    # No infohash (non-torrent sources), include anyway
+                    infohash_deduped.append(result)
+                elif infohash not in seen_hashes:
+                    seen_hashes.add(infohash)
+                    infohash_deduped.append(result)
+                # else: duplicate infohash, skip
 
-        # Step 3: Title + format + quality based deduplication
-        # Different quality levels of the same release are kept separate
-        quality_groups = {}
-        non_torrents = []
+            # Step 2: Parse quality metadata from torrent titles (needed for dedup key)
+            for result in infohash_deduped:
+                if result.source_type == SourceType.TORRENT and result.format:
+                    codec, bitrate = extract_quality_metadata(result.title, result.format)
+                    if codec and not result.codec:
+                        result.codec = codec
+                    if bitrate and not result.bitrate:
+                        result.bitrate = bitrate
+                        logger.debug(f"✓ Extracted bitrate '{bitrate}' from: {result.title[:60]}")
 
-        for result in infohash_deduped:
-            if result.source_type == SourceType.TORRENT:
-                # Group torrents by normalized title + format + quality
-                normalized_title = normalize_title_for_dedup(result.title)
-                format_str = (result.format or "unknown").upper()
-                quality_str = result.bitrate or "unknown"
-                dedup_key = f"{normalized_title}|{format_str}|{quality_str}"
+            # Step 3: Title + format + quality based deduplication
+            # Different quality levels of the same release are kept separate
+            quality_groups = {}
+            non_torrents = []
 
-                logger.debug(f"   Dedup key: {dedup_key} (title={result.title[:50]}, seeders={result.seeders})")
+            for result in infohash_deduped:
+                if result.source_type == SourceType.TORRENT:
+                    # Group torrents by normalized title + format + quality
+                    normalized_title = normalize_title_for_dedup(result.title)
+                    format_str = (result.format or "unknown").upper()
+                    quality_str = result.bitrate or "unknown"
+                    dedup_key = f"{normalized_title}|{format_str}|{quality_str}"
 
-                if dedup_key not in quality_groups:
-                    quality_groups[dedup_key] = []
-                quality_groups[dedup_key].append(result)
-            else:
-                # Streaming sources don't need title dedup
-                non_torrents.append(result)
+                    logger.debug(f"   Dedup key: {dedup_key} (title={result.title[:50]}, seeders={result.seeders})")
 
-        # For each quality group, keep the best variant (most seeders)
-        unique_results = non_torrents
-        for dedup_key, group in quality_groups.items():
-            if len(group) == 1:
-                # Only one torrent for this quality level, keep it
-                unique_results.append(group[0])
-            else:
-                # Multiple torrents with same title/format/quality, keep the one with most seeders
-                best = max(group, key=lambda x: x.seeders or 0)
-                logger.debug(f"   📦 Deduped {len(group)} torrents for key '{dedup_key[:80]}' → keeping best ({best.seeders} seeders)")
-                unique_results.append(best)
+                    if dedup_key not in quality_groups:
+                        quality_groups[dedup_key] = []
+                    quality_groups[dedup_key].append(result)
+                else:
+                    # Streaming sources don't need title dedup
+                    non_torrents.append(result)
+
+            # For each quality group, keep the best variant (most seeders)
+            unique_results = non_torrents
+            for dedup_key, group in quality_groups.items():
+                if len(group) == 1:
+                    # Only one torrent for this quality level, keep it
+                    unique_results.append(group[0])
+                else:
+                    # Multiple torrents with same title/format/quality, keep the one with most seeders
+                    best = max(group, key=lambda x: x.seeders or 0)
+                    logger.debug(f"   📦 Deduped {len(group)} torrents for key '{dedup_key[:80]}' → keeping best ({best.seeders} seeders)")
+                    unique_results.append(best)
+
+            logger.info(f"   → After dedup: {len(unique_results)} unique results")
+        else:
+            logger.info(f"🔧 Deduplication: DISABLED (raw results mode, {len(all_results)} results)")
+            # No deduplication - use raw results from adapters
+            # Still extract quality metadata for better display
+            for result in all_results:
+                if result.source_type == SourceType.TORRENT and result.format:
+                    codec, bitrate = extract_quality_metadata(result.title, result.format)
+                    if codec and not result.codec:
+                        result.codec = codec
+                    if bitrate and not result.bitrate:
+                        result.bitrate = bitrate
+            unique_results = all_results
 
         # Filter by minimum seeders (only applies to torrent sources)
         # Non-torrent sources (streaming) are always included since they don't have seeders
@@ -188,5 +210,10 @@ class SearchEngine:
 
         # Sort by quality score (highest first)
         filtered_results.sort(key=lambda r: r.quality_score, reverse=True)
+
+        # Apply max_results limit
+        if max_results > 0 and len(filtered_results) > max_results:
+            logger.info(f"   → Limiting results from {len(filtered_results)} to {max_results}")
+            filtered_results = filtered_results[:max_results]
 
         return filtered_results
