@@ -1286,37 +1286,71 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 14.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Search Input
-            TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search for music',
-                hintText: 'e.g., radiohead ok computer',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
+            Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF333333),
+                  width: 1,
+                ),
               ),
-              enabled: !_isSearching,
-              onSubmitted: (_) => _search(),
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: Colors.white,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search for music... (e.g., radiohead ok computer)',
+                  hintStyle: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: const Color(0xFF888888),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: Color(0xFF888888),
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 20,
+                            color: Color(0xFF888888),
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : (_isSearching
+                          ? const Padding(
+                              padding: EdgeInsets.all(12.0),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF888888),
+                                ),
+                              ),
+                            )
+                          : null),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                enabled: !_isSearching,
+                onSubmitted: (_) => _search(),
+              ),
             ),
             const SizedBox(height: 16),
-
-            // Search Button
-            FilledButton.icon(
-              onPressed: _isSearching ? null : _search,
-              icon: _isSearching
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.search),
-              label: const Text('Search'),
-            ),
-            const SizedBox(height: 12),
 
             // Quality and Source Controls (Collapsible)
             ExpansionTile(
