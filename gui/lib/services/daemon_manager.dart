@@ -247,10 +247,55 @@ class DaemonManager {
       // Check if binary exists
       if (!await File(daemonPath).exists()) {
         print('[Daemon] ❌ ERROR: Binary not found at $daemonPath');
+        print('[Daemon] Platform: ${Platform.operatingSystem}');
+        print('[Daemon] Build mode: ${kReleaseMode ? "RELEASE" : "DEBUG"}');
         print('[Daemon] Checked locations:');
-        print('[Daemon]   - $daemonPath');
-        print('[Daemon]   - /opt/homebrew/bin/transmission-daemon');
-        print('[Daemon]   - /usr/local/bin/transmission-daemon');
+        print('[Daemon]   - $daemonPath (bundled)');
+        
+        // Build list of checked locations for error reporting (platform-specific)
+        final checkedLocations = <String>['$daemonPath (bundled)'];
+        
+        if (Platform.isMacOS) {
+          print('[Daemon]   - /opt/homebrew/bin/transmission-daemon (Homebrew - Apple Silicon)');
+          print('[Daemon]   - /usr/local/bin/transmission-daemon (Homebrew - Intel)');
+          checkedLocations.addAll([
+            '/opt/homebrew/bin/transmission-daemon (Homebrew - Apple Silicon)',
+            '/usr/local/bin/transmission-daemon (Homebrew - Intel)',
+          ]);
+        } else if (Platform.isLinux) {
+          print('[Daemon]   - /usr/bin/transmission-daemon (system)');
+          checkedLocations.add('/usr/bin/transmission-daemon (system)');
+        } else if (Platform.isWindows) {
+          print('[Daemon]   - No system fallback (Windows requires bundled binary)');
+          checkedLocations.add('No system fallback (Windows requires bundled binary)');
+        }
+        
+        // In release mode, bundled binary missing is a CRITICAL build/packaging issue
+        // Windows is especially critical since it has NO fallback
+        final isBuildIssue = kReleaseMode;
+        final isCritical = isBuildIssue || Platform.isWindows;
+        final errorMessage = isCritical
+            ? 'CRITICAL: Bundled transmission-daemon binary missing in RELEASE build (build/packaging failure)${Platform.isWindows ? " - Windows has NO system fallback" : ""}'
+            : 'Transmission daemon binary not found';
+        
+        // Report to Glitchtip
+        AnalyticsService().captureError(
+          Exception(errorMessage),
+          StackTrace.current,
+          context: isBuildIssue ? 'daemon_binary_missing_build_issue' : 'daemon_binary_not_found',
+          extras: {
+            'daemon_path': daemonPath,
+            'platform': Platform.operatingSystem,
+            'build_mode': kReleaseMode ? 'release' : 'debug',
+            'checked_locations': checkedLocations.join(', '),
+            'is_bundled_missing': true,
+            'is_build_issue': isBuildIssue,
+            'is_critical': isCritical,
+            'has_system_fallback': Platform.isMacOS || Platform.isLinux,
+            'executable_path': Platform.resolvedExecutable,
+          },
+        );
+        
         return false;
       }
 
@@ -322,6 +367,7 @@ class DaemonManager {
       // Verify daemon is actually responding on port 9091
       bool daemonHealthy = false;
       print('[Daemon] Verifying daemon is responsive on port 9091...');
+      String? lastHealthCheckError;
 
       for (int attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -333,12 +379,31 @@ class DaemonManager {
               '[Daemon] ✅ Daemon is responding on port 9091 (attempt $attempt/3)');
           break;
         } catch (e) {
+          lastHealthCheckError = e.toString();
           print(
               '[Daemon] ⚠️  Daemon not responding yet (attempt $attempt/3): $e');
           if (attempt < 3) {
             await Future.delayed(const Duration(seconds: 1));
           }
         }
+      }
+      
+      // Report health check failure if all attempts failed
+      if (!daemonHealthy && _daemonProcess != null) {
+        AnalyticsService().captureError(
+          Exception('Daemon health check failed after 3 attempts'),
+          StackTrace.current,
+          context: 'daemon_health_check_failed',
+          extras: {
+            'attempts': 3,
+            'last_error': lastHealthCheckError ?? 'Unknown',
+            'pid': _daemonProcess!.pid,
+            'platform': Platform.operatingSystem,
+            'daemon_path': daemonPath,
+            'port': 9091,
+            'build_mode': kReleaseMode ? 'release' : 'debug',
+          },
+        );
       }
 
       // Check if process is still running AND responding
@@ -376,7 +441,27 @@ class DaemonManager {
           } else {
             print('[Daemon] ❌ Process exited with error code: $code');
             _isRunning = false;
+            final exitedPid = _daemonProcess?.pid;
             _daemonProcess = null;
+
+            // Report to Glitchtip
+            final timeSinceStart = _lastStartAttempt != null
+                ? DateTime.now().difference(_lastStartAttempt!).inSeconds
+                : null;
+            AnalyticsService().captureError(
+              Exception('Daemon process exited with error code: $code'),
+              StackTrace.current,
+              context: 'daemon_process_exited_with_error',
+              extras: {
+                'exit_code': code,
+                'pid': exitedPid,
+                'platform': Platform.operatingSystem,
+                'time_since_start_seconds': timeSinceStart,
+                'daemon_path': daemonPath,
+                'build_mode': kReleaseMode ? 'release' : 'debug',
+                'is_windows': Platform.isWindows,
+              },
+            );
 
             // Auto-retry once on Windows if early exit (handles UAC prompt scenario)
             if (Platform.isWindows &&
@@ -401,9 +486,28 @@ class DaemonManager {
         // Process exists but not responding - kill it and report failure
         print('[Daemon] ❌ Process started but not responding on port 9091');
         print('[Daemon] Killing unresponsive process...');
+        final unresponsivePid = _daemonProcess!.pid;
         _daemonProcess!.kill();
         _daemonProcess = null;
         _isRunning = false;
+        
+        // Report to Glitchtip
+        AnalyticsService().captureError(
+          Exception('Daemon process started but not responding on port 9091'),
+          StackTrace.current,
+          context: 'daemon_started_but_not_responding',
+          extras: {
+            'pid': unresponsivePid,
+            'daemon_path': daemonPath,
+            'config_dir': config,
+            'download_dir': download,
+            'platform': Platform.operatingSystem,
+            'port': 9091,
+            'build_mode': kReleaseMode ? 'release' : 'debug',
+            'is_bundled': daemonPath.contains('Resources') || daemonPath.contains('bin') || daemonPath.endsWith('.exe'),
+          },
+        );
+        
         return false;
       }
     } catch (e, stackTrace) {
