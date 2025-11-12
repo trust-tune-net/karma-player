@@ -90,6 +90,23 @@ abstract class AudioDevicePlatform {
   /// Set the audio output device (if supported by platform)
   Future<bool> setAudioDevice(String deviceId);
 
+  /// Whether the platform can surface a native AirPlay picker.
+  bool get supportsAirPlayRouting;
+
+  /// Whether the platform can surface a native Google Cast picker.
+  bool get supportsCastRouting;
+
+  /// Try to display the platform-native AirPlay picker.
+  /// Returns true if a picker was launched successfully.
+  Future<bool> showAirPlayPicker();
+
+  /// Try to display the platform-native Google Cast picker.
+  /// Returns true if a picker was launched successfully.
+  Future<bool> showCastPicker();
+
+  /// Open the system's audio settings panel as a fallback.
+  Future<bool> openSystemSoundSettings();
+
   // Exclusive Mode Support (Phase 2 - Audiophile Features)
 
   /// Check if a device supports exclusive mode (Integer Mode/WASAPI Exclusive)

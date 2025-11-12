@@ -27,6 +27,8 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   Map<String, dynamic>? _deviceFormat;
   Map<String, dynamic>? _deviceMetadata;
   bool _loadingMetadata = false;
+  bool _refreshingDevices = false;
+  bool _wirelessActive = false;
 
   @override
   void initState() {
@@ -35,6 +37,10 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
 
     // Listen to AudioDeviceService changes (e.g., when headphones plugged in)
     _audioService.addListener(_onAudioDeviceChanged);
+    _wirelessActive = !_audioService.isExclusiveModeEligible;
+    if (_wirelessActive && _exclusiveModeEnabled) {
+      _exclusiveModeEnabled = false;
+    }
   }
 
   /// Called when AudioDeviceService notifies of device changes
@@ -60,6 +66,11 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       if (mounted) {
         setState(() {
           _selectedPlatformDevice = matchingPlatformDevice;
+          final wirelessNow = !_audioService.isExclusiveModeEligible;
+          if (wirelessNow && _exclusiveModeEnabled) {
+            _exclusiveModeEnabled = false;
+          }
+          _wirelessActive = wirelessNow;
         });
 
         // Reload exclusive mode state and metadata for new device
@@ -67,6 +78,16 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       }
 
       print('[AudioSettings] ✓ UI updated to show: ${matchingPlatformDevice.name}');
+    }
+
+    if (mounted && (selectedDevice == null || selectedDevice.name == 'auto')) {
+      final wirelessNow = !_audioService.isExclusiveModeEligible;
+      setState(() {
+        if (wirelessNow && _exclusiveModeEnabled) {
+          _exclusiveModeEnabled = false;
+        }
+        _wirelessActive = wirelessNow;
+      });
     }
   }
 
@@ -109,6 +130,15 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       }
 
       await _loadExclusiveModeState(_selectedPlatformDevice!);
+      if (mounted) {
+        setState(() {
+          final wirelessNow = !_audioService.isExclusiveModeEligible;
+          if (wirelessNow && _exclusiveModeEnabled) {
+            _exclusiveModeEnabled = false;
+          }
+          _wirelessActive = wirelessNow;
+        });
+      }
     }
   }
 
@@ -144,6 +174,15 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
 
   Future<void> _toggleExclusiveMode(bool enable) async {
     if (_selectedPlatformDevice == null) return;
+    if (enable && _wirelessActive) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Exclusive mode is unavailable while a wireless output is active.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _loadingExclusiveMode = true;
@@ -215,6 +254,10 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
           _buildSectionHeader('🎵 Audiophile Settings', 'High-quality audio output configuration'),
           const SizedBox(height: 32),
 
+          // Wireless quick actions
+          _buildWirelessOutputsSection(),
+          const SizedBox(height: 32),
+
           // Device Selection Section
           _buildDeviceSelectionSection(),
           const SizedBox(height: 32),
@@ -262,6 +305,429 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
     );
   }
 
+  Widget _buildWirelessOutputsSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF2A2A2A),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.wifi_tethering, color: Color(0xFF9D4EDD), size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Wireless Outputs',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Connect to AirPlay or Google Cast speakers without leaving Karma Player.',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.65),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ListenableBuilder(
+            listenable: _audioService,
+            builder: (context, _) {
+              final airPlayStatus = _audioService.airPlayStatus;
+              final castStatus = _audioService.castStatus;
+
+              final airPlayButtonLabel = _audioService.supportsAirPlayPicker
+                  ? 'Open AirPlay Picker'
+                  : 'Open Sound Settings';
+              final castButtonLabel = _audioService.supportsCastPicker
+                  ? 'Open Cast Picker'
+                  : 'Open Sound Settings';
+
+              return Column(
+                children: [
+                  _buildWirelessCard(
+                    icon: Icons.airplay,
+                    iconColor: const Color(0xFF9D4EDD),
+                    title: 'AirPlay',
+                    description: _airPlayDescription(),
+                    status: airPlayStatus,
+                    tooltip: _audioService.supportsAirPlayPicker
+                        ? 'Launch the macOS AirPlay picker'
+                        : 'Opens system sound settings to expose AirPlay devices',
+                    buttonLabel: airPlayButtonLabel,
+                    onPressed: _handleAirPlayAction,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildWirelessCard(
+                    icon: Icons.cast,
+                    iconColor: const Color(0xFF06D6A0),
+                    title: 'Google Cast',
+                    description: _castDescription(),
+                    status: castStatus,
+                    tooltip: _audioService.supportsCastPicker
+                        ? 'Launch the Google Cast picker'
+                        : 'Opens system sound settings for Cast-compatible sinks',
+                    buttonLabel: castButtonLabel,
+                    onPressed: _handleCastAction,
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWirelessCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String description,
+    required WirelessOutputStatus status,
+    required String tooltip,
+    required String buttonLabel,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF121212),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFF2A2A2A),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: iconColor, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.65),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildStatusChip(status),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Tooltip(
+            message: tooltip,
+            waitDuration: const Duration(milliseconds: 200),
+            child: FilledButton.icon(
+              onPressed: onPressed,
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(buttonLabel),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF9D4EDD).withOpacity(0.15),
+                foregroundColor: const Color(0xFF9D4EDD),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(WirelessOutputStatus status) {
+    final color = _statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.4),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        _statusLabel(status),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  String _statusLabel(WirelessOutputStatus status) {
+    switch (status) {
+      case WirelessOutputStatus.connected:
+        return 'Connected';
+      case WirelessOutputStatus.available:
+        return 'Available';
+      case WirelessOutputStatus.unavailable:
+        return 'Unavailable';
+    }
+  }
+
+  Color _statusColor(WirelessOutputStatus status) {
+    switch (status) {
+      case WirelessOutputStatus.connected:
+        return const Color(0xFF10B981);
+      case WirelessOutputStatus.available:
+        return const Color(0xFFF59E0B);
+      case WirelessOutputStatus.unavailable:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  Future<void> _handleAirPlayAction() async {
+    final outcome = await _audioService.openAirPlayPicker();
+    if (!mounted) return;
+    _handleWirelessOutcome(
+      label: 'AirPlay',
+      outcome: outcome,
+      guidance: _airPlayGuidance(),
+    );
+  }
+
+  Future<void> _handleCastAction() async {
+    final outcome = await _audioService.openCastPicker();
+    if (!mounted) return;
+    _handleWirelessOutcome(
+      label: 'Google Cast',
+      outcome: outcome,
+      guidance: _castGuidance(),
+    );
+  }
+
+  void _handleWirelessOutcome({
+    required String label,
+    required WirelessActionOutcome outcome,
+    required List<String> guidance,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+
+    switch (outcome) {
+      case WirelessActionOutcome.pickerLaunched:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Select your $label destination in the picker that just opened.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        break;
+      case WirelessActionOutcome.systemSettingsOpened:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Opening system sound settings—choose your $label output there.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        break;
+      case WirelessActionOutcome.unsupported:
+        _showWirelessGuidance(label: label, guidance: guidance);
+        break;
+      case WirelessActionOutcome.error:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Could not open $label controls. Showing setup tips.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _showWirelessGuidance(label: label, guidance: guidance);
+        break;
+    }
+  }
+
+  void _showWirelessGuidance({
+    required String label,
+    required List<String> guidance,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: Text(
+            '$label setup tips',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: guidance
+                .map(
+                  (tip) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '• ',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                        Expanded(
+                          child: Text(
+                            tip,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.75),
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _airPlayDescription() {
+    if (Platform.isMacOS) {
+      return 'Use Control Center or the button below to pick an AirPlay target for Karma Player.';
+    } else if (Platform.isWindows) {
+      return 'Use an AirPlay bridge or Apple Music to expose AirPlay speakers, then open sound settings.';
+    }
+    return 'Expose AirPlay sinks (shairport-sync/RAOP) in your desktop environment and select them from system sound.';
+  }
+
+  String _castDescription() {
+    if (Platform.isWindows) {
+      return 'Chromecast and Nest speakers appear after you cast system audio through Chrome or Google Home.';
+    } else if (Platform.isMacOS) {
+      return 'Cast audio via Chrome or the Google Home app, then refresh devices to see the new route.';
+    }
+    return 'Use PipeWire/PulseAudio cast extensions or Chrome to start casting, then refresh devices.';
+  }
+
+  List<String> _airPlayGuidance() {
+    if (Platform.isMacOS) {
+      return [
+        'Open Control Center → Screen Mirroring or Sound to choose your AirPlay device.',
+        'Make sure the AirPlay speaker or Apple TV is on the same network and not muted.',
+        'Return here and tap Refresh devices so the new route shows up in the list.',
+      ];
+    } else if (Platform.isWindows) {
+      return [
+        'Install an AirPlay bridge (AirParrot, TuneBlade) or use iTunes/Apple Music to enable AirPlay.',
+        'Switch the Windows audio output to the AirPlay bridge from system sound settings.',
+        'Use Refresh devices so Karma Player picks up the new AirPlay route.',
+      ];
+    }
+    return [
+      'Ensure a RAOP/AirPlay bridge such as shairport-sync is running on your network.',
+      'Select the AirPlay sink via your desktop sound settings.',
+      'Use Refresh devices to update the available outputs in Karma Player.',
+    ];
+  }
+
+  List<String> _castGuidance() {
+    if (Platform.isWindows || Platform.isMacOS) {
+      return [
+        'Make sure Google Chrome or the Google Home app can see your Chromecast/Nest speaker.',
+        'Start casting system audio or set the Cast device as the default output in Google Home.',
+        'Return to Karma Player and use Refresh devices to update the list.',
+      ];
+    }
+    return [
+      'Use Chrome, Chromium, or `pactl load-module module-null-sink` style Cast bridges to route audio.',
+      'Confirm the Cast sink appears in your desktop sound settings.',
+      'Refresh devices so Karma Player can target the Cast output.',
+    ];
+  }
+
+  Future<void> _refreshAudioDevices() async {
+    if (_refreshingDevices) return;
+
+    setState(() {
+      _refreshingDevices = true;
+    });
+
+    try {
+      await _audioService.refreshDevices();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Audio devices refreshed'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not refresh devices: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _refreshingDevices = false;
+          final wirelessNow = !_audioService.isExclusiveModeEligible;
+          if (wirelessNow && _exclusiveModeEnabled) {
+            _exclusiveModeEnabled = false;
+          }
+          _wirelessActive = wirelessNow;
+        });
+      }
+    }
+  }
+
   Widget _buildDeviceSelectionSection() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -286,6 +752,28 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Tooltip(
+                message: 'Refresh available output devices',
+                waitDuration: const Duration(milliseconds: 200),
+                child: TextButton.icon(
+                  onPressed: _refreshingDevices ? null : _refreshAudioDevices,
+                  icon: _refreshingDevices
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9D4EDD)),
+                          ),
+                        )
+                      : const Icon(Icons.refresh, size: 18),
+                  label: Text(_refreshingDevices ? 'Refreshing...' : 'Refresh'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF9D4EDD),
+                  ),
                 ),
               ),
             ],
@@ -434,7 +922,7 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                 Switch(
                   value: _exclusiveModeEnabled,
                   activeColor: const Color(0xFFFF6B35),
-                  onChanged: _exclusiveModeSupported ? _toggleExclusiveMode : null,
+                  onChanged: _exclusiveModeSupported && !_wirelessActive ? _toggleExclusiveMode : null,
                 ),
             ],
           ),
@@ -442,14 +930,44 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
 
           // Description
           Text(
-            'Exclusive mode provides bit-perfect audio by taking exclusive control of the device. '
-            'Other applications cannot use this device while exclusive mode is active.',
+            'Exclusive mode provides bit-perfect audio by taking exclusive control of a local output device. '
+            'Wireless routes (AirPlay, Google Cast, Bluetooth) continue using system mixing and cannot enter hog mode.',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 14,
               height: 1.5,
             ),
           ),
+
+          if (_wirelessActive) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.blue.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, color: Colors.blue, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Switch to a wired or USB output to enable exclusive mode. macOS/Windows/Linux hand off wireless audio to the system mixer.',
+                      style: TextStyle(
+                        color: Colors.blue.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           if (!_exclusiveModeSupported) ...[
             const SizedBox(height: 12),

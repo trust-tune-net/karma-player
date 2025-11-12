@@ -11,6 +11,12 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
   bool get supportsNativeEnumeration => Platform.isMacOS;
 
   @override
+  bool get supportsAirPlayRouting => Platform.isMacOS;
+
+  @override
+  bool get supportsCastRouting => false;
+
+  @override
   Future<List<PlatformAudioDevice>> enumerateDevices() async {
     try {
       final List<dynamic> devices = await platform.invokeMethod('enumerateDevices');
@@ -157,6 +163,66 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
           'platform': 'macOS',
           'deviceId': deviceId,
         },
+      );
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> showAirPlayPicker() async {
+    try {
+      await platform.invokeMethod('showAirPlayPicker');
+      return true;
+    } on PlatformException catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Failed to show AirPlay picker: ${e.message}');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_airplay_picker',
+        extras: {
+          'platform': 'macOS',
+          'code': e.code,
+          'message': e.message,
+        },
+      );
+      return false;
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Unexpected AirPlay picker error: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_airplay_picker_unknown',
+        extras: {'platform': 'macOS'},
+      );
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> showCastPicker() async {
+    // macOS does not provide a native Google Cast picker.
+    return false;
+  }
+
+  @override
+  Future<bool> openSystemSoundSettings() async {
+    try {
+      final result = await Process.run(
+        'open',
+        ['x-apple.systempreferences:com.apple.preference.sound?output'],
+      );
+      final success = result.exitCode == 0;
+      if (!success) {
+        print('[AudioDevicePlatformMacOS] Failed to open Sound settings: ${result.stderr}');
+      }
+      return success;
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Error opening Sound settings: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_open_sound_settings',
+        extras: {'platform': 'macOS'},
       );
       return false;
     }

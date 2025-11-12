@@ -11,6 +11,12 @@ class AudioDevicePlatformWindows implements AudioDevicePlatform {
   bool get supportsNativeEnumeration => Platform.isWindows;
 
   @override
+  bool get supportsAirPlayRouting => false;
+
+  @override
+  bool get supportsCastRouting => false;
+
+  @override
   Future<List<PlatformAudioDevice>> enumerateDevices() async {
     try {
       final List<dynamic> devices = await platform.invokeMethod('enumerateDevices');
@@ -135,6 +141,42 @@ class AudioDevicePlatformWindows implements AudioDevicePlatform {
           'platform': 'Windows',
           'deviceId': deviceId,
         },
+      );
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> showAirPlayPicker() async {
+    // No native AirPlay picker on Windows.
+    return false;
+  }
+
+  @override
+  Future<bool> showCastPicker() async {
+    // No native Cast picker integration available.
+    return false;
+  }
+
+  @override
+  Future<bool> openSystemSoundSettings() async {
+    try {
+      final result = await Process.run(
+        'cmd',
+        ['/c', 'start', '', 'ms-settings:sound'],
+      );
+      final success = result.exitCode == 0;
+      if (!success) {
+        print('[AudioDevicePlatformWindows] Failed to open sound settings: ${result.stderr}');
+      }
+      return success;
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformWindows] Error opening sound settings: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_open_sound_settings',
+        extras: {'platform': 'Windows'},
       );
       return false;
     }

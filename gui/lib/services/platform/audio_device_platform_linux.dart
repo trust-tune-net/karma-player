@@ -11,6 +11,12 @@ class AudioDevicePlatformLinux implements AudioDevicePlatform {
   bool get supportsNativeEnumeration => Platform.isLinux;
 
   @override
+  bool get supportsAirPlayRouting => false;
+
+  @override
+  bool get supportsCastRouting => false;
+
+  @override
   Future<List<PlatformAudioDevice>> enumerateDevices() async {
     try {
       final List<dynamic> devices = await platform.invokeMethod('enumerateDevices');
@@ -138,6 +144,47 @@ class AudioDevicePlatformLinux implements AudioDevicePlatform {
       );
       return false;
     }
+  }
+
+  @override
+  Future<bool> showAirPlayPicker() async {
+    // Linux desktop environments surface routing through system mixers instead.
+    return false;
+  }
+
+  @override
+  Future<bool> showCastPicker() async {
+    // No unified Cast picker available at the platform layer.
+    return false;
+  }
+
+  @override
+  Future<bool> openSystemSoundSettings() async {
+    final attempts = <List<String>>[
+      ['sh', '-c', 'pavucontrol &'],
+      ['sh', '-c', 'gnome-control-center sound &'],
+      ['sh', '-c', 'mate-volume-control &'],
+    ];
+
+    for (final command in attempts) {
+      try {
+        final result = await Process.run(command[0], command.sublist(1));
+        if (result.exitCode == 0) {
+          return true;
+        }
+      } catch (e) {
+        // Ignore and try next option.
+        print('[AudioDevicePlatformLinux] Sound settings command failed: $e');
+      }
+    }
+
+    AnalyticsService().captureError(
+      'sound_settings_unavailable',
+      StackTrace.current,
+      context: 'audio_device_platform_open_sound_settings',
+      extras: {'platform': 'Linux'},
+    );
+    return false;
   }
 
   // PulseAudio doesn't have exclusive mode like WASAPI

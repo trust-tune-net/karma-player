@@ -96,6 +96,53 @@ AudioDeviceType _detectDeviceType(AudioDevice device) {
   return AudioDeviceType.other;
 }
 
+bool _isCastDeviceName(String value) {
+  final lower = value.toLowerCase();
+  const keywords = [
+    'chromecast',
+    'google cast',
+    'google home',
+    'nest audio',
+    'nest hub',
+    'cast audio',
+    'cast speaker',
+  ];
+
+  if (keywords.any(lower.contains)) {
+    return true;
+  }
+
+  if (lower.startsWith('cast ')) return true;
+  if (lower.endsWith(' cast')) return true;
+  if (lower.contains(' cast ')) return true;
+  if (lower.contains('cast-')) return true;
+  if (lower.contains('-cast')) return true;
+
+  return false;
+}
+
+enum WirelessOutputStatus {
+  connected,
+  available,
+  unavailable,
+}
+
+enum WirelessActionOutcome {
+  pickerLaunched,
+  systemSettingsOpened,
+  unsupported,
+  error,
+}
+
+bool _isBluetoothDevice(AudioDevice device) {
+  final lowerName = device.name.toLowerCase();
+  final lowerDescription = device.description.toLowerCase();
+  return lowerName.contains('bluetooth') ||
+      lowerDescription.contains('bluetooth') ||
+      lowerName.contains('airpods') ||
+      lowerDescription.contains('airpods');
+}
+
 /// Parse friendly name from MediaKit's technical device name
 /// Examples:
 /// - "auto" -> "System Default"
@@ -257,6 +304,16 @@ class AudioDeviceService extends ChangeNotifier {
 
   // Platform API access (for AudioSettingsScreen Phase 2 features)
   AudioDevicePlatform get platform => _platform;
+
+  bool get supportsAirPlayPicker => _platform.supportsAirPlayRouting;
+  bool get supportsCastPicker => _platform.supportsCastRouting;
+
+  bool get hasAirPlayRoute => _hasAirPlayRoute();
+  bool get hasCastRoute => _hasCastRoute();
+
+  WirelessOutputStatus get airPlayStatus => _computeAirPlayStatus();
+  WirelessOutputStatus get castStatus => _computeCastStatus();
+  bool get isExclusiveModeEligible => !_isWirelessSelected();
 
   /// Get device type for UI display
   AudioDeviceType getDeviceType(AudioDevice device) {
@@ -751,6 +808,135 @@ class AudioDeviceService extends ChangeNotifier {
         stackTrace,
         context: 'audio_device_save_preference',
       );
+    }
+  }
+
+  bool _hasAirPlayRoute() {
+    final platformMatch = _platformDevices.any((d) => d.isAirPlay);
+    final mediaKitMatch = _availableDevices.any((d) {
+      final name = d.name.toLowerCase();
+      final description = d.description.toLowerCase();
+      return name.contains('airplay') || description.contains('airplay');
+    });
+    return platformMatch || mediaKitMatch;
+  }
+
+  bool _hasCastRoute() {
+    final platformMatch = _platformDevices.any((d) => _isCastDeviceName(d.name));
+    final mediaKitMatch = _availableDevices.any((d) {
+      final name = d.name.toLowerCase();
+      final description = d.description.toLowerCase();
+      return _isCastDeviceName(name) || _isCastDeviceName(description);
+    });
+    return platformMatch || mediaKitMatch;
+  }
+
+  bool _isAirPlaySelected() {
+    if (_selectedDevice == null) return false;
+    final name = _selectedDevice!.name.toLowerCase();
+    final description = _selectedDevice!.description.toLowerCase();
+    if (name.contains('airplay') || description.contains('airplay')) {
+      return true;
+    }
+
+    return _platformDevices.any(
+      (device) =>
+          device.isAirPlay &&
+          (device.name == _selectedDevice!.description ||
+              device.id == _selectedDevice!.name),
+    );
+  }
+
+  bool _isCastSelected() {
+    if (_selectedDevice == null) return false;
+    final name = _selectedDevice!.name.toLowerCase();
+    final description = _selectedDevice!.description.toLowerCase();
+
+    if (_isCastDeviceName(name) || _isCastDeviceName(description)) {
+      return true;
+    }
+
+    return _platformDevices.any(
+      (device) =>
+          _isCastDeviceName(device.name) &&
+          (device.name == _selectedDevice!.description ||
+              device.id == _selectedDevice!.name),
+    );
+  }
+
+  WirelessOutputStatus _computeAirPlayStatus() {
+    if (_isAirPlaySelected()) return WirelessOutputStatus.connected;
+    if (_hasAirPlayRoute()) return WirelessOutputStatus.available;
+    return WirelessOutputStatus.unavailable;
+  }
+
+  WirelessOutputStatus _computeCastStatus() {
+    if (_isCastSelected()) return WirelessOutputStatus.connected;
+    if (_hasCastRoute()) return WirelessOutputStatus.available;
+    return WirelessOutputStatus.unavailable;
+  }
+
+  bool _isWirelessSelected() {
+    if (_selectedDevice == null) return false;
+    if (_isAirPlaySelected() || _isCastSelected()) return true;
+    final device = _selectedDevice!;
+    if (_isBluetoothDevice(device)) return true;
+    return _platformDevices.any(
+      (d) =>
+          d.isBluetooth &&
+          (d.name == device.description || d.id == device.name),
+    );
+  }
+
+  Future<WirelessActionOutcome> openAirPlayPicker() async {
+    try {
+      if (_platform.supportsAirPlayRouting) {
+        final launched = await _platform.showAirPlayPicker();
+        if (launched) {
+          return WirelessActionOutcome.pickerLaunched;
+        }
+      }
+
+      final openedSettings = await _platform.openSystemSoundSettings();
+      if (openedSettings) {
+        return WirelessActionOutcome.systemSettingsOpened;
+      }
+
+      return WirelessActionOutcome.unsupported;
+    } catch (e, stackTrace) {
+      print('[AudioDevice] Error launching AirPlay picker: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_airplay_action',
+      );
+      return WirelessActionOutcome.error;
+    }
+  }
+
+  Future<WirelessActionOutcome> openCastPicker() async {
+    try {
+      if (_platform.supportsCastRouting) {
+        final launched = await _platform.showCastPicker();
+        if (launched) {
+          return WirelessActionOutcome.pickerLaunched;
+        }
+      }
+
+      final openedSettings = await _platform.openSystemSoundSettings();
+      if (openedSettings) {
+        return WirelessActionOutcome.systemSettingsOpened;
+      }
+
+      return WirelessActionOutcome.unsupported;
+    } catch (e, stackTrace) {
+      print('[AudioDevice] Error launching Cast picker: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_cast_action',
+      );
+      return WirelessActionOutcome.error;
     }
   }
 

@@ -7,10 +7,31 @@ class AudioDevicePlatformFallback implements AudioDevicePlatform {
   bool get supportsNativeEnumeration => false;
 
   @override
+  bool get supportsAirPlayRouting => false;
+
+  @override
+  bool get supportsCastRouting => false;
+
+  @override
   Future<List<PlatformAudioDevice>> enumerateDevices() async {
     // Return empty list - caller will fall back to media_kit
     print('[AudioDevicePlatformFallback] Native enumeration not supported on this platform');
     return [];
+  }
+
+  @override
+  Future<bool> showAirPlayPicker() async {
+    return false;
+  }
+
+  @override
+  Future<bool> showCastPicker() async {
+    return false;
+  }
+
+  @override
+  Future<bool> openSystemSoundSettings() async {
+    return false;
   }
 
   @override
