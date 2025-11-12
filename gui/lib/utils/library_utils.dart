@@ -122,4 +122,77 @@ class LibraryUtils {
     final seconds = duration.inSeconds.remainder(60);
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
+
+  /// Parse track number and title from a filename (without extension)
+  /// 
+  /// Supports multiple filename patterns:
+  /// - "01 - Title" (space-dash-space)
+  /// - "01.-Title" (dot-dash)
+  /// - "01. Title" (dot-space)
+  /// - "01-Title" (single dash, no spaces)
+  /// - "01 -Title" (space before dash)
+  /// - "01- Title" (space after dash)
+  /// - "01 Title" (space only, fallback)
+  /// 
+  /// Returns a record with `trackNumber` (int?) and `title` (String).
+  /// If no track number is found, `trackNumber` is null and `title` is the full filename.
+  static ({int? trackNumber, String title}) parseTrackNumberAndTitle(String nameWithoutExt) {
+    int? trackNum;
+    String trackTitle = nameWithoutExt;
+
+    // Try " - " separator first (e.g., "01 - Title")
+    if (nameWithoutExt.contains(' - ')) {
+      final splitParts = nameWithoutExt.split(' - ');
+      if (splitParts.length >= 2) {
+        trackNum = int.tryParse(splitParts[0].trim());
+        if (trackNum != null) {
+          trackTitle = splitParts.sublist(1).join(' - ').trim();
+        }
+      }
+    }
+    // Try ".-" separator (e.g., "01.-Title")
+    else if (nameWithoutExt.contains('.-')) {
+      final splitParts = nameWithoutExt.split('.-');
+      if (splitParts.length >= 2) {
+        trackNum = int.tryParse(splitParts[0].trim());
+        if (trackNum != null) {
+          trackTitle = splitParts.sublist(1).join('.-').trim();
+        }
+      }
+    }
+    // Try ". " separator (e.g., "01. Title")
+    else if (nameWithoutExt.contains('. ')) {
+      final splitParts = nameWithoutExt.split('. ');
+      if (splitParts.length >= 2) {
+        trackNum = int.tryParse(splitParts[0].trim());
+        if (trackNum != null) {
+          trackTitle = splitParts.sublist(1).join('. ').trim();
+        }
+      }
+    }
+    // Try single-dash separator with optional spaces (e.g., "01-Title", "01 -Title", "01- Title")
+    // This regex matches: digits, optional whitespace, dash, optional whitespace, rest of string
+    else {
+      final singleDashPattern = RegExp(r'^(\d+)\s*-\s*(.+)$');
+      final match = singleDashPattern.firstMatch(nameWithoutExt);
+      if (match != null) {
+        trackNum = int.tryParse(match.group(1)!.trim());
+        if (trackNum != null) {
+          trackTitle = match.group(2)!.trim();
+        }
+      }
+      // Try " " separator as last resort (e.g., "01 Title")
+      else if (nameWithoutExt.contains(' ')) {
+        final splitParts = nameWithoutExt.split(' ');
+        if (splitParts.isNotEmpty) {
+          trackNum = int.tryParse(splitParts[0].trim());
+          if (trackNum != null && splitParts.length > 1) {
+            trackTitle = splitParts.sublist(1).join(' ').trim();
+          }
+        }
+      }
+    }
+
+    return (trackNumber: trackNum, title: trackTitle);
+  }
 }

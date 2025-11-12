@@ -46,8 +46,11 @@ class AudioDevicePlatformFallback implements AudioDevicePlatform {
 
   // Exclusive Mode Support - Not supported on this platform
   @override
-  Future<bool> supportsExclusiveMode(String deviceId) async {
-    return false; // No exclusive mode support on non-macOS platforms yet
+  Future<ExclusiveModeCapability> getExclusiveModeCapability(String deviceId) async {
+    return const ExclusiveModeCapability(
+      supported: false,
+      reason: 'Exclusive mode is not exposed by this platform adapter.',
+    );
   }
 
   @override
@@ -62,7 +65,10 @@ class AudioDevicePlatformFallback implements AudioDevicePlatform {
 
   // Phase 3 - Advanced Device Metadata
   @override
-  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId) async {
-    return null; // No metadata available on non-macOS platforms yet
+  Future<MetadataFetchResult> getDeviceMetadata(String deviceId) async {
+    return const MetadataFetchResult(
+      metadata: null,
+      reason: 'Advanced metadata is not exposed by this platform adapter.',
+    );
   }
 }

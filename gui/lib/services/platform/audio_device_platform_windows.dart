@@ -184,16 +184,62 @@ class AudioDevicePlatformWindows implements AudioDevicePlatform {
 
   // WASAPI Exclusive Mode Support
   @override
-  Future<bool> supportsExclusiveMode(String deviceId) async {
+  Future<ExclusiveModeCapability> getExclusiveModeCapability(String deviceId) async {
     try {
       final result = await platform.invokeMethod('supportsExclusiveMode', {
         'deviceId': deviceId,
       });
 
-      return result['supported'] as bool? ?? false;
-    } catch (e) {
+      if (result is Map) {
+        final supported = result['supported'] as bool? ?? false;
+        final reason = result['reason'] as String?;
+        return ExclusiveModeCapability(
+          supported: supported,
+          reason: supported
+              ? null
+              : reason ??
+                  'This device did not report WASAPI exclusive mode support. Verify "Allow applications to take '
+                      'exclusive control" is enabled in Windows Sound settings.',
+        );
+      }
+
+      final supported = (result as bool?) ?? false;
+      return ExclusiveModeCapability(
+        supported: supported,
+        reason: supported
+            ? null
+            : 'This device did not report WASAPI exclusive mode support. Verify Windows Sound settings allow '
+                'exclusive control.',
+      );
+    } on PlatformException catch (e, stackTrace) {
+      print('[AudioDevicePlatformWindows] PlatformException checking exclusive mode support: ${e.message}');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_exclusive_capability',
+        extras: {
+          'platform': 'Windows',
+          'code': e.code,
+          'message': e.message,
+          'deviceId': deviceId,
+        },
+      );
+      return ExclusiveModeCapability(
+        supported: false,
+        reason: e.message ?? e.code,
+      );
+    } catch (e, stackTrace) {
       print('[AudioDevicePlatformWindows] Error checking exclusive mode support: $e');
-      return false;
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_exclusive_capability_unknown',
+        extras: {'platform': 'Windows', 'deviceId': deviceId},
+      );
+      return const ExclusiveModeCapability(
+        supported: false,
+        reason: 'Unexpected error while checking exclusive mode support.',
+      );
     }
   }
 
@@ -252,17 +298,27 @@ class AudioDevicePlatformWindows implements AudioDevicePlatform {
   }
 
   @override
-  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId) async {
+  Future<MetadataFetchResult> getDeviceMetadata(String deviceId) async {
     try {
       final result = await platform.invokeMethod('getDeviceMetadata', {
         'deviceId': deviceId,
       });
 
-      if (result == null) return null;
-      return Map<String, dynamic>.from(result);
+      if (result == null) {
+        return const MetadataFetchResult(
+          metadata: null,
+          reason: 'Advanced metadata is not available for this device on Windows.',
+        );
+      }
+      return MetadataFetchResult(
+        metadata: Map<String, dynamic>.from(result),
+      );
     } catch (e) {
       print('[AudioDevicePlatformWindows] Error getting metadata: $e');
-      return null;
+      return MetadataFetchResult(
+        metadata: null,
+        reason: e.toString(),
+      );
     }
   }
 }

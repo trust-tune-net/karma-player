@@ -29,6 +29,8 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   bool _loadingMetadata = false;
   bool _refreshingDevices = false;
   bool _wirelessActive = false;
+  String? _exclusiveModeReason;
+  String? _metadataReason;
 
   @override
   void initState() {
@@ -51,6 +53,8 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   void _onAudioDeviceChanged() {
     print('[AudioSettings] Audio device changed, updating UI...');
 
+    PlatformAudioDevice? deviceForCapability;
+
     // Sync UI with the newly selected device from AudioDeviceService
     final selectedDevice = _audioService.selectedDevice;
 
@@ -66,28 +70,37 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       if (mounted) {
         setState(() {
           _selectedPlatformDevice = matchingPlatformDevice;
+          _exclusiveModeReason = null;
+          _metadataReason = null;
+          _deviceMetadata = null;
+          _deviceFormat = null;
           final wirelessNow = !_audioService.isExclusiveModeEligible;
           if (wirelessNow && _exclusiveModeEnabled) {
             _exclusiveModeEnabled = false;
           }
           _wirelessActive = wirelessNow;
         });
-
-        // Reload exclusive mode state and metadata for new device
-        _loadExclusiveModeState(matchingPlatformDevice);
       }
 
       print('[AudioSettings] ✓ UI updated to show: ${matchingPlatformDevice.name}');
+      deviceForCapability = matchingPlatformDevice;
     }
 
-    if (mounted && (selectedDevice == null || selectedDevice.name == 'auto')) {
+    if (selectedDevice == null || selectedDevice.name == 'auto') {
       final wirelessNow = !_audioService.isExclusiveModeEligible;
-      setState(() {
-        if (wirelessNow && _exclusiveModeEnabled) {
-          _exclusiveModeEnabled = false;
-        }
-        _wirelessActive = wirelessNow;
-      });
+      if (mounted) {
+        setState(() {
+          if (wirelessNow && _exclusiveModeEnabled) {
+            _exclusiveModeEnabled = false;
+          }
+          _wirelessActive = wirelessNow;
+        });
+      }
+      deviceForCapability ??= _selectedPlatformDevice;
+    }
+
+    if (deviceForCapability != null) {
+      _loadExclusiveModeState(deviceForCapability);
     }
   }
 
@@ -143,30 +156,28 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   }
 
   Future<void> _loadExclusiveModeState(PlatformAudioDevice device) async {
-    // Only check exclusive mode on macOS for now
-    if (!Platform.isMacOS) return;
+    if (mounted) {
+      setState(() {
+        _loadingMetadata = true;
+      });
+    }
 
-    setState(() {
-      _loadingMetadata = true;
-    });
-
-    // Use the platform device ID for CoreAudio methods
     final deviceId = device.id;
 
-    // Check if current device supports exclusive mode
-    final supported = await _audioService.platform.supportsExclusiveMode(deviceId);
-
-    // Get current device format
-    final format = await _audioService.platform.getDeviceFormat(deviceId);
-
-    // Get device metadata (Phase 3)
-    final metadata = await _audioService.platform.getDeviceMetadata(deviceId);
+    final exclusiveCapability = await _audioService.fetchExclusiveModeCapability(deviceId);
+    final format = await _audioService.fetchDeviceFormat(deviceId);
+    final metadataResult = await _audioService.fetchDeviceMetadata(deviceId);
 
     if (mounted) {
       setState(() {
-        _exclusiveModeSupported = supported;
+        _exclusiveModeSupported = exclusiveCapability.supported;
+        _exclusiveModeReason = exclusiveCapability.reason;
+        if (!_exclusiveModeSupported && _exclusiveModeEnabled) {
+          _exclusiveModeEnabled = false;
+        }
         _deviceFormat = format;
-        _deviceMetadata = metadata;
+        _deviceMetadata = metadataResult.metadata;
+        _metadataReason = metadataResult.reason;
         _loadingMetadata = false;
       });
     }
@@ -178,6 +189,16 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Exclusive mode is unavailable while a wireless output is active.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (enable && !_exclusiveModeSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_exclusiveModeReason ??
+              'Exclusive mode is not supported for the selected device on ${Platform.operatingSystem}.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -263,19 +284,15 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
           const SizedBox(height: 32),
 
           // Exclusive Mode Section (Phase 2)
-          if (Platform.isMacOS) ...[
-            _buildExclusiveModeSection(),
-            const SizedBox(height: 32),
-          ],
+          _buildExclusiveModeSection(),
+          const SizedBox(height: 32),
 
           // Device Format Section
           _buildDeviceFormatSection(),
           const SizedBox(height: 32),
 
           // Phase 3 - Advanced Metadata
-          if (Platform.isMacOS) ...[
-            _buildAdvancedMetadata(),
-          ],
+          _buildAdvancedMetadata(),
         ],
       ),
     );
@@ -724,6 +741,9 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
           }
           _wirelessActive = wirelessNow;
         });
+        if (_selectedPlatformDevice != null) {
+          _loadExclusiveModeState(_selectedPlatformDevice!);
+        }
       }
     }
   }
@@ -987,7 +1007,8 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Exclusive mode not supported on this device',
+                      _exclusiveModeReason ??
+                          'Exclusive mode not supported on this device for ${Platform.operatingSystem}.',
                       style: TextStyle(
                         color: Colors.orange.withOpacity(0.9),
                         fontSize: 13,
@@ -1150,13 +1171,44 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
 
           if (_deviceMetadata == null && !_loadingMetadata) ...[
             Text(
-              'Select a device to view advanced metadata',
+              _metadataReason == null
+                  ? 'Select a device to view advanced metadata'
+                  : 'Advanced metadata is unavailable for the selected device.',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 14,
                 fontStyle: FontStyle.italic,
               ),
             ),
+            if (_metadataReason != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.blue.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _metadataReason!,
+                        style: TextStyle(
+                          color: Colors.blue.withOpacity(0.9),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ] else if (_deviceMetadata != null) ...[
             // USB DAC Chipset
             if (_deviceMetadata!['chipset'] != null) ...[

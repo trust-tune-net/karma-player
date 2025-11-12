@@ -1,5 +1,6 @@
 import 'dart:io';
 import '../services/metadata_service.dart';
+import '../utils/library_utils.dart';
 
 class Song {
   final String id;
@@ -67,44 +68,10 @@ class Song {
     // Remove only the file extension (e.g., ".flac"), not all periods
     final nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
 
-    // Parse track number and title using simple string splitting
-    int? trackNum;
-    String trackTitle = nameWithoutExt;
-
-    // Try " - " separator first (e.g., "01 - Title")
-    if (nameWithoutExt.contains(' - ')) {
-      final splitParts = nameWithoutExt.split(' - ');
-      if (splitParts.length >= 2) {
-        trackNum = int.tryParse(splitParts[0].trim());
-        trackTitle = splitParts.sublist(1).join(' - ').trim();
-      }
-    }
-    // Try ".-" separator (e.g., "01.-Title")
-    else if (nameWithoutExt.contains('.-')) {
-      final splitParts = nameWithoutExt.split('.-');
-      if (splitParts.length >= 2) {
-        trackNum = int.tryParse(splitParts[0].trim());
-        trackTitle = splitParts.sublist(1).join('.-').trim();
-      }
-    }
-    // Try ". " separator (e.g., "01. Title")
-    else if (nameWithoutExt.contains('. ')) {
-      final splitParts = nameWithoutExt.split('. ');
-      if (splitParts.length >= 2) {
-        trackNum = int.tryParse(splitParts[0].trim());
-        trackTitle = splitParts.sublist(1).join('. ').trim();
-      }
-    }
-    // Try " " separator as last resort (e.g., "01 Title")
-    else if (nameWithoutExt.contains(' ')) {
-      final splitParts = nameWithoutExt.split(' ');
-      if (splitParts.isNotEmpty) {
-        trackNum = int.tryParse(splitParts[0].trim());
-        if (trackNum != null && splitParts.length > 1) {
-          trackTitle = splitParts.sublist(1).join(' ').trim();
-        }
-      }
-    }
+    // Parse track number and title using centralized utility
+    final parsed = LibraryUtils.parseTrackNumberAndTitle(nameWithoutExt);
+    final trackNum = parsed.trackNumber;
+    final trackTitle = parsed.title;
 
     final extension = fileName.contains('.')
         ? fileName.substring(fileName.lastIndexOf('.') + 1).toUpperCase()
@@ -144,6 +111,21 @@ class Song {
         final metadata =
             await metadataServiceInstance.extractSongMetadata(path);
 
+        // Parse track number from filename as fallback if metadata doesn't have it
+        // This preserves track numbers parsed from filenames when metadata tags are missing track numbers
+        int? trackNumberFromFilename;
+        if (metadata.trackNumber == null) {
+          final parts = path.split('/');
+          final fileName = parts.last;
+          // Remove file extension safely (handle files without extensions)
+          final lastDotIndex = fileName.lastIndexOf('.');
+          final nameWithoutExt = lastDotIndex > 0
+              ? fileName.substring(0, lastDotIndex)
+              : fileName;
+          final parsed = LibraryUtils.parseTrackNumberAndTitle(nameWithoutExt);
+          trackNumberFromFilename = parsed.trackNumber;
+        }
+
         return Song(
           id: path.hashCode.toString(),
           title: metadata.title ?? _extractTitleFromFilename(path),
@@ -151,7 +133,7 @@ class Song {
           album: metadata.album ?? albumName,
           filePath: path,
           libraryOrder: libraryOrder,
-          trackNumber: metadata.trackNumber,
+          trackNumber: metadata.trackNumber ?? trackNumberFromFilename,
           discNumber: metadata.discNumber,
           duration: metadata.duration,
           artworkPath: artworkPath,
@@ -274,14 +256,9 @@ class Song {
     final fileName = parts.last;
     final nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
 
-    // Try to parse track number and title
-    if (nameWithoutExt.contains(' - ')) {
-      final splitParts = nameWithoutExt.split(' - ');
-      if (splitParts.length >= 2) {
-        return splitParts.sublist(1).join(' - ').trim();
-      }
-    }
-    return nameWithoutExt;
+    // Use centralized parser to extract title (ignoring track number)
+    final parsed = LibraryUtils.parseTrackNumberAndTitle(nameWithoutExt);
+    return parsed.title;
   }
 
   String get displayTitle => '$title - $artist';

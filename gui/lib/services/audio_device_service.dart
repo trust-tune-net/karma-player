@@ -13,87 +13,59 @@ import 'platform/audio_device_platform_fallback.dart';
 
 // AudioDeviceType is now exported from platform/audio_device_platform.dart
 
-/// Helper to detect device type from MediaKit's AudioDevice
-AudioDeviceType _detectDeviceType(AudioDevice device) {
-  final name = device.name.toLowerCase();
-  final description = device.description.toLowerCase();
-  
-  // Check for Bluetooth in both name and description (MediaKit may put it in description)
-  final combined = '$name $description';
-  
-  // Enhanced Bluetooth detection patterns
-  // Check for explicit Bluetooth indicators
-  if (combined.contains('bluetooth') || 
-      combined.contains('bt ') || 
-      combined.contains(' bt') ||
-      combined.contains('bt-') ||
-      combined.contains('-bt') ||
-      name.contains('airpods') ||
-      description.contains('airpods')) {
-    return AudioDeviceType.bluetooth;
-  }
-  
-  // Check for common Bluetooth device brand names (often appear without "Bluetooth" in name)
-  final bluetoothBrands = [
-    'airpod', 'airpods',
-    'beats', 'beats studio', 'beats solo', 'beats pro',
-    'sony wh-', 'sony wf-', 'sony wf', // Sony WH/WF series are Bluetooth
-    'bose', 'bose quietcomfort', 'bose soundsport',
-    'jbl', 'jbl tune', 'jbl live', 'jbl flip',
-    'sennheiser momentum', 'sennheiser cx',
-    'akg', 'akg y', // AKG Y series are Bluetooth
-    'shure', 'shure aonic',
-    'jabra', 'jabra elite',
-    'skullcandy', 'skullcandy indy',
-    'hyperx cloud', 'hyperx cloud flight',
-    'corsair void', 'corsair virtuoso',
-    'steelseries arctis',
-    'razer barracuda', 'razer hammerhead',
-    'logitech g', 'logitech zone',
-    'audio-technica ath-m',
-    'philips shb',
-    'anker soundcore', 'soundcore',
-    'buds', 'earbuds', 'earbud', // Generic earbuds are often Bluetooth
-    'tws', // True Wireless Stereo
-    'wireless headphone', 'wireless earbud', 'wireless headset',
-  ];
-  
-  for (var brand in bluetoothBrands) {
-    if (combined.contains(brand)) {
-      // Additional check: if it's a common Bluetooth brand, check if description confirms
-      // Some USB headsets share names with Bluetooth models
-      if (!combined.contains('usb') && !name.contains('usb')) {
-        return AudioDeviceType.bluetooth;
-      }
-    }
-  }
-  
-  // Check for Bluetooth headphone patterns (headphones with specific naming often indicate Bluetooth)
-  if ((combined.contains('headphone') || combined.contains('headset') || combined.contains('earbud')) &&
-      !combined.contains('usb') && !combined.contains('wired')) {
-    // If it's a headphone/headset without USB/wired indicator, might be Bluetooth
-    // But be conservative - only if we have other indicators
-    if (combined.contains('pro') || combined.contains('max') || combined.contains('plus')) {
-      // Pro/Max/Plus variants are often Bluetooth
+/// Minimal device type detection for MediaKit devices (fallback only)
+/// Only checks explicit indicators - no brand-name guessing
+/// This is used when platform enumeration is unavailable
+AudioDeviceType _detectDeviceTypeMinimal(AudioDevice device) {
+  try {
+    final name = device.name.toLowerCase();
+    final description = device.description.toLowerCase();
+    final combined = '$name $description';
+    
+    // Only check explicit indicators - no brand lists
+    if (combined.contains('bluetooth') || 
+        combined.contains(' bt ') ||
+        combined.contains(' bt') ||
+        combined.contains('bt-') ||
+        combined.contains('-bt')) {
       return AudioDeviceType.bluetooth;
     }
+    
+    if (name.contains('airplay') || description.contains('airplay')) {
+      return AudioDeviceType.airplay;
+    }
+    
+    if (combined.contains('usb') || name.contains('dac') || description.contains('dac')) {
+      return AudioDeviceType.usb;
+    }
+    
+    if (name.contains('hdmi') || name.contains('displayport')) {
+      return AudioDeviceType.hdmi;
+    }
+    
+    if (name.contains('built-in') || 
+        name.contains('internal') ||
+        name.contains('builtinspeaker') ||
+        name.contains('builtinspeakerdevice')) {
+      return AudioDeviceType.builtIn;
+    }
+    
+    return AudioDeviceType.other;
+  } catch (e, stackTrace) {
+    // Unexpected error in fallback detection - report to GlitchTip
+    print('[AudioDevice] ❌ Unexpected error in _detectDeviceTypeMinimal: $e');
+    AnalyticsService().captureError(
+      e,
+      stackTrace,
+      context: 'device_type_minimal_fallback',
+      extras: {
+        'mediakit_name': device.name,
+        'mediakit_description': device.description,
+      },
+    );
+    // Return safe default
+    return AudioDeviceType.other;
   }
-  
-  // Check for other device types
-  if (combined.contains('usb') || name.contains('dac') || description.contains('dac')) {
-    return AudioDeviceType.usb;
-  } else if (name.contains('hdmi') || name.contains('displayport')) {
-    return AudioDeviceType.hdmi;
-  } else if (name.contains('airplay')) {
-    return AudioDeviceType.airplay;
-  } else if (name.contains('built-in') || 
-             name.contains('internal') ||
-             name.contains('speaker') ||
-             name.contains('builtinspeaker') ||
-             name.contains('builtinspeakerdevice')) {
-    return AudioDeviceType.builtIn;
-  }
-  return AudioDeviceType.other;
 }
 
 bool _isCastDeviceName(String value) {
@@ -141,116 +113,6 @@ bool _isBluetoothDevice(AudioDevice device) {
       lowerDescription.contains('bluetooth') ||
       lowerName.contains('airpods') ||
       lowerDescription.contains('airpods');
-}
-
-/// Parse friendly name from MediaKit's technical device name
-/// Examples:
-/// - "auto" -> "System Default"
-/// - "coreaudio/BuiltInSpeakerDevice" -> "Built-in Speakers"
-/// - "coreaudio/Headphones" -> "Headphones"
-/// - "bluetooth/DeviceName" -> "DeviceName"
-String _parseFriendlyName(AudioDevice device) {
-  final name = device.name;
-  
-  // Handle "auto" or empty
-  if (name.isEmpty || name == 'auto' || name.toLowerCase() == 'auto') {
-    return 'System Default';
-  }
-  
-  // Handle macOS CoreAudio format: "coreaudio/DeviceName"
-  if (name.contains('/')) {
-    final parts = name.split('/');
-    if (parts.length >= 2) {
-      var devicePart = parts[1];
-      
-      // Clean up common CoreAudio naming patterns
-      devicePart = devicePart
-          .replaceAll('Device', '')
-          .replaceAll('Output', '')
-          .replaceAll('Input', '')
-          .replaceAll('Capture', '');
-      
-      // Convert camelCase to Title Case with spaces
-      devicePart = devicePart
-          .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) => '${match.group(1)} ${match.group(2)}')
-          .trim();
-      
-      // Handle specific device names
-      if (devicePart.toLowerCase().contains('builtinspeaker') ||
-          devicePart.toLowerCase().contains('built-in speaker')) {
-        return 'Built-in Speakers';
-      } else if (devicePart.toLowerCase().contains('bluetooth')) {
-        // Extract Bluetooth device name - remove "Bluetooth" prefix/suffix
-        var btName = devicePart
-            .replaceAll(RegExp(r'bluetooth', caseSensitive: false), '')
-            .replaceAll(RegExp(r'BT', caseSensitive: false), '')
-            .trim();
-        
-        // If name is empty after removing Bluetooth, try using description or original
-        if (btName.isEmpty) {
-          btName = device.description.isNotEmpty && device.description != device.name
-              ? device.description
-              : devicePart;
-        }
-        
-        // Clean up common suffixes/prefixes
-        btName = btName
-            .replaceAll(RegExp(r'Device$', caseSensitive: false), '')
-            .replaceAll(RegExp(r'Output$', caseSensitive: false), '')
-            .trim();
-        
-        return btName.isNotEmpty ? btName : 'Bluetooth Device';
-      } else if (devicePart.toLowerCase().contains('headphone')) {
-        // Check if it's a Bluetooth headphone by description or pattern
-        if (_detectDeviceType(device) == AudioDeviceType.bluetooth) {
-          // It's a Bluetooth headphone - use device description or cleaned name
-          final desc = device.description;
-          if (desc.isNotEmpty && desc != device.name) {
-            return desc;
-          }
-          return devicePart;
-        }
-        return 'Headphones';
-      }
-      
-      // If we have a clean device name, use it
-      if (devicePart.isNotEmpty) {
-        // Capitalize first letter of each word
-        final words = devicePart.split(' ');
-        final capitalized = words.map((w) {
-          if (w.isEmpty) return w;
-          return w[0].toUpperCase() + w.substring(1).toLowerCase();
-        }).join(' ');
-        return capitalized;
-      }
-    }
-    
-    // Fallback: use the part after the slash
-    return name.split('/').last;
-  }
-  
-  // If no slash, try to clean up the name
-  var cleaned = name
-      .replaceAll('Device', '')
-      .replaceAll('Output', '')
-      .trim();
-  
-  if (cleaned.isEmpty) {
-    return name; // Fallback to original
-  }
-  
-  // Convert camelCase to Title Case
-  cleaned = cleaned.replaceAllMapped(
-    RegExp(r'([a-z])([A-Z])'),
-    (match) => '${match.group(1)} ${match.group(2)}',
-  );
-  
-  // Capitalize first letter of each word
-  final words = cleaned.split(' ');
-  return words.map((w) {
-    if (w.isEmpty) return w;
-    return w[0].toUpperCase() + w.substring(1).toLowerCase();
-  }).join(' ');
 }
 
 /// Service for managing audio output device selection
@@ -305,6 +167,91 @@ class AudioDeviceService extends ChangeNotifier {
   // Platform API access (for AudioSettingsScreen Phase 2 features)
   AudioDevicePlatform get platform => _platform;
 
+  Future<ExclusiveModeCapability> fetchExclusiveModeCapability(String deviceId) async {
+    try {
+      final capability = await _platform.getExclusiveModeCapability(deviceId);
+      if (!capability.supported && capability.reason != null) {
+        ErrorHandler().logExpectedError(
+          'exclusive_mode_capability',
+          capability.reason!,
+          extras: {
+            'platform': Platform.operatingSystem,
+            'deviceId': deviceId,
+          },
+        );
+      }
+      return capability;
+    } catch (e, stackTrace) {
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'exclusive_mode_capability_fetch',
+        extras: {
+          'platform': Platform.operatingSystem,
+          'deviceId': deviceId,
+        },
+      );
+      return ExclusiveModeCapability(
+        supported: false,
+        reason: 'Failed to query exclusive mode capability: $e',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchDeviceFormat(String deviceId) async {
+    try {
+      return await _platform.getDeviceFormat(deviceId);
+    } catch (e, stackTrace) {
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'device_format_fetch',
+        extras: {
+          'platform': Platform.operatingSystem,
+          'deviceId': deviceId,
+        },
+      );
+      ErrorHandler().logExpectedError(
+        'device_format_fetch',
+        e,
+        stackTrace: stackTrace,
+        extras: {'platform': Platform.operatingSystem, 'deviceId': deviceId},
+      );
+      return null;
+    }
+  }
+
+  Future<MetadataFetchResult> fetchDeviceMetadata(String deviceId) async {
+    try {
+      final result = await _platform.getDeviceMetadata(deviceId);
+      if (result.reason != null) {
+        ErrorHandler().logExpectedError(
+          'device_metadata_capability',
+          result.reason!,
+          extras: {
+            'platform': Platform.operatingSystem,
+            'deviceId': deviceId,
+          },
+        );
+      }
+      return result;
+    } catch (e, stackTrace) {
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'device_metadata_capability_fetch',
+        extras: {
+          'platform': Platform.operatingSystem,
+          'deviceId': deviceId,
+        },
+      );
+      return MetadataFetchResult(
+        metadata: null,
+        reason: 'Failed to query device metadata: $e',
+      );
+    }
+  }
+
   bool get supportsAirPlayPicker => _platform.supportsAirPlayRouting;
   bool get supportsCastPicker => _platform.supportsCastRouting;
 
@@ -316,13 +263,230 @@ class AudioDeviceService extends ChangeNotifier {
   bool get isExclusiveModeEligible => !_isWirelessSelected();
 
   /// Get device type for UI display
+  /// Prioritizes platform-native detection (from CoreAudio/WASAPI/PulseAudio transport types)
+  /// Falls back to minimal string matching only when platform enumeration unavailable
   AudioDeviceType getDeviceType(AudioDevice device) {
-    return _detectDeviceType(device);
+    try {
+      // First, try to match with platform device (has native transport type info)
+      if (_platformDevices.isNotEmpty) {
+        try {
+          // Try matching by description (most reliable - MediaKit description often matches platform name)
+          final platformDevice = _platformDevices.firstWhere(
+            (d) => d.name == device.description,
+            orElse: () => throw StateError('No match by description'),
+          );
+          
+          // Use platform device's type (from native APIs like CoreAudio transport type)
+          print('[AudioDevice] ✓ Matched MediaKit device "${device.name}" to platform device "${platformDevice.name}" (type: ${platformDevice.deviceType})');
+          return platformDevice.deviceType;
+        } catch (e) {
+          // StateError is expected when no match found - try name matching
+          if (e is StateError) {
+            // Try matching by name as fallback
+            try {
+              final platformDevice = _platformDevices.firstWhere(
+                (d) => d.name == device.name || d.id == device.name,
+                orElse: () => throw StateError('No match by name'),
+              );
+              
+              print('[AudioDevice] ✓ Matched MediaKit device "${device.name}" to platform device "${platformDevice.name}" by name/ID (type: ${platformDevice.deviceType})');
+              return platformDevice.deviceType;
+            } catch (e2) {
+              // StateError is expected when no match found
+              if (e2 is StateError) {
+                // No platform match - this is expected when platform enumeration isn't available
+                // or when MediaKit exposes devices that platform APIs don't see
+                print('[AudioDevice] ⚠️  No platform device match for MediaKit device "${device.name}" (${device.description}) - using fallback heuristics');
+                ErrorHandler().logExpectedError(
+                  'device_type_no_platform_match',
+                  'MediaKit device not found in platform enumeration',
+                  extras: {
+                    'mediakit_name': device.name,
+                    'mediakit_description': device.description,
+                    'platform_device_count': _platformDevices.length,
+                    'platform_supports_native': _platform.supportsNativeEnumeration,
+                  },
+                );
+              } else {
+                // Unexpected exception during name matching - report to GlitchTip
+                print('[AudioDevice] ❌ Unexpected error during device name matching: $e2');
+                AnalyticsService().captureError(
+                  e2,
+                  StackTrace.current,
+                  context: 'device_type_name_matching',
+                  extras: {
+                    'mediakit_name': device.name,
+                    'mediakit_description': device.description,
+                    'platform_device_count': _platformDevices.length,
+                  },
+                );
+                // Fall through to fallback
+              }
+            }
+          } else {
+            // Unexpected exception during description matching - report to GlitchTip
+            print('[AudioDevice] ❌ Unexpected error during device description matching: $e');
+            AnalyticsService().captureError(
+              e,
+              StackTrace.current,
+              context: 'device_type_description_matching',
+              extras: {
+                'mediakit_name': device.name,
+                'mediakit_description': device.description,
+                'platform_device_count': _platformDevices.length,
+              },
+            );
+            // Fall through to fallback
+          }
+        }
+      } else {
+        // Platform enumeration not available - expected on some platforms or during initialization
+        print('[AudioDevice] ⚠️  Platform enumeration unavailable - using fallback heuristics for "${device.name}"');
+        ErrorHandler().logExpectedError(
+          'device_type_platform_unavailable',
+          'Platform enumeration not available, using MediaKit heuristics',
+          extras: {
+            'mediakit_name': device.name,
+            'mediakit_description': device.description,
+            'platform_supports_native': _platform.supportsNativeEnumeration,
+          },
+        );
+      }
+      
+      // Fallback: minimal MediaKit heuristics (only when platform enumeration unavailable)
+      return _detectDeviceTypeMinimal(device);
+    } catch (e, stackTrace) {
+      // Unexpected exception in getDeviceType - report to GlitchTip
+      print('[AudioDevice] ❌ Unexpected error in getDeviceType: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'device_type_detection',
+        extras: {
+          'mediakit_name': device.name,
+          'mediakit_description': device.description,
+          'platform_device_count': _platformDevices.length,
+          'platform_supports_native': _platform.supportsNativeEnumeration,
+        },
+      );
+      // Return safe fallback
+      return _detectDeviceTypeMinimal(device);
+    }
   }
 
   /// Get friendly display name for a device
   String getFriendlyName(AudioDevice device) {
     return _parseFriendlyName(device);
+  }
+
+  /// Parse friendly name from MediaKit's technical device name
+  /// Examples:
+  /// - "auto" -> "System Default"
+  /// - "coreaudio/BuiltInSpeakerDevice" -> "Built-in Speakers"
+  /// - "coreaudio/Headphones" -> "Headphones"
+  /// - "bluetooth/DeviceName" -> "DeviceName"
+  String _parseFriendlyName(AudioDevice device) {
+    final name = device.name;
+    
+    // Handle "auto" or empty
+    if (name.isEmpty || name == 'auto' || name.toLowerCase() == 'auto') {
+      return 'System Default';
+    }
+    
+    // Handle macOS CoreAudio format: "coreaudio/DeviceName"
+    if (name.contains('/')) {
+      final parts = name.split('/');
+      if (parts.length >= 2) {
+        var devicePart = parts[1];
+        
+        // Clean up common CoreAudio naming patterns
+        devicePart = devicePart
+            .replaceAll('Device', '')
+            .replaceAll('Output', '')
+            .replaceAll('Input', '')
+            .replaceAll('Capture', '');
+        
+        // Convert camelCase to Title Case with spaces
+        devicePart = devicePart
+            .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) => '${match.group(1)} ${match.group(2)}')
+            .trim();
+        
+        // Handle specific device names
+        if (devicePart.toLowerCase().contains('builtinspeaker') ||
+            devicePart.toLowerCase().contains('built-in speaker')) {
+          return 'Built-in Speakers';
+        } else if (devicePart.toLowerCase().contains('bluetooth')) {
+          // Extract Bluetooth device name - remove "Bluetooth" prefix/suffix
+          var btName = devicePart
+              .replaceAll(RegExp(r'bluetooth', caseSensitive: false), '')
+              .replaceAll(RegExp(r'BT', caseSensitive: false), '')
+              .trim();
+          
+          // If name is empty after removing Bluetooth, try using description or original
+          if (btName.isEmpty) {
+            btName = device.description.isNotEmpty && device.description != device.name
+                ? device.description
+                : devicePart;
+          }
+          
+          // Clean up common suffixes/prefixes
+          btName = btName
+              .replaceAll(RegExp(r'Device$', caseSensitive: false), '')
+              .replaceAll(RegExp(r'Output$', caseSensitive: false), '')
+              .trim();
+          
+          return btName.isNotEmpty ? btName : 'Bluetooth Device';
+        } else if (devicePart.toLowerCase().contains('headphone')) {
+          // Check if it's a Bluetooth headphone by description or pattern
+          if (getDeviceType(device) == AudioDeviceType.bluetooth) {
+            // It's a Bluetooth headphone - use device description or cleaned name
+            final desc = device.description;
+            if (desc.isNotEmpty && desc != device.name) {
+              return desc;
+            }
+            return devicePart;
+          }
+          return 'Headphones';
+        }
+        
+        // If we have a clean device name, use it
+        if (devicePart.isNotEmpty) {
+          // Capitalize first letter of each word
+          final words = devicePart.split(' ');
+          final capitalized = words.map((w) {
+            if (w.isEmpty) return w;
+            return w[0].toUpperCase() + w.substring(1).toLowerCase();
+          }).join(' ');
+          return capitalized;
+        }
+      }
+      
+      // Fallback: use the part after the slash
+      return name.split('/').last;
+    }
+    
+    // If no slash, try to clean up the name
+    var cleaned = name
+        .replaceAll('Device', '')
+        .replaceAll('Output', '')
+        .trim();
+    
+    if (cleaned.isEmpty) {
+      return name; // Fallback to original
+    }
+    
+    // Convert camelCase to Title Case
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(r'([a-z])([A-Z])'),
+      (match) => '${match.group(1)} ${match.group(2)}',
+    );
+    
+    // Capitalize first letter of each word
+    final words = cleaned.split(' ');
+    return words.map((w) {
+      if (w.isEmpty) return w;
+      return w[0].toUpperCase() + w.substring(1).toLowerCase();
+    }).join(' ');
   }
 
   /// Get technical/ID name for a device (for subtitle display)
@@ -365,7 +529,7 @@ class AudioDeviceService extends ChangeNotifier {
         // Check if we found Bluetooth devices (platform or media_kit)
         final platformBtCount = _platformDevices.where((d) => d.isBluetooth).length;
         final mediaKitBtCount = _availableDevices
-            .where((d) => _detectDeviceType(d) == AudioDeviceType.bluetooth)
+            .where((d) => getDeviceType(d) == AudioDeviceType.bluetooth)
             .length;
 
         if ((platformBtCount > 0 || mediaKitBtCount > 0) && attempt > 1) {
@@ -449,7 +613,7 @@ class AudioDeviceService extends ChangeNotifier {
       // Log Bluetooth device counts
       final platformBtCount = _platformDevices.where((d) => d.isBluetooth).length;
       final mediaKitBtCount = _availableDevices
-          .where((d) => _detectDeviceType(d) == AudioDeviceType.bluetooth)
+          .where((d) => getDeviceType(d) == AudioDeviceType.bluetooth)
           .length;
 
       if (platformBtCount > 0 || mediaKitBtCount > 0) {
@@ -529,7 +693,7 @@ class AudioDeviceService extends ChangeNotifier {
         // Analyze device for Bluetooth detection
         final lowerName = device.name.toLowerCase();
         final lowerDesc = device.description.toLowerCase();
-        final detectedType = _detectDeviceType(device);
+        final detectedType = getDeviceType(device);
         
         print('[AudioDevice]   - Detected type: $detectedType');
         
@@ -970,7 +1134,7 @@ class AudioDeviceService extends ChangeNotifier {
 
     // Log device types found
     final platformBtCount = _platformDevices.where((d) => d.isBluetooth).length;
-    final mediaKitBtCount = _availableDevices.where((d) => _detectDeviceType(d) == AudioDeviceType.bluetooth).length;
+    final mediaKitBtCount = _availableDevices.where((d) => getDeviceType(d) == AudioDeviceType.bluetooth).length;
 
     if (platformBtCount > 0 || mediaKitBtCount > 0) {
       print('[AudioDevice] ✅ Found Bluetooth device(s): Platform=$platformBtCount, Media_kit=$mediaKitBtCount');

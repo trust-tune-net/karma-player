@@ -189,8 +189,11 @@ class AudioDevicePlatformLinux implements AudioDevicePlatform {
 
   // PulseAudio doesn't have exclusive mode like WASAPI
   @override
-  Future<bool> supportsExclusiveMode(String deviceId) async {
-    return false;
+  Future<ExclusiveModeCapability> getExclusiveModeCapability(String deviceId) async {
+    return const ExclusiveModeCapability(
+      supported: false,
+      reason: 'Exclusive mode is not supported on Linux (PulseAudio/PipeWire).',
+    );
   }
 
   @override
@@ -214,17 +217,27 @@ class AudioDevicePlatformLinux implements AudioDevicePlatform {
   }
 
   @override
-  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId) async {
+  Future<MetadataFetchResult> getDeviceMetadata(String deviceId) async {
     try {
       final result = await platform.invokeMethod('getDeviceMetadata', {
         'deviceId': deviceId,
       });
 
-      if (result == null) return null;
-      return Map<String, dynamic>.from(result);
+      if (result == null) {
+        return const MetadataFetchResult(
+          metadata: null,
+          reason: 'Advanced metadata is not currently available via the Linux audio backend.',
+        );
+      }
+      return MetadataFetchResult(
+        metadata: Map<String, dynamic>.from(result),
+      );
     } catch (e) {
       print('[AudioDevicePlatformLinux] Error getting metadata: $e');
-      return null;
+      return MetadataFetchResult(
+        metadata: null,
+        reason: e.toString(),
+      );
     }
   }
 }

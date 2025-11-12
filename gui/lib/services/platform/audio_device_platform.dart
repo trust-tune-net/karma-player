@@ -79,6 +79,28 @@ enum AudioDeviceType {
   other,
 }
 
+/// Represents whether exclusive mode is available for a device, and why not.
+class ExclusiveModeCapability {
+  final bool supported;
+  final String? reason;
+
+  const ExclusiveModeCapability({
+    required this.supported,
+    this.reason,
+  });
+}
+
+/// Represents the result of fetching additional device metadata.
+class MetadataFetchResult {
+  final Map<String, dynamic>? metadata;
+  final String? reason;
+
+  const MetadataFetchResult({
+    this.metadata,
+    this.reason,
+  });
+}
+
 /// Abstract platform interface for audio device enumeration
 abstract class AudioDevicePlatform {
   /// Enumerate all available audio output devices
@@ -110,7 +132,8 @@ abstract class AudioDevicePlatform {
   // Exclusive Mode Support (Phase 2 - Audiophile Features)
 
   /// Check if a device supports exclusive mode (Integer Mode/WASAPI Exclusive)
-  Future<bool> supportsExclusiveMode(String deviceId);
+  /// Returns a reason when the capability is unavailable.
+  Future<ExclusiveModeCapability> getExclusiveModeCapability(String deviceId);
 
   /// Enable or disable exclusive mode for a device
   /// Returns true if successful, false otherwise
@@ -127,8 +150,8 @@ abstract class AudioDevicePlatform {
   /// - USB DAC chipset (if applicable)
   /// - Bluetooth codec (if applicable)
   /// - Device capabilities
-  /// Returns null if device not found or metadata unavailable
-  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId);
+  /// Returns a result containing metadata or an explanatory reason when unavailable.
+  Future<MetadataFetchResult> getDeviceMetadata(String deviceId);
 
   /// Check if platform supports native enumeration
   bool get supportsNativeEnumeration;

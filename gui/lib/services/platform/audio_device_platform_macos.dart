@@ -231,25 +231,69 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
   // MARK: - Exclusive Mode Support (Phase 2)
 
   @override
-  Future<bool> supportsExclusiveMode(String deviceId) async {
+  Future<ExclusiveModeCapability> getExclusiveModeCapability(String deviceId) async {
     try {
       final result = await platform.invokeMethod('supportsExclusiveMode', {
         'deviceId': deviceId,
       });
 
-      final supported = result['supported'] as bool? ?? false;
-      final mode = result['mode'] as String? ?? 'unknown';
+      if (result is Map) {
+        final supported = result['supported'] as bool? ?? false;
+        final mode = result['mode'] as String? ?? 'unknown';
+        final reason = result['reason'] as String?;
 
-      if (supported) {
-        print('[AudioDevicePlatformMacOS] Device $deviceId supports exclusive mode ($mode)');
-      } else {
-        print('[AudioDevicePlatformMacOS] Device $deviceId does not support exclusive mode');
+        if (supported) {
+          print('[AudioDevicePlatformMacOS] Device $deviceId supports exclusive mode ($mode)');
+        } else {
+          print('[AudioDevicePlatformMacOS] Device $deviceId does not support exclusive mode');
+        }
+
+        return ExclusiveModeCapability(
+          supported: supported,
+          reason: supported
+              ? null
+              : reason ??
+                  'macOS reported that this device cannot enter exclusive (hog) mode. Try selecting a different output '
+                      'or update the device driver.',
+        );
       }
 
-      return supported;
-    } catch (e) {
-      print('[AudioDevicePlatformMacOS] Error checking exclusive mode support: $e');
-      return false;
+      final supported = (result as bool?) ?? false;
+      return ExclusiveModeCapability(
+        supported: supported,
+        reason: supported
+            ? null
+            : 'macOS reported that this device cannot enter exclusive (hog) mode.',
+      );
+    } on PlatformException catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] PlatformException checking exclusive mode support: ${e.message}');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_exclusive_capability',
+        extras: {
+          'platform': 'macOS',
+          'code': e.code,
+          'message': e.message,
+          'deviceId': deviceId,
+        },
+      );
+      return ExclusiveModeCapability(
+        supported: false,
+        reason: e.message ?? e.code,
+      );
+    } catch (e, stackTrace) {
+      print('[AudioDevicePlatformMacOS] Unexpected error checking exclusive mode support: $e');
+      AnalyticsService().captureError(
+        e,
+        stackTrace,
+        context: 'audio_device_platform_exclusive_capability_unknown',
+        extras: {'platform': 'macOS', 'deviceId': deviceId},
+      );
+      return const ExclusiveModeCapability(
+        supported: false,
+        reason: 'Unexpected error while checking exclusive mode support.',
+      );
     }
   }
 
@@ -381,7 +425,7 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
   // MARK: - Phase 3: Advanced Device Metadata
 
   @override
-  Future<Map<String, dynamic>?> getDeviceMetadata(String deviceId) async {
+  Future<MetadataFetchResult> getDeviceMetadata(String deviceId) async {
     try {
       final result = await platform.invokeMethod('getDeviceMetadata', {
         'deviceId': deviceId,
@@ -389,7 +433,10 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
 
       if (result == null) {
         print('[AudioDevicePlatformMacOS] No metadata for device $deviceId');
-        return null;
+        return const MetadataFetchResult(
+          metadata: null,
+          reason: 'macOS CoreAudio did not return metadata for this device.',
+        );
       }
 
       // Deep convert all nested maps to Map<String, dynamic>
@@ -407,7 +454,7 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
         print('[AudioDevicePlatformMacOS] Supported sample rates: ${rates.join(', ')} Hz');
       }
 
-      return metadata;
+      return MetadataFetchResult(metadata: metadata);
     } on PlatformException catch (e, stackTrace) {
       print('[AudioDevicePlatformMacOS] PlatformException getting metadata: ${e.message}');
 
@@ -423,7 +470,10 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
         },
       );
 
-      return null;
+      return MetadataFetchResult(
+        metadata: null,
+        reason: e.message ?? 'Failed to fetch metadata (platform exception).',
+      );
     } catch (e, stackTrace) {
       print('[AudioDevicePlatformMacOS] Unexpected error getting metadata: $e');
 
@@ -438,7 +488,10 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
         },
       );
 
-      return null;
+      return const MetadataFetchResult(
+        metadata: null,
+        reason: 'Unexpected error while fetching device metadata.',
+      );
     }
   }
 

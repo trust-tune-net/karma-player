@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:path/path.dart' as path;
 import 'ffprobe_service.dart';
+import '../utils/library_utils.dart';
 
 /// Service for extracting metadata from audio files
 /// Handles ID3 tags, FLAC tags, and EXACT audio quality via FFprobe
@@ -288,17 +289,11 @@ class SongMetadata {
     
     // Extract title from filename
     final fileName = path.basenameWithoutExtension(filePath);
-    String title = fileName;
-    int? trackNumber;
     
-    // Try to parse track number from filename
-    if (fileName.contains(' - ')) {
-      final parts = fileName.split(' - ');
-      if (parts.length >= 2) {
-        trackNumber = int.tryParse(parts[0].trim());
-        title = parts.sublist(1).join(' - ').trim();
-      }
-    }
+    // Parse track number and title using centralized utility
+    final parsed = LibraryUtils.parseTrackNumberAndTitle(fileName);
+    final trackNumber = parsed.trackNumber;
+    final title = parsed.title;
     
     // Estimate bitrate from file size (CD quality baseline)
     int? bitrate;
