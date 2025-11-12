@@ -216,7 +216,7 @@ class PlaybackService extends ChangeNotifier {
           _isShuffle = true;
           _originalQueue = List.from(queue);  // Store original unshuffled order
 
-          // Shuffle while keeping current song at index 0
+          // Shuffle while keeping current song at index 0 (standard behavior)
           _queue = List<Song>.from(queue);
           _queue.remove(song);
           _queue.shuffle();
@@ -548,15 +548,16 @@ class PlaybackService extends ChangeNotifier {
       _originalQueue = List.from(_queue);
       print('[SHUFFLE] Saved original queue (${_originalQueue.length} songs)');
 
-      // Shuffle while keeping current song at current index
+      // Shuffle while keeping current song at index 0 (standard behavior)
       final shuffled = List<Song>.from(_queue);
       final currentSong = _currentSong;
 
       if (currentSong != null) {
         shuffled.remove(currentSong);
         shuffled.shuffle();
-        shuffled.insert(_currentIndex, currentSong);
-        print('[SHUFFLE] Shuffled queue, kept "${currentSong.title}" at index $_currentIndex');
+        shuffled.insert(0, currentSong);  // Always put current song at start
+        _currentIndex = 0;  // Update index to match
+        print('[SHUFFLE] Shuffled queue, moved "${currentSong.title}" to index 0');
       } else {
         shuffled.shuffle();
         print('[SHUFFLE] Shuffled entire queue');

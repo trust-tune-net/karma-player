@@ -27,9 +27,9 @@ class AppSettings extends ChangeNotifier {
   DateTime? lastHealthCheck;
   int apiResponseTimeMs = 0; // API response time in milliseconds
   
-  // Toast throttling for network errors
-  DateTime? lastNetworkErrorToastTime;
-  int networkErrorToastCount = 0;
+  // Centralized API health monitoring
+  Timer? _healthMonitorTimer;
+  Duration _healthMonitorInterval = const Duration(minutes: 5);
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -156,13 +156,13 @@ class AppSettings extends ChangeNotifier {
       apiResponseTimeMs = 9999; // High value to indicate failure
       lastHealthCheck = DateTime.now();
       notifyListeners(); // Notify all listeners that connection failed
-      
+
       // Categorize error types
-      final isNetworkError = e is TimeoutException || 
-                            e.toString().contains('SocketException') ||
-                            e.toString().contains('ClientException') ||
-                            e.toString().contains('Failed host lookup');
-      
+      final isNetworkError = e is TimeoutException ||
+          e.toString().contains('SocketException') ||
+          e.toString().contains('ClientException') ||
+          e.toString().contains('Failed host lookup');
+
       if (isNetworkError) {
         // Log locally only (not to Glitchtip)
         debugPrint('[AppSettings] Network connectivity issue: ${e.runtimeType} - $e');
@@ -179,36 +179,36 @@ class AppSettings extends ChangeNotifier {
           },
         );
       }
-      
+
       return false;
     }
   }
 
-  /// Check if we should show a network error toast (max 2 per day)
-  bool shouldShowNetworkErrorToast() {
-    final now = DateTime.now();
-    
-    // Reset counter if it's a new day
-    if (lastNetworkErrorToastTime == null ||
-        !_isSameDay(lastNetworkErrorToastTime!, now)) {
-      networkErrorToastCount = 0;
-      lastNetworkErrorToastTime = now;
-      return true;
+  void startHealthMonitoring({Duration? interval}) {
+    if (interval != null) {
+      _healthMonitorInterval = interval;
     }
-    
-    // Allow max 2 toasts per day
-    if (networkErrorToastCount < 2) {
-      networkErrorToastCount++;
-      lastNetworkErrorToastTime = now;
-      return true;
+
+    if (_healthMonitorTimer != null) {
+      return;
     }
-    
-    return false;
+
+    // Fire an initial check without waiting for the first interval tick.
+    // ignore: avoid-ignoring-return-values
+    checkApiHealth();
+
+    _healthMonitorTimer = Timer.periodic(
+      _healthMonitorInterval,
+      (_) => checkApiHealth(),
+    );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+  void stopHealthMonitoring() {
+    _healthMonitorTimer?.cancel();
+    _healthMonitorTimer = null;
   }
+
+  Future<void> refreshHealth() => checkApiHealth();
 
   String get connectionQuality {
     if (!apiHealthy) return 'offline';

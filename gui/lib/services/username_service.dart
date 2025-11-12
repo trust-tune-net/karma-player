@@ -1,8 +1,8 @@
+import 'package:grpc/grpc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'device_service.dart';
 import 'api_auth_service.dart';
+import '../proto/auth.pbgrpc.dart' as auth;
 
 /// Service for fetching and caching Reddit-style usernames.
 ///
@@ -16,7 +16,12 @@ class UsernameService {
 
   final DeviceService _deviceService;
   final ApiAuthService _apiAuthService;
-  final String _apiBaseUrl;
+  final String _host;
+  final int _port;
+  final bool _useSecure;
+
+  ClientChannel? _channel;
+  auth.AuthServiceClient? _client;
 
   // Memory cache
   String? _cachedUsername;
@@ -27,10 +32,14 @@ class UsernameService {
   UsernameService({
     required DeviceService deviceService,
     required ApiAuthService apiAuthService,
-    required String apiBaseUrl,
+    required String host,
+    required int port,
+    required bool useSecure,
   })  : _deviceService = deviceService,
         _apiAuthService = apiAuthService,
-        _apiBaseUrl = apiBaseUrl;
+        _host = host,
+        _port = port,
+        _useSecure = useSecure;
 
   /// Get the user's username.
   ///
@@ -117,40 +126,62 @@ class UsernameService {
   /// Fetch username from API and cache it.
   Future<void> _fetchAndCacheUsername() async {
     try {
-      // Get auth headers
+      final client = await _ensureClient();
+
       final authHeaders = await _apiAuthService.getAuthHeaders();
+      final deviceId = authHeaders['X-Device-ID'];
+      final apiKey = authHeaders['X-API-Key'];
 
-      // Call API
-      final response = await http.get(
-        Uri.parse('$_apiBaseUrl/api/user/identity'),
-        headers: authHeaders,
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        // Extract username and components
-        final username = data['username'] as String;
-        final components = data['components'] as Map<String, dynamic>;
-        final adjective = components['adjective'] as String;
-        final noun = components['noun'] as String;
-        final number = components['number'] as int;
-
-        // Cache in memory
-        _cachedUsername = username;
-        _cachedAdjective = adjective;
-        _cachedNoun = noun;
-        _cachedNumber = number;
-
-        // Persist to storage
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_usernameKey, username);
-        await prefs.setString(_adjectiveKey, adjective);
-        await prefs.setString(_nounKey, noun);
-        await prefs.setInt(_numberKey, number);
-      } else {
-        throw Exception('API returned ${response.statusCode}: ${response.body}');
+      if (deviceId == null || apiKey == null) {
+        throw Exception('Missing authentication headers for username request');
       }
+
+      final response = await client.getUserIdentity(
+        auth.GetUserIdentityRequest(),
+        options: CallOptions(
+          metadata: {
+            'device_id': deviceId,
+            'api_key': apiKey,
+          },
+          timeout: const Duration(seconds: 10),
+        ),
+      );
+
+      if (response.hasError()) {
+        final error = response.error;
+        throw Exception(
+          'AuthService error: ${error.message}${error.details.isNotEmpty ? " (${error.details})" : ""}',
+        );
+      }
+
+      if (!response.hasIdentity()) {
+        throw Exception('AuthService returned empty identity');
+      }
+
+      final identity = response.identity;
+      final components = identity.hasComponents() ? identity.components : null;
+
+      if (components == null) {
+        throw Exception('AuthService did not include username components');
+      }
+
+      final username = identity.username;
+      final adjective = components.adjective;
+      final noun = components.noun;
+      final number = components.number;
+
+      // Cache in memory
+      _cachedUsername = username;
+      _cachedAdjective = adjective;
+      _cachedNoun = noun;
+      _cachedNumber = number;
+
+      // Persist to storage
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_usernameKey, username);
+      await prefs.setString(_adjectiveKey, adjective);
+      await prefs.setString(_nounKey, noun);
+      await prefs.setInt(_numberKey, number);
     } catch (e) {
       throw Exception('Failed to fetch username: $e');
     }
@@ -164,5 +195,31 @@ class UsernameService {
 
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey(_usernameKey);
+  }
+
+  Future<auth.AuthServiceClient> _ensureClient() async {
+    if (_client != null) {
+      return _client!;
+    }
+
+    _channel = ClientChannel(
+      _host,
+      port: _port,
+      options: ChannelOptions(
+        credentials: _useSecure
+            ? const ChannelCredentials.secure()
+            : const ChannelCredentials.insecure(),
+        connectionTimeout: const Duration(seconds: 10),
+      ),
+    );
+
+    _client = auth.AuthServiceClient(_channel!);
+    return _client!;
+  }
+
+  Future<void> dispose() async {
+    await _channel?.shutdown();
+    _channel = null;
+    _client = null;
   }
 }

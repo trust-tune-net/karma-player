@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -31,17 +32,22 @@ class _UsernameBadgeState extends State<UsernameBadge> {
     super.initState();
     _deviceService = DeviceService();
 
-    // Convert gRPC URL (port 50051) to HTTP API URL (port 3000)
-    String httpApiUrl = appSettings.searchApiUrl
-        .replaceFirst('0.0.0.0', '127.0.0.1')
-        .replaceFirst(':50051', ':3000');
+    final (host, port, useSecure) = _resolveGrpcEndpoint(appSettings.searchApiUrl);
 
     _usernameService = UsernameService(
       deviceService: _deviceService,
       apiAuthService: ApiAuthService(),
-      apiBaseUrl: httpApiUrl,
+      host: host,
+      port: port,
+      useSecure: useSecure,
     );
     _loadUsername();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_usernameService.dispose());
+    super.dispose();
   }
 
   Future<void> _loadUsername() async {
@@ -65,6 +71,27 @@ class _UsernameBadgeState extends State<UsernameBadge> {
         });
       }
     }
+  }
+
+  (String, int, bool) _resolveGrpcEndpoint(String baseUrl) {
+    String normalized = baseUrl.replaceFirst('0.0.0.0', '127.0.0.1');
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      normalized = 'http://$normalized';
+    }
+
+    Uri uri;
+    try {
+      uri = Uri.parse(normalized);
+    } catch (_) {
+      return ('localhost', 50051, false);
+    }
+
+    final host = uri.host.isNotEmpty ? uri.host : 'localhost';
+    final port = uri.hasPort
+        ? uri.port
+        : (uri.scheme == 'https' ? 443 : 50051);
+    final useSecure = uri.scheme == 'https' || port == 443;
+    return (host, port, useSecure);
   }
 
   @override

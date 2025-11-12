@@ -46,9 +46,7 @@ class LibraryController extends ChangeNotifier {
   bool _isLoadingMetadata = false;
   bool _isInitialized = false;
   bool _sortAscending = true;
-  bool _connectionLostNotification = false;
   bool _disposed = false;
-  bool _lastKnownHealth = appSettings.apiHealthy;
 
   SortCriteria _sortCriteria = SortCriteria.title;
   String _statusMessage = 'No music loaded';
@@ -73,7 +71,6 @@ class LibraryController extends ChangeNotifier {
   bool get isScanning => _isScanning;
   bool get isLoadingMetadata => _isLoadingMetadata;
   bool get sortAscending => _sortAscending;
-  bool get hasConnectionLostNotification => _connectionLostNotification;
   bool get hasActiveFormatFilter => _selectedFormats.isNotEmpty;
   bool get hasFiles => _allSongs.isNotEmpty;
   bool get isMetadataScanRunning => _isMetadataScanRunning;
@@ -127,7 +124,6 @@ class LibraryController extends ChangeNotifier {
     _autoRefreshTimer = Timer.periodic(autoRefreshInterval, (_) async {
       await _scanMusicFolder();
     });
-    await _checkHealth();
   }
 
   @override
@@ -136,13 +132,6 @@ class LibraryController extends ChangeNotifier {
     _downloadPollTimer?.cancel();
     _autoRefreshTimer?.cancel();
     super.dispose();
-  }
-
-  void markConnectionNotificationHandled() {
-    if (_connectionLostNotification) {
-      _connectionLostNotification = false;
-      _notify();
-    }
   }
 
   void updateViewMode(LibraryViewMode viewMode) {
@@ -168,8 +157,6 @@ class LibraryController extends ChangeNotifier {
   void refreshLibrary() {
     _scanMusicFolder();
   }
-
-  Future<void> checkHealth() => _checkHealth();
 
   @visibleForTesting
   void seedAlbums(List<Album> albums) {
@@ -365,6 +352,26 @@ class LibraryController extends ChangeNotifier {
         }
       }
 
+      // Re-sort songs by disc and track number after metadata is loaded
+      updatedSongs.sort((a, b) {
+        // First, sort by disc number if available
+        if (a.discNumber != null && b.discNumber != null) {
+          final discCompare = a.discNumber!.compareTo(b.discNumber!);
+          if (discCompare != 0) return discCompare;
+        }
+        // Handle cases where one has disc number and the other doesn't
+        if (a.discNumber != null && b.discNumber == null) return -1;
+        if (a.discNumber == null && b.discNumber != null) return 1;
+
+        // Then, sort by track number
+        if (a.trackNumber != null && b.trackNumber != null) {
+          return a.trackNumber!.compareTo(b.trackNumber!);
+        }
+
+        // Fallback to title sorting
+        return a.title.compareTo(b.title);
+      });
+
       final index = _albums.indexWhere((a) => a.id == album.id);
       if (index != -1) {
         _albums[index] = Album(
@@ -495,7 +502,13 @@ class LibraryController extends ChangeNotifier {
 
         final isDiscFolder =
             discPatterns.any((pattern) => pattern.hasMatch(folderName));
+        int? discNumber;
         if (isDiscFolder) {
+          // Extract disc number from folder name (e.g., "Disc 1" → 1)
+          final discMatch = RegExp(r'\d+').firstMatch(folderName);
+          if (discMatch != null) {
+            discNumber = int.tryParse(discMatch.group(0)!);
+          }
           albumPath = path.dirname(albumPath);
         }
 
@@ -516,6 +529,7 @@ class LibraryController extends ChangeNotifier {
           'albumPath': albumPath,
           'albumName': albumName,
           'artistName': artistName,
+          'discNumber': discNumber,
         });
       }
 
@@ -528,6 +542,7 @@ class LibraryController extends ChangeNotifier {
             fileInfo['path'] as String,
             albumName: fileInfo['albumName'] as String,
             artistName: fileInfo['artistName'] as String,
+            discNumber: fileInfo['discNumber'] as int?,
           );
           albumMap[albumPath]!.add(song);
         } catch (error) {
@@ -545,9 +560,21 @@ class LibraryController extends ChangeNotifier {
         final songs = entry.value;
 
         songs.sort((a, b) {
+          // First, sort by disc number if available
+          if (a.discNumber != null && b.discNumber != null) {
+            final discCompare = a.discNumber!.compareTo(b.discNumber!);
+            if (discCompare != 0) return discCompare;
+          }
+          // Handle cases where one has disc number and the other doesn't
+          if (a.discNumber != null && b.discNumber == null) return -1;
+          if (a.discNumber == null && b.discNumber != null) return 1;
+
+          // Then, sort by track number
           if (a.trackNumber != null && b.trackNumber != null) {
             return a.trackNumber!.compareTo(b.trackNumber!);
           }
+
+          // Fallback to title sorting
           return a.title.compareTo(b.title);
         });
 
@@ -641,8 +668,6 @@ class LibraryController extends ChangeNotifier {
         stackTrace,
         context: 'library_scan_error',
       );
-    } finally {
-      await _checkHealth();
     }
   }
 
@@ -812,17 +837,6 @@ class LibraryController extends ChangeNotifier {
       _albums = [];
     }
     _notify();
-  }
-
-  Future<void> _checkHealth() async {
-    final wasHealthy = _lastKnownHealth;
-    final isHealthy = await appSettings.checkApiHealth();
-    _lastKnownHealth = isHealthy;
-
-    if (wasHealthy && !isHealthy && appSettings.shouldShowNetworkErrorToast()) {
-      _connectionLostNotification = true;
-      _notify();
-    }
   }
 
   void _notify() {

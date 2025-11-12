@@ -38,8 +38,11 @@ class LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _controller = LibraryController()
-      ..addListener(_onControllerChanged)
-      ..initialize();
+      ..addListener(_onControllerChanged);
+    
+    // Defer initialize() to ensure _controller is fully initialized before
+    // any notifications are triggered (prevents LateInitializationError)
+    Future.microtask(() => _controller.initialize());
 
     _searchController = TextEditingController()
       ..addListener(() {
@@ -67,29 +70,6 @@ class LibraryScreenState extends State<LibraryScreen> {
   void _onControllerChanged() {
     if (!mounted) return;
     setState(() {});
-
-    if (_controller.hasConnectionLostNotification) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.cloud_off, color: Colors.orange, size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('Network connectivity issue - working offline'),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFF2A2A2E),
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        _controller.markConnectionNotificationHandled();
-      });
-    }
   }
 
   void resetToAlbumsView() {
@@ -166,7 +146,7 @@ class LibraryScreenState extends State<LibraryScreen> {
         trailing: Align(
           alignment: Alignment.centerRight,
           child: StatsBadges(
-            onConnectionTap: _controller.checkHealth,
+            onConnectionTap: appSettings.refreshHealth,
           ),
         ),
         bottom: _buildControlSection(context),

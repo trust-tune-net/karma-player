@@ -33,7 +33,6 @@ class _StatusBarState extends State<StatusBar> {
 
   Future<void> _checkStatus() async {
     final daemonStatus = await daemonManager.isDaemonRunning();
-    await appSettings.checkApiHealth();
 
     if (mounted) {
       setState(() {

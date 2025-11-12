@@ -279,6 +279,7 @@ Future<void> _runApp() async {
     // Continue with default settings (AppSettings should handle this gracefully)
   }
   await errorHandler.logStartup('═══════════════════════════════════════════════');
+  appSettings.startHealthMonitoring();
   await errorHandler.logStartup('Launching app UI...');
   runApp(const KarmaPlayerApp());
 
@@ -535,7 +536,7 @@ class StatsBadges extends StatelessWidget {
             if (onConnectionTap != null) {
               onConnectionTap!();
             } else {
-              appSettings.checkApiHealth();
+              appSettings.refreshHealth();
             }
           },
           borderRadius: BorderRadius.circular(12),

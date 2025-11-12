@@ -90,9 +90,10 @@ class MetadataService {
         artist: metadata.artist?.trim(),
         album: metadata.album?.trim(),
         trackNumber: metadata.trackNumber,
+        discNumber: metadata.discNumber,
         year: metadata.year,
         genre: metadata.genre,
-        duration: metadata.durationMs != null 
+        duration: metadata.durationMs != null
             ? Duration(milliseconds: metadata.durationMs!.toInt())
             : null,
         fileSize: fileSize,
@@ -105,7 +106,7 @@ class MetadataService {
         channelLayout: audioInfo.channelLayout,
         codecDetails: audioInfo.codecLongName,
         rawMetadata: audioInfo.rawJson,
-        metadataToolVersion: audioInfo.ffprobeVersion != null 
+        metadataToolVersion: audioInfo.ffprobeVersion != null
             ? 'FFprobe ${audioInfo.ffprobeVersion}'
             : null,
         isEstimated: isEstimated,
@@ -239,12 +240,13 @@ class SongMetadata {
   final String? artist;
   final String? album;
   final int? trackNumber;
+  final int? discNumber;
   final int? year;
   final String? genre;
   final Duration? duration;
   final int? fileSize;
   final String? format;
-  
+
   // Audio quality
   final int? bitrate;     // in kbps
   final int? sampleRate;  // in Hz
@@ -261,6 +263,7 @@ class SongMetadata {
     this.artist,
     this.album,
     this.trackNumber,
+    this.discNumber,
     this.year,
     this.genre,
     this.duration,

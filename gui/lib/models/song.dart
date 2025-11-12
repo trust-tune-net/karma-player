@@ -11,6 +11,7 @@ class Song {
   final Duration? duration;
   final String? artworkPath;
   final int? trackNumber;
+  final int? discNumber;
 
   // Audiophile metadata
   final int? bitrate; // in kbps
@@ -39,6 +40,7 @@ class Song {
     this.duration,
     this.artworkPath,
     this.trackNumber,
+    this.discNumber,
     this.bitrate,
     this.sampleRate,
     this.bitDepth,
@@ -57,6 +59,7 @@ class Song {
       {String? albumName,
       String? artistName,
       String? artworkPath,
+      int? discNumber,
       int libraryOrder = 0}) {
     // Extract basic info from file path
     final parts = path.split('/');
@@ -115,6 +118,7 @@ class Song {
       filePath: path,
       libraryOrder: libraryOrder,
       trackNumber: trackNum,
+      discNumber: discNumber,
       artworkPath: artworkPath,
       format: extension,
     );
@@ -148,6 +152,7 @@ class Song {
           filePath: path,
           libraryOrder: libraryOrder,
           trackNumber: metadata.trackNumber,
+          discNumber: metadata.discNumber,
           duration: metadata.duration,
           artworkPath: artworkPath,
           bitrate: metadata.bitrate, // EXACT or estimated from FFprobe
@@ -333,6 +338,7 @@ class Song {
     Duration? duration,
     String? artworkPath,
     int? trackNumber,
+    int? discNumber,
     int? bitrate,
     int? sampleRate,
     int? bitDepth,
@@ -356,6 +362,7 @@ class Song {
       duration: duration ?? this.duration,
       artworkPath: artworkPath ?? this.artworkPath,
       trackNumber: trackNumber ?? this.trackNumber,
+      discNumber: discNumber ?? this.discNumber,
       bitrate: bitrate ?? this.bitrate,
       sampleRate: sampleRate ?? this.sampleRate,
       bitDepth: bitDepth ?? this.bitDepth,

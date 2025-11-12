@@ -4,7 +4,7 @@ import '../../controllers/library_controller.dart';
 import '../../models/song.dart';
 import 'library_track_list_item.dart';
 
-class LibraryFilesView extends StatelessWidget {
+class LibraryFilesView extends StatefulWidget {
   const LibraryFilesView({
     super.key,
     required this.controller,
@@ -23,35 +23,56 @@ class LibraryFilesView extends StatelessWidget {
   final void Function(String path) onOpenFolder;
 
   @override
+  State<LibraryFilesView> createState() => _LibraryFilesViewState();
+}
+
+class _LibraryFilesViewState extends State<LibraryFilesView> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!controller.hasFiles) {
+    if (!widget.controller.hasFiles) {
       return _buildEmptyFilesState(context);
     }
 
-    if (songs.isEmpty) {
+    if (widget.songs.isEmpty) {
       return _buildNoResultsState(context);
     }
 
     return Scrollbar(
+      controller: _scrollController,
       thumbVisibility: true,
       child: ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: songs.length,
+        itemCount: widget.songs.length,
         itemBuilder: (context, index) {
-          final song = songs[index];
-          final isPlaying = currentSong?.id == song.id;
-          final isExpanded = controller.isSongExpanded(song.id);
+          final song = widget.songs[index];
+          final isPlaying = widget.currentSong?.id == song.id;
+          final isExpanded = widget.controller.isSongExpanded(song.id);
 
           return LibraryTrackListItem(
             song: song,
             isPlaying: isPlaying,
             isExpanded: isExpanded,
-            onTap: () => onSongTap(song),
-            onToggleExpanded: () => controller.updateExpandedSongId(
+            onTap: () => widget.onSongTap(song),
+            onToggleExpanded: () => widget.controller.updateExpandedSongId(
               isExpanded ? null : song.id,
             ),
-            onVerify: () => onVerifySong(song),
-            onOpenFolder: () => onOpenFolder(song.filePath),
+            onVerify: () => widget.onVerifySong(song),
+            onOpenFolder: () => widget.onOpenFolder(song.filePath),
           );
         },
       ),
@@ -70,7 +91,7 @@ class LibraryFilesView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            controller.isScanning
+            widget.controller.isScanning
                 ? 'Scanning for files...'
                 : 'No audio files found',
             style: Theme.of(context).textTheme.titleMedium,
