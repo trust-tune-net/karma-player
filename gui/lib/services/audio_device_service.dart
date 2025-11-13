@@ -296,17 +296,20 @@ class AudioDeviceService extends ChangeNotifier {
               if (e2 is StateError) {
                 // No platform match - this is expected when platform enumeration isn't available
                 // or when MediaKit exposes devices that platform APIs don't see
-                print('[AudioDevice] ⚠️  No platform device match for MediaKit device "${device.name}" (${device.description}) - using fallback heuristics');
-                ErrorHandler().logExpectedError(
-                  'device_type_no_platform_match',
-                  'MediaKit device not found in platform enumeration',
-                  extras: {
-                    'mediakit_name': device.name,
-                    'mediakit_description': device.description,
-                    'platform_device_count': _platformDevices.length,
-                    'platform_supports_native': _platform.supportsNativeEnumeration,
-                  },
-                );
+                // Skip warning for "auto" device - it's a special MediaKit device with no platform match
+                if (device.name != 'auto' && device.description.toLowerCase() != 'autoselect device') {
+                  print('[AudioDevice] ⚠️  No platform device match for MediaKit device "${device.name}" (${device.description}) - using fallback heuristics');
+                  ErrorHandler().logExpectedError(
+                    'device_type_no_platform_match',
+                    'MediaKit device not found in platform enumeration',
+                    extras: {
+                      'mediakit_name': device.name,
+                      'mediakit_description': device.description,
+                      'platform_device_count': _platformDevices.length,
+                      'platform_supports_native': _platform.supportsNativeEnumeration,
+                    },
+                  );
+                }
               } else {
                 // Unexpected exception during name matching - report to GlitchTip
                 print('[AudioDevice] ❌ Unexpected error during device name matching: $e2');
@@ -624,8 +627,30 @@ class AudioDeviceService extends ChangeNotifier {
       if (_platformDevices.isNotEmpty) {
         print('[AudioDevice] Platform devices:');
         for (var device in _platformDevices) {
-          final type = device.isBluetooth ? '🔵 BT' : device.isUSB ? '🔌 USB' : '🔊';
-          print('[AudioDevice]   $type ${device.name}');
+          String type;
+          if (device.isBluetooth) {
+            type = '🔵 BT';
+          } else if (device.isUSB) {
+            type = '🔌 USB';
+          } else if (device.isAirPlay) {
+            type = '📡 AirPlay';
+          } else if (device.isBuiltIn) {
+            type = '🔊 Built-in';
+          } else {
+            type = '🔊';
+          }
+          print('[AudioDevice]   $type ${device.name} (transport: ${device.transportType})');
+        }
+        
+        // Log AirPlay devices specifically
+        final airPlayDevices = _platformDevices.where((d) => d.isAirPlay).toList();
+        if (airPlayDevices.isNotEmpty) {
+          print('[AudioDevice] 📡 Found ${airPlayDevices.length} AirPlay device(s):');
+          for (var device in airPlayDevices) {
+            print('[AudioDevice]   📡 ${device.name} (ID: ${device.id})');
+          }
+        } else {
+          print('[AudioDevice] ⚠️  No AirPlay devices found in CoreAudio enumeration');
         }
       } else if (_availableDevices.isNotEmpty) {
         final deviceNames = _availableDevices.map((d) => d.name).join(', ');
@@ -1057,12 +1082,42 @@ class AudioDeviceService extends ChangeNotifier {
       if (_platform.supportsAirPlayRouting) {
         final launched = await _platform.showAirPlayPicker();
         if (launched) {
+          // After AirPlay picker closes, refresh devices to pick up newly connected AirPlay devices
+          // AirPlay devices may not appear in CoreAudio until they're actively connected
+          print('[AudioDevice] AirPlay picker launched - will refresh devices after delay');
+          Future.delayed(const Duration(seconds: 2), () async {
+            print('[AudioDevice] Refreshing devices after AirPlay picker...');
+            if (_platform.supportsNativeEnumeration) {
+              await _refreshPlatformDevices();
+            }
+            await _refreshDevices();
+            notifyListeners();
+            
+            // Log AirPlay devices found after refresh
+            final airPlayDevices = _platformDevices.where((d) => d.isAirPlay).toList();
+            if (airPlayDevices.isNotEmpty) {
+              print('[AudioDevice] 📡 Found ${airPlayDevices.length} AirPlay device(s) after picker:');
+              for (var device in airPlayDevices) {
+                print('[AudioDevice]   📡 ${device.name}');
+              }
+            }
+          });
           return WirelessActionOutcome.pickerLaunched;
         }
       }
 
       final openedSettings = await _platform.openSystemSoundSettings();
       if (openedSettings) {
+        // Also refresh after opening system settings
+        print('[AudioDevice] System sound settings opened - will refresh devices after delay');
+        Future.delayed(const Duration(seconds: 2), () async {
+          print('[AudioDevice] Refreshing devices after system settings...');
+          if (_platform.supportsNativeEnumeration) {
+            await _refreshPlatformDevices();
+          }
+          await _refreshDevices();
+          notifyListeners();
+        });
         return WirelessActionOutcome.systemSettingsOpened;
       }
 
@@ -1105,7 +1160,7 @@ class AudioDeviceService extends ChangeNotifier {
   }
 
   /// Refresh device list manually (can be called from UI)
-  /// This forces a re-enumeration which may pick up newly connected Bluetooth devices
+  /// This forces a re-enumeration which may pick up newly connected devices
   Future<void> refreshDevices() async {
     print('[AudioDevice] Manual refresh requested by user');
 
@@ -1135,6 +1190,7 @@ class AudioDeviceService extends ChangeNotifier {
     // Log device types found
     final platformBtCount = _platformDevices.where((d) => d.isBluetooth).length;
     final mediaKitBtCount = _availableDevices.where((d) => getDeviceType(d) == AudioDeviceType.bluetooth).length;
+    final platformAirPlayCount = _platformDevices.where((d) => d.isAirPlay).length;
 
     if (platformBtCount > 0 || mediaKitBtCount > 0) {
       print('[AudioDevice] ✅ Found Bluetooth device(s): Platform=$platformBtCount, Media_kit=$mediaKitBtCount');
@@ -1143,6 +1199,17 @@ class AudioDeviceService extends ChangeNotifier {
       print('[AudioDevice]    1. Connected and paired to your Mac');
       print('[AudioDevice]    2. Showing in System Settings > Sound');
       print('[AudioDevice]    3. Not in use exclusively by another application');
+    }
+    
+    if (platformAirPlayCount > 0) {
+      print('[AudioDevice] 📡 Found $platformAirPlayCount AirPlay device(s):');
+      for (var device in _platformDevices.where((d) => d.isAirPlay)) {
+        print('[AudioDevice]   📡 ${device.name} (transport: ${device.transportType})');
+      }
+    } else if (_platform.supportsNativeEnumeration) {
+      print('[AudioDevice] ⚠️  No AirPlay devices found via CoreAudio.');
+      print('[AudioDevice]    AirPlay devices may only appear when actively connected.');
+      print('[AudioDevice]    Try connecting via System Settings > Sound or Control Center first.');
     }
   }
 

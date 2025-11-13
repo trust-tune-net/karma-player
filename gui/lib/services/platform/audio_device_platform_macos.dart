@@ -24,16 +24,39 @@ class AudioDevicePlatformMacOS implements AudioDevicePlatform {
           .map((d) => PlatformAudioDevice.fromMap(Map<String, dynamic>.from(d)))
           .toList();
 
-      print('[AudioDevicePlatformMacOS] Enumerated ${deviceList.length} devices');
-
-      // Log Bluetooth devices specifically
-      final bluetoothCount = deviceList.where((d) => d.isBluetooth).length;
-      if (bluetoothCount > 0) {
-        print('[AudioDevicePlatformMacOS] ✅ Found $bluetoothCount Bluetooth device(s)');
-        for (var device in deviceList.where((d) => d.isBluetooth)) {
-          print('[AudioDevicePlatformMacOS]   🔵 ${device.name}');
+      print('[AudioDevicePlatformMacOS] Enumerated ${deviceList.length} devices from CoreAudio');
+      print('[AudioDevicePlatformMacOS] ========== DEVICE LIST ==========');
+      
+      // Log all devices with their types
+      for (var device in deviceList) {
+        String typeLabel;
+        if (device.isAirPlay) {
+          typeLabel = '📡 AirPlay';
+        } else if (device.isBluetooth) {
+          typeLabel = '🔵 Bluetooth';
+        } else if (device.isUSB) {
+          typeLabel = '🔌 USB';
+        } else if (device.isBuiltIn) {
+          typeLabel = '🔊 Built-in';
+        } else {
+          typeLabel = '🔊 ${device.transportType}';
         }
+        print('[AudioDevicePlatformMacOS]   $typeLabel: ${device.name} (ID: ${device.id})');
       }
+      
+      // Log device type counts
+      final bluetoothCount = deviceList.where((d) => d.isBluetooth).length;
+      final airPlayCount = deviceList.where((d) => d.isAirPlay).length;
+      final usbCount = deviceList.where((d) => d.isUSB).length;
+      final builtInCount = deviceList.where((d) => d.isBuiltIn).length;
+      
+      print('[AudioDevicePlatformMacOS] ========== SUMMARY ==========');
+      print('[AudioDevicePlatformMacOS] Total: ${deviceList.length}');
+      print('[AudioDevicePlatformMacOS] AirPlay: $airPlayCount');
+      print('[AudioDevicePlatformMacOS] Bluetooth: $bluetoothCount');
+      print('[AudioDevicePlatformMacOS] USB: $usbCount');
+      print('[AudioDevicePlatformMacOS] Built-in: $builtInCount');
+      print('[AudioDevicePlatformMacOS] ==============================');
 
       return deviceList;
     } on PlatformException catch (e, stackTrace) {

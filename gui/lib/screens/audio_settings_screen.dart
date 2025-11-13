@@ -31,6 +31,7 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   bool _wirelessActive = false;
   String? _exclusiveModeReason;
   String? _metadataReason;
+  bool _isManualRefresh = false; // Flag to suppress callbacks during manual refresh
 
   @override
   void initState() {
@@ -51,6 +52,11 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   /// - macOS changes system default device
   /// - User manually selects device
   void _onAudioDeviceChanged() {
+    // Suppress callback during manual refresh to prevent flickering
+    if (_isManualRefresh) {
+      return;
+    }
+    
     print('[AudioSettings] Audio device changed, updating UI...');
 
     PlatformAudioDevice? deviceForCapability;
@@ -709,12 +715,50 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
   Future<void> _refreshAudioDevices() async {
     if (_refreshingDevices) return;
 
+    // Set flag to suppress callbacks during refresh
+    _isManualRefresh = true;
+
     setState(() {
       _refreshingDevices = true;
     });
 
     try {
       await _audioService.refreshDevices();
+      if (!mounted) return;
+      
+      // Update selected device if it still exists, otherwise select first available
+      if (_audioService.platformDevices.isNotEmpty) {
+        final currentSelectedId = _selectedPlatformDevice?.id;
+        final stillExists = _audioService.platformDevices.any((d) => d.id == currentSelectedId);
+        
+        if (!stillExists && _audioService.platformDevices.isNotEmpty) {
+          // Previous device no longer exists, select first available
+          _selectedPlatformDevice = _audioService.platformDevices.first;
+        } else if (stillExists) {
+          // Update reference to ensure it's current
+          _selectedPlatformDevice = _audioService.platformDevices.firstWhere(
+            (d) => d.id == currentSelectedId,
+          );
+        }
+      }
+      
+      // Batch all state updates into one setState call
+      if (mounted) {
+        final wirelessNow = !_audioService.isExclusiveModeEligible;
+        setState(() {
+          _refreshingDevices = false;
+          if (wirelessNow && _exclusiveModeEnabled) {
+            _exclusiveModeEnabled = false;
+          }
+          _wirelessActive = wirelessNow;
+        });
+        
+        // Load exclusive mode state after state update
+        if (_selectedPlatformDevice != null) {
+          await _loadExclusiveModeState(_selectedPlatformDevice!);
+        }
+      }
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -724,6 +768,9 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _refreshingDevices = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Could not refresh devices: $e'),
@@ -732,19 +779,8 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _refreshingDevices = false;
-          final wirelessNow = !_audioService.isExclusiveModeEligible;
-          if (wirelessNow && _exclusiveModeEnabled) {
-            _exclusiveModeEnabled = false;
-          }
-          _wirelessActive = wirelessNow;
-        });
-        if (_selectedPlatformDevice != null) {
-          _loadExclusiveModeState(_selectedPlatformDevice!);
-        }
-      }
+      // Clear flag after refresh completes
+      _isManualRefresh = false;
     }
   }
 
@@ -813,9 +849,22 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                     color: const Color(0xFF0A0A0A),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    'No audio devices found',
-                    style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'No audio devices found',
+                        style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'AirPlay device not listed? Connect via System Settings > Sound first, then refresh.',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }
@@ -854,23 +903,30 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
                           _getDeviceIcon(deviceType),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              device.name,
-                              overflow: TextOverflow.ellipsis,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  device.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _getFriendlyTypeName(device),
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
-                          if (device.isBluetooth)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0A84FF),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'BT',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
                         ],
                       ),
                     );
@@ -885,11 +941,57 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
 
                       // Map to MediaKit AudioDevice and call selectDevice
                       // MediaKit's description matches PlatformDevice's name
-                      final mediaKitDevice = _audioService.availableDevices.firstWhere(
-                        (d) => d.description == platformDevice.name,
-                        orElse: () => _audioService.availableDevices.first,
-                      );
-                      await _audioService.selectDevice(mediaKitDevice);
+                      try {
+                        final mediaKitDevice = _audioService.availableDevices.firstWhere(
+                          (d) => d.description == platformDevice.name || d.name == platformDevice.name,
+                        );
+                        print('[AudioSettings] ✓ Matched platform device "${platformDevice.name}" to MediaKit device "${mediaKitDevice.name}"');
+                        await _audioService.selectDevice(mediaKitDevice);
+                      } catch (e) {
+                        print('[AudioSettings] ⚠️  Could not find MediaKit device for platform device "${platformDevice.name}"');
+                        print('[AudioSettings] Available MediaKit devices:');
+                        for (var d in _audioService.availableDevices) {
+                          print('[AudioSettings]   - "${d.name}" (description: "${d.description}")');
+                        }
+                        // For AirPlay devices, use platform selection
+                        if (platformDevice.isAirPlay) {
+                          print('[AudioSettings] AirPlay device selected - attempting platform-level selection');
+                          try {
+                            final success = await _audioService.platform.setAudioDevice(platformDevice.id);
+                            if (success) {
+                              print('[AudioSettings] ✓ Set AirPlay device "${platformDevice.name}" via platform channel');
+                              // Refresh devices to see if MediaKit picks it up
+                              await _audioService.refreshDevices();
+                              // Try to find it in MediaKit now
+                              try {
+                                final mediaKitDevice = _audioService.availableDevices.firstWhere(
+                                  (d) => d.description == platformDevice.name || d.name == platformDevice.name,
+                                );
+                                await _audioService.selectDevice(mediaKitDevice);
+                                print('[AudioSettings] ✓ Found MediaKit device after refresh');
+                              } catch (_) {
+                                // MediaKit still doesn't have it, but platform selection succeeded
+                                print('[AudioSettings] ⚠️  Platform device set, but not available in MediaKit');
+                              }
+                            } else {
+                              throw Exception('Platform returned false');
+                            }
+                          } catch (platformError) {
+                            print('[AudioSettings] ❌ Failed to set device via platform: $platformError');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Could not switch to ${platformDevice.name}. Try selecting it in System Settings first.'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                        } else {
+                          // For non-AirPlay devices, fall back to first available
+                          if (_audioService.availableDevices.isNotEmpty) {
+                            await _audioService.selectDevice(_audioService.availableDevices.first);
+                          }
+                        }
+                      }
 
                       await _loadExclusiveModeState(platformDevice); // Reload for new device
                     }
@@ -899,8 +1001,125 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
               );
             },
           ),
+          const SizedBox(height: 16),
+          
+          // AirPlay connection warning
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.blue.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'AirPlay device not in the list?',
+                        style: TextStyle(
+                          color: Colors.blue.withOpacity(0.9),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Connect it via System Settings first:',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInstructionStep('1. Open System Settings > Sound'),
+                      const SizedBox(height: 4),
+                      _buildInstructionStep('2. Connect to your AirPlay device'),
+                      const SizedBox(height: 4),
+                      _buildInstructionStep('3. Return here and click Refresh'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () async {
+                        await _audioService.platform.openSystemSoundSettings();
+                      },
+                      icon: const Icon(Icons.settings, size: 18),
+                      label: const Text('Open System Settings'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.blue.withOpacity(0.2),
+                        foregroundColor: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: _refreshingDevices ? null : _refreshAudioDevices,
+                      icon: _refreshingDevices
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                              ),
+                            )
+                          : const Icon(Icons.refresh, size: 18),
+                      label: Text(_refreshingDevices ? 'Refreshing...' : 'Refresh'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                        side: BorderSide(color: Colors.blue.withOpacity(0.5)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildInstructionStep(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '• ',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 13,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1414,5 +1633,21 @@ class _AudioSettingsScreenState extends State<AudioSettingsScreen> {
     }
 
     return Icon(iconData, color: iconColor, size: 20);
+  }
+
+  /// Get friendly type name for display (matches System Settings format)
+  String _getFriendlyTypeName(PlatformAudioDevice device) {
+    if (device.isAirPlay) return 'AirPlay';
+    if (device.isBluetooth) return 'Bluetooth';
+    if (device.isUSB) return 'USB';
+    if (device.isBuiltIn) return 'Built-in';
+    if (device.transportType == 'hdmi') return 'HDMI';
+    if (device.transportType == 'displayport') return 'DisplayPort';
+    if (device.transportType == 'headphone') return 'Headphone port';
+    // Capitalize first letter of transport type
+    if (device.transportType.isNotEmpty) {
+      return device.transportType[0].toUpperCase() + device.transportType.substring(1);
+    }
+    return 'Other';
   }
 }

@@ -1,6 +1,7 @@
 import Cocoa
 import FlutterMacOS
 import CoreAudio
+import Foundation
 
 class AudioDeviceChannel: NSObject, FlutterPlugin {
     static let channelName = "com.trusttune.audio_device"
@@ -60,6 +61,13 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
             } else {
                 result(FlutterError(code: "INVALID_ARGS", message: "Missing deviceId", details: nil))
             }
+        case "showAirPlayPicker":
+            AudioDeviceChannel.showAirPlayPicker(result: result)
+        case "showCastPicker":
+            // Cast picker not supported on macOS
+            result(false)
+        case "openSystemSoundSettings":
+            AudioDeviceChannel.openSystemSoundSettings(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -107,18 +115,88 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
         }
 
         print("[AudioDeviceChannel] Found \(deviceCount) total audio devices")
+        print("[AudioDeviceChannel] ========== COMPREHENSIVE DEVICE ENUMERATION ==========")
+        print("[AudioDeviceChannel] NOTE: AirPlay devices may only appear when actively connected.")
+        print("[AudioDeviceChannel] If AirPlay devices don't appear, try connecting via System Settings first.")
 
         // Filter for output devices and get details
+        var outputCount = 0
+        var airPlayCount = 0
+        var skippedCount = 0
+        
         for deviceId in audioDevices {
-            if let deviceInfo = getDeviceInfo(deviceId: deviceId), deviceInfo["isOutput"] as? Bool == true {
-                devices.append(deviceInfo)
-                print("[AudioDeviceChannel] ✓ Output device: \(deviceInfo["name"] as? String ?? "Unknown")")
+            if let deviceInfo = getDeviceInfo(deviceId: deviceId) {
+                let isOutput = deviceInfo["isOutput"] as? Bool == true
+                let isAirPlay = deviceInfo["isAirPlay"] as? Bool == true
+                let deviceName = deviceInfo["name"] as? String ?? "Unknown"
+                let transportType = deviceInfo["transportType"] as? String ?? "unknown"
+                let isBluetooth = deviceInfo["isBluetooth"] as? Bool == true
+                let isUSB = deviceInfo["isUSB"] as? Bool == true
+                let isBuiltIn = deviceInfo["isBuiltIn"] as? Bool == true
+                
+                // Log ALL devices for debugging
+                var deviceTypeIcon = "🔊"
+                if isAirPlay { deviceTypeIcon = "📡" }
+                else if isBluetooth { deviceTypeIcon = "🔵" }
+                else if isUSB { deviceTypeIcon = "🔌" }
+                else if isBuiltIn { deviceTypeIcon = "🔊" }
+                
+                print("[AudioDeviceChannel] \(deviceTypeIcon) Device: \(deviceName)")
+                print("[AudioDeviceChannel]    - Transport: \(transportType)")
+                print("[AudioDeviceChannel]    - Has Output: \(isOutput)")
+                print("[AudioDeviceChannel]    - Is AirPlay: \(isAirPlay)")
+                print("[AudioDeviceChannel]    - Device ID: \(deviceId)")
+                
+                // Include output devices, OR AirPlay devices (even if they don't have output streams yet)
+                // AirPlay devices may not show output streams until actively connected
+                if isOutput || isAirPlay {
+                    if isAirPlay {
+                        // For AirPlay devices, enumerate data sources (individual speakers)
+                        let baseUID = deviceInfo["id"] as? String ?? ""
+                        let baseName = deviceInfo["name"] as? String ?? ""
+                        let dataSourceDevices = enumerateAirPlayDataSources(
+                            deviceId: deviceId,
+                            baseUID: baseUID,
+                            baseName: baseName
+                        )
+                        
+                        if !dataSourceDevices.isEmpty {
+                            // Add each data source as a separate device entry
+                            devices.append(contentsOf: dataSourceDevices)
+                            airPlayCount += dataSourceDevices.count
+                            print("[AudioDeviceChannel]    ✅ INCLUDED \(dataSourceDevices.count) AirPlay data source(s)")
+                        } else {
+                            // No data sources found, include base AirPlay device
+                            devices.append(deviceInfo)
+                            airPlayCount += 1
+                            print("[AudioDeviceChannel]    ✅ INCLUDED (AirPlay device, no data sources)")
+                        }
+                    } else {
+                        devices.append(deviceInfo)
+                        outputCount += 1
+                        print("[AudioDeviceChannel]    ✅ INCLUDED (Output device)")
+                    }
+                } else {
+                    skippedCount += 1
+                    print("[AudioDeviceChannel]    ⚠️  SKIPPED (no output streams, not AirPlay)")
+                }
+                print("[AudioDeviceChannel]    ---")
+            } else {
+                print("[AudioDeviceChannel] ⚠️  Failed to get info for device ID: \(deviceId)")
             }
         }
+        
+        print("[AudioDeviceChannel] ========== ENUMERATION SUMMARY ==========")
+        print("[AudioDeviceChannel] Total devices found: \(deviceCount)")
+        print("[AudioDeviceChannel] Output devices included: \(outputCount)")
+        print("[AudioDeviceChannel] AirPlay devices included: \(airPlayCount)")
+        print("[AudioDeviceChannel] Devices skipped: \(skippedCount)")
+        print("[AudioDeviceChannel] Returning \(devices.count) devices to Flutter")
+        print("[AudioDeviceChannel] ==========================================")
 
         return devices
     }
-
+    
     static func getDeviceInfo(deviceId: AudioDeviceID) -> [String: Any]? {
         var deviceInfo: [String: Any] = [:]
 
@@ -209,8 +287,144 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
         if transportType == kAudioDeviceTransportTypeBluetooth {
             print("[AudioDeviceChannel] 🔵 Bluetooth device detected: \(deviceName)")
         }
+        
+        // Log detailed info for AirPlay devices
+        if transportType == kAudioDeviceTransportTypeAirPlay {
+            print("[AudioDeviceChannel] 📡 AirPlay device detected: \(deviceName) (UID: \(deviceUID), DeviceID: \(deviceId))")
+            print("[AudioDeviceChannel] 📡 Attempting to enumerate data sources for this AirPlay device...")
+        }
 
         return deviceInfo
+    }
+    
+    /// Enumerate data sources for an AirPlay device
+    /// AirPlay devices list individual speakers (like "JBL Authentics 500") as data sources
+    static func enumerateAirPlayDataSources(deviceId: AudioDeviceID, baseUID: String, baseName: String) -> [[String: Any]] {
+        var dataSourceDevices: [[String: Any]] = []
+        
+        print("[AudioDeviceChannel] 📡 Enumerating data sources for AirPlay device: \(baseName) (DeviceID: \(deviceId))")
+        
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDataSources,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        // First check if the property exists
+        var isWritable: DarwinBoolean = false
+        var status = AudioObjectIsPropertySettable(deviceId, &propertyAddress, &isWritable)
+        if status != noErr {
+            print("[AudioDeviceChannel] ⚠️  Data sources property not available (status: \(status))")
+        }
+        
+        var dataSize: UInt32 = 0
+        status = AudioObjectGetPropertyDataSize(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize
+        )
+        
+        guard status == noErr else {
+            print("[AudioDeviceChannel] ⚠️  AirPlay device has no data sources (status: \(status), error code: \(status))")
+            print("[AudioDeviceChannel]    This usually means the AirPlay device is not actively connected.")
+            print("[AudioDeviceChannel]    Try connecting to the AirPlay device via System Settings first.")
+            // AirPlay device might not have data sources yet, return base device
+            return []
+        }
+        
+        let dataSourceCount = Int(dataSize) / MemoryLayout<UInt32>.size
+        guard dataSourceCount > 0 else {
+            print("[AudioDeviceChannel] ⚠️  AirPlay device has 0 data sources")
+            return []
+        }
+        
+        var dataSources = [UInt32](repeating: 0, count: dataSourceCount)
+        status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &dataSources
+        )
+        
+        guard status == noErr else {
+            print("[AudioDeviceChannel] ⚠️  Failed to get data sources (status: \(status))")
+            return []
+        }
+        
+        print("[AudioDeviceChannel] 📡 Found \(dataSourceCount) AirPlay data source(s)")
+        
+        // Get current data source to identify which one is active
+        propertyAddress.mSelector = kAudioDevicePropertyDataSource
+        var currentDataSource: UInt32 = 0
+        dataSize = UInt32(MemoryLayout<UInt32>.size)
+        let currentStatus = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &currentDataSource
+        )
+        
+        // For each data source, get its name and create a device entry
+        for dataSource in dataSources {
+            var sourceName = "AirPlay Device"
+            
+            // Try to get data source name using kAudioDevicePropertyDataSourceNameForIDCFString
+            // This requires passing the data source ID as qualifier data
+            propertyAddress.mSelector = kAudioDevicePropertyDataSourceNameForIDCFString
+            propertyAddress.mElement = kAudioObjectPropertyElementMain
+            
+            var dataSourceName: CFString = "" as CFString
+            dataSize = UInt32(MemoryLayout<CFString>.size)
+            var dataSourceIdForName = dataSource
+            status = AudioObjectGetPropertyData(
+                deviceId,
+                &propertyAddress,
+                UInt32(MemoryLayout<UInt32>.size),
+                &dataSourceIdForName,
+                &dataSize,
+                &dataSourceName
+            )
+            
+            if status == noErr {
+                sourceName = dataSourceName as String
+            } else {
+                // Fallback: try getting name from device when this data source is selected
+                // Or use a generic name with the data source ID
+                print("[AudioDeviceChannel] ⚠️  Could not get name for data source \(dataSource) (status: \(status)), using fallback")
+                sourceName = "\(baseName) (\(dataSource))"
+            }
+            
+            let isActive = (currentStatus == noErr && currentDataSource == dataSource)
+            
+            // Create unique ID for this data source device
+            let dataSourceUID = "\(baseUID):\(dataSource)"
+            
+            print("[AudioDeviceChannel]   📡 Data source: \(sourceName) (ID: \(dataSource), Active: \(isActive))")
+            
+            // Create device entry for this data source
+            let dataSourceDevice: [String: Any] = [
+                "id": dataSourceUID,
+                "name": sourceName,
+                "deviceId": String(deviceId),
+                "dataSourceId": String(dataSource),
+                "isOutput": true,
+                "transportType": "airplay",
+                "isBluetooth": false,
+                "isUSB": false,
+                "isBuiltIn": false,
+                "isAirPlay": true,
+            ]
+            
+            dataSourceDevices.append(dataSourceDevice)
+        }
+        
+        return dataSourceDevices
     }
 
     static func getTransportTypeName(transportType: UInt32) -> String {
@@ -264,10 +478,86 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
     }
 
     static func setOutputDevice(deviceId: String, result: @escaping FlutterResult) {
-        // Note: We don't actually change the system default device
-        // Instead, we'll pass this to media_kit via the Dart layer
-        // Just return success - the actual device switching happens in Dart
         print("[AudioDeviceChannel] Device selection request: \(deviceId)")
+        
+        // Check if this is a Bonjour-discovered AirPlay device (shouldn't happen, but handle gracefully)
+        if deviceId.hasPrefix("bonjour:airplay:") {
+            print("[AudioDeviceChannel] Bonjour device ID detected - opening System Settings")
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.sound?Output")!
+            if NSWorkspace.shared.open(url) {
+                result(["success": true, "deviceId": deviceId, "requiresSystemSettings": true])
+            } else {
+                result(FlutterError(
+                    code: "SYSTEM_SETTINGS_FAILED",
+                    message: "Could not open System Settings. Please connect via System Settings > Sound first.",
+                    details: nil
+                ))
+            }
+            return
+        }
+        
+        // Check if this is an AirPlay data source device (format: "baseUID:dataSourceId")
+        if deviceId.contains(":") && !deviceId.hasPrefix("bonjour:") {
+            let components = deviceId.split(separator: ":")
+            if components.count >= 2 {
+                let baseUID = String(components[0])
+                let dataSourceIdStr = String(components[1])
+                
+                // Get the base device ID from UID
+                guard let baseDeviceId = getDeviceIdFromUID(deviceUID: baseUID) else {
+                    result(FlutterError(
+                        code: "DEVICE_NOT_FOUND",
+                        message: "AirPlay base device not found: \(baseUID)",
+                        details: nil
+                    ))
+                    return
+                }
+                
+                // Parse data source ID
+                guard let dataSourceIdValue = UInt32(dataSourceIdStr) else {
+                    result(FlutterError(
+                        code: "INVALID_DATA_SOURCE",
+                        message: "Invalid data source ID: \(dataSourceIdStr)",
+                        details: nil
+                    ))
+                    return
+                }
+                
+                // Set the data source for the AirPlay device
+                var propertyAddress = AudioObjectPropertyAddress(
+                    mSelector: kAudioDevicePropertyDataSource,
+                    mScope: kAudioDevicePropertyScopeOutput,
+                    mElement: kAudioObjectPropertyElementMain
+                )
+                
+                let dataSize = UInt32(MemoryLayout<UInt32>.size)
+                var dataSourceId = dataSourceIdValue  // Make mutable for inout parameter
+                let status = AudioObjectSetPropertyData(
+                    baseDeviceId,
+                    &propertyAddress,
+                    0,
+                    nil,
+                    dataSize,
+                    &dataSourceId
+                )
+                
+                if status == noErr {
+                    print("[AudioDeviceChannel] ✓ Set AirPlay data source \(dataSourceId) for device \(baseUID)")
+                    result(["success": true, "deviceId": deviceId, "baseDeviceId": String(baseDeviceId), "dataSourceId": dataSourceIdValue])
+                } else {
+                    print("[AudioDeviceChannel] ✗ Failed to set data source (status: \(status))")
+                    result(FlutterError(
+                        code: "DATA_SOURCE_SET_FAILED",
+                        message: "Failed to set AirPlay data source",
+                        details: ["osStatus": Int(status)]
+                    ))
+                }
+                return
+            }
+        }
+        
+        // For non-data-source devices, just return success
+        // The actual device switching happens in Dart/MediaKit
         result(["success": true, "deviceId": deviceId])
     }
 
@@ -321,7 +611,7 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
 
         // Set Hog Mode
         var hogPid: pid_t = enable ? getpid() : -1
-        var dataSize = UInt32(MemoryLayout<pid_t>.size)
+        let dataSize = UInt32(MemoryLayout<pid_t>.size)
 
         status = AudioObjectSetPropertyData(
             deviceId,
@@ -774,5 +1064,94 @@ class AudioDeviceChannel: NSObject, FlutterPlugin {
         }
 
         return capabilities
+    }
+    
+    // MARK: - AirPlay and System Settings
+    
+    /// Show AirPlay picker (opens System Settings > Sound on macOS)
+    static func showAirPlayPicker(result: @escaping FlutterResult) {
+        print("[AudioDeviceChannel] showAirPlayPicker called")
+        
+        // On macOS, there's no direct AirPlay picker API
+        // We'll open System Settings to the Sound section where AirPlay devices are shown
+        // Try multiple URL schemes for compatibility across macOS versions
+        let urls = [
+            "x-apple.systempreferences:com.apple.preference.sound?Output",
+            "x-apple.systempreferences:com.apple.preference.sound",
+            "x-apple.systempreferences:com.apple.Sound-Settings.extension"
+        ]
+        
+        var opened = false
+        for urlString in urls {
+            if let url = URL(string: urlString) {
+                if NSWorkspace.shared.open(url) {
+                    print("[AudioDeviceChannel] ✓ Opened System Settings > Sound using: \(urlString)")
+                    opened = true
+                    break
+                }
+            }
+        }
+        
+        if !opened {
+            // Fallback: use shell command
+            let process = Process()
+            process.launchPath = "/usr/bin/open"
+            process.arguments = ["-b", "com.apple.systempreferences", "x-apple.systempreferences:com.apple.preference.sound"]
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus == 0 {
+                    print("[AudioDeviceChannel] ✓ Opened System Settings > Sound using shell command")
+                    opened = true
+                }
+            } catch {
+                print("[AudioDeviceChannel] ✗ Failed to open System Settings: \(error)")
+            }
+        }
+        
+        result(opened)
+    }
+    
+    /// Open System Sound Settings
+    static func openSystemSoundSettings(result: @escaping FlutterResult) {
+        print("[AudioDeviceChannel] openSystemSoundSettings called")
+        
+        // Try multiple URL schemes for compatibility
+        let urls = [
+            "x-apple.systempreferences:com.apple.preference.sound",
+            "x-apple.systempreferences:com.apple.Sound-Settings.extension"
+        ]
+        
+        var opened = false
+        for urlString in urls {
+            if let url = URL(string: urlString) {
+                if NSWorkspace.shared.open(url) {
+                    print("[AudioDeviceChannel] ✓ Opened System Settings > Sound using: \(urlString)")
+                    opened = true
+                    break
+                }
+            }
+        }
+        
+        if !opened {
+            // Fallback: use shell command
+            let process = Process()
+            process.launchPath = "/usr/bin/open"
+            process.arguments = ["-b", "com.apple.systempreferences", "x-apple.systempreferences:com.apple.preference.sound"]
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus == 0 {
+                    print("[AudioDeviceChannel] ✓ Opened System Settings > Sound using shell command")
+                    opened = true
+                }
+            } catch {
+                print("[AudioDeviceChannel] ✗ Failed to open System Settings: \(error)")
+            }
+        }
+        
+        result(opened)
     }
 }
