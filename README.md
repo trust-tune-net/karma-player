@@ -10,11 +10,11 @@
 <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python"/>
 <img src="https://img.shields.io/badge/flutter-3.9+-blue.svg" alt="Flutter"/>
 
-### Music discovery with quality you can trust
+### Music discovery with quality you can verify, not just trust
 
-*Search naturally or query like a database. Own your music. Pay artists fairly.*
+*Build 200-year censorship-resistant libraries where permanence is protocol-guaranteed, quality is cryptographically proven, and artists receive 70-85% of revenue transparently (tiered by file size).*
 
-**[Download](#1-download)** • **[How It Works](#-how-it-works)** • **[Roadmap](ROADMAP.md)** • **[Documentation](docs/VISION.md)**
+**[Download](#1-download)** • **[How It Works](#-how-it-works)** • **[White Paper](WHITE_PAPER.md)** • **[Documentation](docs/VISION.md)**
 
 <br/>
 
@@ -34,14 +34,16 @@
 
 TrustTune is a **music discovery app** that finds high-quality music ranked by format:
 
-- 🗣️ **Two search modes:** Natural language ("radiohead ok computer flac")
+- 🔍 **Simple search:** Find quality-ranked music ("radiohead ok computer flac")
 - 🎯 **Quality ranking:** Server ranks by quality - DSD > FLAC 24-bit > FLAC > MP3 320
 - 🎵 **Dual download modes:** Torrents (high quality, slower) OR YouTube (quick download, converted to m4a with artwork)
 - 📦 **Zero config:** Everything bundled - just download and run
 - 🌐 **Protocol-first:** Like BitTorrent, anyone can run a node (Phase 2+)
-- 💰 **Endgame:** 95% revenue to artists (Phase 3+)
+- 💰 **Endgame:** 70-85% revenue to artists via tiered pricing (Phase 3+)
 
-This is **Phase 0.5** of a larger vision. See **[ROADMAP.md](ROADMAP.md)** for the full plan.
+This is **Phase 0.5** of a larger vision—building **200-year tamper-proof music libraries** where quality is cryptographically verified and artists earn 70-85% of revenue (tiered by file size). See the **[White Paper](WHITE_PAPER.md)** for the complete protocol specification.
+
+> **⚠️ Trust Status:** TrustTune is trust-minimized, not fully trustless. Phase 1 depends on Worldcoin biometric verification, MusicBrainz/AcoustID APIs, and Gun.js relay infrastructure. We're working toward full decentralization in Phase 2-3. See [WHITE_PAPER.md](WHITE_PAPER.md#trust-assumptions--dependencies) for details.
 
 ---
 
@@ -57,7 +59,13 @@ This is **Phase 0.5** of a larger vision. See **[ROADMAP.md](ROADMAP.md)** for t
 - No trust: Fake files, transcodes, malware
 - Hard to find, hard to verify
 
-**TrustTune fixes both:** Quality ranked automatically, community validates authenticity (Phase 1+), validators get rewarded (karma, platform benefits, money when economics arrive), you own the files, artists get paid fairly (Phase 3+).
+**TrustTune vs Competitors:**
+- **Spotify:** 20-30% to artists, compressed audio, own nothing
+- **iTunes:** 70% to artists (DRM-locked, no permanence)
+- **Bandcamp:** 82% to artists (no permanence guarantee, no cryptographic verification)
+- **TrustTune:** 70-85% to artists (tiered by file size, cryptographically verified, 200-year permanence)
+
+**TrustTune fixes streaming and torrents:** Quality ranked automatically, community validates authenticity (Phase 1+), validators get rewarded (reputation scores, token earnings when economics arrive), you own the files, artists get paid fairly (Phase 3+).
 
 ---
 
@@ -76,7 +84,7 @@ This is **Phase 0.5** of a larger vision. See **[ROADMAP.md](ROADMAP.md)** for t
 
 ### 2. Search
 
-Two ways to search - your choice:
+Search for quality-ranked music:
 
 ```
 radiohead ok computer flac
@@ -127,7 +135,6 @@ Choose your download mode:
 │              Remote Search API (REMOTE)                  │
 │  - Multi-source aggregation (Jackett, 1337x, DHT)       │
 │  - Quality ranking (DSD > FLAC 24-bit > FLAC > MP3)     │
-│  - MusicBrainz metadata enrichment                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -139,7 +146,7 @@ Choose your download mode:
 
 ### High-Quality Search
 
-Search naturally (“radiohead ok computer flac”) and TrustTune returns quality-ranked results ready for download.
+Search for music ("radiohead ok computer flac") and TrustTune returns cryptographically verified, quality-ranked results ready for permanent archival.
 
 ### Dual Download Modes
 
@@ -174,20 +181,13 @@ Server ranks torrents by audio quality:
    magnet:?xt=urn:btih:...
 ```
 
-### MusicBrainz Integration
-
-Canonical metadata from MusicBrainz (35M+ recordings):
-- Artist disambiguation
-- Release year and country
-- Track listings
-- Album art
-- Auto-tagging for downloads
-
 ---
 
 ## 📖 Documentation
 
-- **[ROADMAP](ROADMAP.md)** - Full project roadmap (Phase 0.5 → Phase 3)
+- **[WHITE_PAPER](WHITE_PAPER.md)** - Complete protocol specification and technical architecture
+- **[ROADMAP](ROADMAP.md)** - User-facing roadmap (Phase 0.5 → Phase 3)
+- **[ROADMAP_LEGACY](ROADMAP_LEGACY.md)** - Original phased development plan (historical reference)
 - **[TROUBLESHOOTING](TROUBLESHOOTING.md)** - Common issues and solutions
 - **[LEGAL](LEGAL.md)** - Legal disclaimers and user responsibility
 - **[Vision Document](docs/VISION.md)** - Full project vision and philosophy
@@ -212,7 +212,7 @@ cd karma-player && pip install -e .
 ### CLI Usage
 
 ```bash
-# Natural language
+# Search example
 karma-player search "radiohead ok computer flac"
 
 # Advanced options
@@ -221,13 +221,24 @@ karma-player search "miles davis" --full-ai --min-seeders 10 --skip-musicbrainz
 
 ### Technology Stack
 
+**Current (Phase 0.5):**
 - **Backend:** Python + FastAPI + gRPC
 - **Desktop:** Flutter (cross-platform)
 - **Search:** Plugin architecture (Jackett, 1337x, DHT)
-- **Metadata:** MusicBrainz API
 - **Player:** media_kit (MPV)
 - **Torrents:** Transmission daemon (bundled)
 - **YouTube:** yt-dlp with opus→m4a conversion
+
+**Protocol Stack (Phase 1 Dependencies):**
+- **Gun.js** - Distributed ledger (community-operated relays from day 1)
+- **Worldcoin** - Biometric authentication (⚠️ centralized dependency, evaluating alternatives Phase 3)
+- **Solana** - Smart contracts for transparent tiered payment splits (70-85% to artists, 15-30% protocol costs: validators + Arweave + gas)
+- **Arweave** - Permanent decentralized storage uploaded by community validators (200+ year guarantee)
+- **MusicBrainz** - Metadata validation (fallback to human validation for rare content)
+
+**Critical:** All infrastructure operated by community validators (permissionless participation). Core team develops code only—never runs production nodes.
+
+See **[WHITE_PAPER.md](WHITE_PAPER.md)** for complete technical specifications and protocol architecture.
 
 ### Running the Backend Locally
 
@@ -269,7 +280,7 @@ We welcome contributions! **TrustTune is not a company—it's a protocol and mov
 - Documentation and tutorials
 - Adding new search sources (adapters)
 
-See **[ROADMAP.md](ROADMAP.md)** for what's coming next.
+See the **[White Paper](WHITE_PAPER.md)** for the complete technical roadmap and **[ROADMAP.md](ROADMAP.md)** for user-facing feature timeline.
 
 ---
 
@@ -291,11 +302,13 @@ See **[ROADMAP.md](ROADMAP.md)** for what's coming next.
 
 ## ⚖️ Legal
 
-**TrustTune is a protocol and open-source software** for music discovery. Like BitTorrent or web search engines, we facilitate discovery of publicly available content.
+**TrustTune is a protocol and open-source software** for music discovery. Like BitTorrent or web search engines, we index content hashes from publicly available sources.
 
 **Users are solely responsible** for ensuring their downloads comply with local laws and regulations.
 
-See **[LEGAL.md](LEGAL.md)** for full legal disclaimers, DMCA compliance, and user responsibility.
+**DMCA Compliance:** The protocol implements a permissionless blocklist system via Gun.js distributed ledger. Community validators receive DMCA notices directly and publish blocklist entries. No central coordinator required—validators operate independently with distributed legal liability.
+
+See **[WHITE_PAPER.md](WHITE_PAPER.md#dmca-compliance)** for complete DMCA procedures and **[LEGAL.md](LEGAL.md)** for full legal disclaimers and user responsibility.
 
 ---
 
@@ -304,10 +317,10 @@ See **[LEGAL.md](LEGAL.md)** for full legal disclaimers, DMCA compliance, and us
 - [x] **Phase 0:** CLI tool with AI search
 - [x] **Phase 0.5:** Desktop GUI with built-in player (Available now)
 - [ ] **Phase 1:** Community validation network (Q2-Q3 2025)
-- [ ] **Phase 2:** Mobile apps + federation (Q4 2025 - Q1 2026)
-- [ ] **Phase 3:** Creator payment system (2026+)
+- [ ] **Phase 2:** Pressing Layer - Permanent storage + artist payments (2026)
+- [ ] **Phase 3:** Mobile + Scale - iOS/Android apps, federation (2027+)
 
-See **[ROADMAP.md](ROADMAP.md)** for detailed phase breakdown, timelines, and success metrics.
+See the **[White Paper](WHITE_PAPER.md)** for detailed phase breakdown, technical specifications, and economic model.
 
 ---
 
@@ -324,7 +337,7 @@ See **[ROADMAP.md](ROADMAP.md)** for detailed phase breakdown, timelines, and su
 
 **Phase 0.5 (Now):** Beautiful app with quality-ranked search
 **Phase 1-2 (Soon):** Community trust network + federation protocol
-**Phase 3+ (Vision):** Fair creator economy (95% to artists)
+**Phase 3+ (Vision):** Fair creator economy (70-85% to artists, tiered by file size)
 
 We're building a **protocol**, like BitTorrent or email:
 - Anyone can implement it
@@ -332,7 +345,7 @@ We're building a **protocol**, like BitTorrent or email:
 - No single point of control
 - Open source, transparent
 
-**Read the full vision:** [ROADMAP.md](ROADMAP.md)
+**Read the complete vision:** [White Paper](WHITE_PAPER.md)
 
 ---
 
@@ -346,13 +359,14 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 - **GitHub Issues:** [Report bugs or request features](https://github.com/trust-tune-net/karma-player/issues)
 - **Discussions:** [Join the conversation](https://github.com/trust-tune-net/karma-player/discussions)
-- **Roadmap:** [See what's coming next](ROADMAP.md)
+- **White Paper:** [Read the protocol specification](WHITE_PAPER.md)
+- **Roadmap:** [See feature timeline](ROADMAP.md)
 
 ---
 
 <div align="center">
 
-**[Download Now](#-quick-start)** • **[Read the Roadmap](ROADMAP.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
+**[Download Now](#-quick-start)** • **[Read the White Paper](WHITE_PAPER.md)** • **[Star on GitHub](https://github.com/trust-tune-net/karma-player)**
 
 *Made with ❤️ for music lovers and creators*
 
