@@ -429,6 +429,17 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
           case SearchResultType.complete:
             if (result.completeResult != null) {
+              // If toggle is OFF, skip COMPLETE and keep streaming order
+              if (!_reorderByQuality) {
+                print('[all] COMPLETE ignored - toggle OFF, keeping streaming order (${_results.length} results)');
+                setState(() {
+                  _streamingLoading = false;
+                  _torrentLoading = false;
+                });
+                break;
+              }
+
+              // Toggle is ON: use backend's ranked/sorted results
               final finalResults = result.completeResult!.rankedSources
                   .map((ranked) => _convertGrpcSourceToMap(ranked))
                   .toList();
