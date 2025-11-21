@@ -106,3 +106,33 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Install Visual C++ Runtime DLLs (required by media_kit and native dependencies)
+set(VCRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+
+# Auto-download DLLs if not present (for CI/CD builds)
+file(GLOB VCRUNTIME_DLLS "${VCRUNTIME_DIR}/*.dll")
+if(NOT VCRUNTIME_DLLS)
+  message(STATUS "VC++ Runtime DLLs not found, attempting auto-download...")
+  execute_process(
+    COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/download_vcruntime.ps1"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    RESULT_VARIABLE DOWNLOAD_RESULT
+  )
+  if(DOWNLOAD_RESULT EQUAL 0)
+    message(STATUS "VC++ Runtime DLLs downloaded successfully")
+    file(GLOB VCRUNTIME_DLLS "${VCRUNTIME_DIR}/*.dll")
+  else()
+    message(WARNING "Failed to auto-download VC++ Runtime DLLs. Manual installation may be required.")
+  endif()
+endif()
+
+# Install the DLLs
+if(VCRUNTIME_DLLS)
+  install(FILES ${VCRUNTIME_DLLS}
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+  message(STATUS "Installing VC++ Runtime DLLs: ${VCRUNTIME_DLLS}")
+else()
+  message(WARNING "VC++ Runtime DLLs not found. Users will need VC++ Redistributable installed.")
+endif()
