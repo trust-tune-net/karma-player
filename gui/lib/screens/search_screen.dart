@@ -196,8 +196,18 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         return true;
       }).toList();
 
-      // REMOVED: Frontend sorting logic - toggle now controls BACKEND deduplication only
-      // Backend already handles sorting when dedup is enabled
+      // Frontend sorting based on toggle
+      // When toggle is ON: Sort by quality_score (highest first)
+      // When toggle is OFF: Keep original order (no sorting)
+      if (_reorderByQuality && filtered.isNotEmpty) {
+        filtered.sort((a, b) {
+          final aSource = a['source'] ?? a['torrent'];
+          final bSource = b['source'] ?? b['torrent'];
+          final aScore = (aSource['quality_score'] ?? 0.0) as num;
+          final bScore = (bSource['quality_score'] ?? 0.0) as num;
+          return bScore.compareTo(aScore); // Descending order (highest quality first)
+        });
+      }
 
       _filteredResults = filtered;
     });
@@ -451,9 +461,20 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                 _streamingLoading = false;
                 _torrentLoading = false;
 
-                // ALWAYS keep partial results visible - don't clear!
-                // Just update status message
-                print('[$timestamp] [all] ✅ COMPLETE: Keeping ${_results.length} partial results visible (dedup=${_reorderByQuality})');
+                // Replace with final sorted/ranked results from backend
+                _results = finalResults;
+                _streamingResults = finalResults.where((result) {
+                  final source = result['source'] ?? result['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  return sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious';
+                }).toList();
+                _torrentResults = finalResults.where((result) {
+                  final source = result['source'] ?? result['torrent'];
+                  final sourceType = source['source_type'] ?? 'torrent';
+                  return sourceType == 'torrent';
+                }).toList();
+
+                print('[$timestamp] [all] ✅ COMPLETE: Replaced with ${_results.length} sorted results (dedup=${_reorderByQuality})');
                 _statusMessage = 'Found ${_streamingResults.length} streaming, ${_torrentResults.length} torrents';
               });
 
