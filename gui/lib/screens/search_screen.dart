@@ -159,57 +159,36 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
   void _applyFilter() {
     setState(() {
-      // Start with all results
-      List<Map<String, dynamic>> filtered = _results;
+      print('[DEBUG _applyFilter] START: _results.length=${_results.length}, filter=${_sourceFilter.name}');
 
-      // Apply old filter chip logic (All/Torrents/Streaming)
+      // Step 1: Apply UI display filtering based on filter chips
+      List<Map<String, dynamic>> filtered;
       switch (_sourceFilter) {
-        case SourceFilter.all:
-          filtered = _results;
-          break;
         case SourceFilter.torrents:
           filtered = _results.where((result) {
-            final source = result['source'] ?? result['torrent'];
-            final sourceType = source['source_type'] ?? 'torrent';
+            final sourceType = result['source']?['source_type'] ?? '';
             return sourceType == 'torrent';
           }).toList();
           break;
         case SourceFilter.streaming:
           filtered = _results.where((result) {
-            final source = result['source'] ?? result['torrent'];
-            final sourceType = source['source_type'] ?? 'torrent';
-            return sourceType == 'youtube' || sourceType == 'piped';
+            final sourceType = result['source']?['source_type'] ?? '';
+            return sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious';
           }).toList();
           break;
+        case SourceFilter.all:
+        default:
+          filtered = List.from(_results);
       }
 
-      // Apply new checkbox toggles (Show Torrents / Show YouTube)
-      filtered = filtered.where((result) {
-        final source = result['source'] ?? result['torrent'];
-        final sourceType = source['source_type'] ?? 'torrent';
-        final isTorrent = sourceType == 'torrent';
-        final isStreaming = sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious';
+      print('[DEBUG _applyFilter] After UI filtering: filtered.length=${filtered.length}');
 
-        // Include result based on toggles
-        if (isTorrent && !_showTorrents) return false;
-        if (isStreaming && !_showYouTube) return false;
-        return true;
-      }).toList();
-
-      // Frontend sorting based on toggle
-      // When toggle is ON: Sort by quality_score (highest first)
-      // When toggle is OFF: Keep original order (no sorting)
-      if (_reorderByQuality && filtered.isNotEmpty) {
-        filtered.sort((a, b) {
-          final aSource = a['source'] ?? a['torrent'];
-          final bSource = b['source'] ?? b['torrent'];
-          final aScore = (aSource['quality_score'] ?? 0.0) as num;
-          final bScore = (bSource['quality_score'] ?? 0.0) as num;
-          return bScore.compareTo(aScore); // Descending order (highest quality first)
-        });
-      }
+      // Backend already sends results in optimal order (top N torrents + top N streaming)
+      // Frontend only filters for display, does NOT reorder
+      // The toggle now only controls backend's use_dedup parameter
 
       _filteredResults = filtered;
+      print('[DEBUG _applyFilter] END: _filteredResults.length=${_filteredResults.length}');
     });
   }
 
@@ -456,6 +435,13 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
 
               print('[all] COMPLETE: ${finalResults.length} results, current=${_results.length}, dedup=${_reorderByQuality}');
 
+              // DEBUG: Inspect first result structure
+              if (finalResults.isNotEmpty) {
+                print('[DEBUG] First result keys: ${finalResults[0].keys}');
+                print('[DEBUG] First result source keys: ${finalResults[0]['source']?.keys}');
+                print('[DEBUG] First result source_type: ${finalResults[0]['source']?['source_type']}');
+              }
+
               final timestamp = DateTime.now().toString().substring(11, 23); // HH:mm:ss.SSS
               setState(() {
                 _streamingLoading = false;
@@ -464,17 +450,19 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
                 // Replace with final sorted/ranked results from backend
                 _results = finalResults;
                 _streamingResults = finalResults.where((result) {
-                  final source = result['source'] ?? result['torrent'];
-                  final sourceType = source['source_type'] ?? 'torrent';
+                  // gRPC results have source directly under result['source']
+                  final sourceType = result['source']?['source_type'] ?? 'torrent';
+                  print('[DEBUG] Filtering streaming: sourceType=$sourceType');
                   return sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious';
                 }).toList();
                 _torrentResults = finalResults.where((result) {
-                  final source = result['source'] ?? result['torrent'];
-                  final sourceType = source['source_type'] ?? 'torrent';
+                  final sourceType = result['source']?['source_type'] ?? 'torrent';
+                  print('[DEBUG] Filtering torrent: sourceType=$sourceType');
                   return sourceType == 'torrent';
                 }).toList();
 
                 print('[$timestamp] [all] ✅ COMPLETE: Replaced with ${_results.length} sorted results (dedup=${_reorderByQuality})');
+                print('[DEBUG] After filtering: streaming=${_streamingResults.length}, torrents=${_torrentResults.length}');
                 _statusMessage = 'Found ${_streamingResults.length} streaming, ${_torrentResults.length} torrents';
               });
 

@@ -117,7 +117,7 @@ class MusicSource:
 
         For TORRENT sources:
         - Format quality: FLAC (200-360) > ALAC (190) > 320kbps (150) > V0 (140)
-        - Seeder bonus: 0-100 based on availability
+        - Seeder bonus: 0-10 minimal tiebreaker (format quality dominates)
         - Size bonus: 0-50 based on file size
 
         For STREAMING sources:
@@ -133,8 +133,9 @@ class MusicSource:
             # Format bonus for torrents
             format_bonus = self._calculate_torrent_format_bonus()
 
-            # Seeder bonus (availability)
-            seeder_bonus = min(self.seeders * 2, 100) if self.seeders else 0
+            # Minimal seeder bonus (max 10 pts) - only as tiebreaker for same-quality releases
+            # Formula: min(seeders * 0.2, 10) gives linear scaling from 0-50 seeders
+            seeder_bonus = min(self.seeders * 0.2, 10) if self.seeders else 0
 
             # Size bonus (larger = higher quality for music)
             size_mb = (self.size_bytes / (1024 * 1024)) if self.size_bytes else 0

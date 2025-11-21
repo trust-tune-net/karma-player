@@ -208,12 +208,29 @@ class SearchEngine:
                 if r.format and r.format.upper() == format_filter.upper()
             ]
 
-        # Sort by quality score (highest first)
-        filtered_results.sort(key=lambda r: r.quality_score, reverse=True)
+        # Separate torrents from streaming sources
+        torrents = [r for r in filtered_results if r.source_type == SourceType.TORRENT]
+        streaming = [r for r in filtered_results if r.source_type != SourceType.TORRENT]
 
-        # Apply max_results limit
-        if max_results > 0 and len(filtered_results) > max_results:
-            logger.info(f"   → Limiting results from {len(filtered_results)} to {max_results}")
-            filtered_results = filtered_results[:max_results]
+        # Sort torrents by quality score (FLAC > MP3 > etc)
+        torrents.sort(key=lambda r: r.quality_score, reverse=True)
+
+        # Streaming sources don't need sorting (all have same quality)
+        # But sort them anyway for consistency
+        streaming.sort(key=lambda r: r.quality_score, reverse=True)
+
+        # Take top N of each source type (not top N overall mixed)
+        if max_results > 0:
+            torrents_limited = torrents[:max_results]
+            streaming_limited = streaming[:max_results]
+
+            logger.info(f"   → Split results: {len(torrents)} torrents, {len(streaming)} streaming")
+            logger.info(f"   → Taking top {max_results} of each: {len(torrents_limited)} torrents + {len(streaming_limited)} streaming = {len(torrents_limited) + len(streaming_limited)} total")
+
+            # Combine: torrents first (quality sorted), then streaming
+            filtered_results = torrents_limited + streaming_limited
+        else:
+            # No limit, return all
+            filtered_results = torrents + streaming
 
         return filtered_results

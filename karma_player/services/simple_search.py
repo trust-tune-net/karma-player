@@ -165,14 +165,13 @@ class SimpleSearch:
             partial_result_callback=partial_result_callback
         )
 
-        logger.info(f"   → Found {len(torrents)} torrents from indexers")
+        logger.info(f"   → Found {len(torrents)} sources from search engine")
         await progress(70, "Ranking results...")
 
         # Rank (already sorted by quality_score)
-        # Apply offset and limit for pagination
-        paginated_sources = torrents[offset:offset+limit]
+        # Return all sources - pagination is handled at gRPC layer
         ranked = []
-        for i, source in enumerate(paginated_sources, start=offset+1):
+        for i, source in enumerate(torrents, start=1):
             explanation = self._explain(source, i)
             tags = self._tag(source, i)
 
