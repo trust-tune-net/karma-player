@@ -1,0 +1,318 @@
+#!/bin/bash
+#
+# TrustTune Backend - Local Development Script
+# Starts Search API (HTTP/WebSocket) + gRPC Server
+#
+# Usage: ./dev-backend.sh
+# Prerequisites: .env file with required variables
+#
+
+set -e  # Exit on error
+
+# ============================================================
+# ANSI COLOR CODES
+# ============================================================
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+GRAY='\033[0;90m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# ============================================================
+# EMOJIS & SYMBOLS
+# ============================================================
+CHECK="✅"
+CROSS="❌"
+ARROW="→"
+ROCKET="🚀"
+GEAR="⚙️ "
+FIRE="🔥"
+WARN="⚠️ "
+INFO="ℹ️ "
+TARGET="🎯"
+SPARKLE="✨"
+CLOCK="🕐"
+STOP="🛑"
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
+GRPC_PORT=50051
+API_PORT=3000
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+
+# Process tracking
+GRPC_PID=""
+API_PID=""
+TAIL_GRPC_PID=""
+TAIL_API_PID=""
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+print_header() {
+    echo -e "${BOLD}${PURPLE}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${TARGET} TrustTune Backend - Local Development"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${RESET}"
+}
+
+print_section() {
+    echo -e "\n${BOLD}${CYAN}$1${RESET}"
+}
+
+print_success() {
+    echo -e "${GREEN}${CHECK} $1${RESET}"
+}
+
+print_error() {
+    echo -e "${RED}${CROSS} $1${RESET}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}${WARN} $1${RESET}"
+}
+
+print_info() {
+    echo -e "${BLUE}${ARROW} $1${RESET}"
+}
+
+print_dim() {
+    echo -e "${GRAY}${DIM}   $1${RESET}"
+}
+
+timestamp() {
+    echo -e "${GRAY}[$(date '+%H:%M:%S')]${RESET}"
+}
+
+# ============================================================
+# CLEANUP FUNCTION
+# ============================================================
+
+cleanup() {
+    echo -e "\n${YELLOW}${STOP} Shutting down services...${RESET}"
+
+    # Kill tail processes first
+    if [ -n "$TAIL_GRPC_PID" ]; then
+        kill $TAIL_GRPC_PID 2>/dev/null || true
+    fi
+    if [ -n "$TAIL_API_PID" ]; then
+        kill $TAIL_API_PID 2>/dev/null || true
+    fi
+
+    if [ -n "$GRPC_PID" ]; then
+        print_info "Stopping gRPC Server (PID: $GRPC_PID)"
+        kill $GRPC_PID 2>/dev/null || true
+        wait $GRPC_PID 2>/dev/null || true
+        print_success "gRPC Server stopped"
+    fi
+
+    if [ -n "$API_PID" ]; then
+        print_info "Stopping Search API (PID: $API_PID)"
+        kill $API_PID 2>/dev/null || true
+        wait $API_PID 2>/dev/null || true
+        print_success "Search API stopped"
+    fi
+
+    echo -e "\n${GREEN}${SPARKLE} Clean shutdown complete${RESET}\n"
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGINT SIGTERM EXIT
+
+# ============================================================
+# ENVIRONMENT VALIDATION
+# ============================================================
+
+print_header
+
+print_section "${GEAR} Environment Setup"
+
+# Check if .env exists
+if [ ! -f "$ENV_FILE" ]; then
+    print_error ".env file not found at: $ENV_FILE"
+    print_dim "Create a .env file with required variables:"
+    print_dim "  API_SECRET_SALT=..."
+    print_dim "  JACKETT_REMOTE_URL=..."
+    print_dim "  JACKETT_REMOTE_API_KEY=..."
+    exit 1
+fi
+
+# Load .env file
+print_info "Loading environment from .env..."
+set -a
+source "$ENV_FILE"
+set +a
+print_success "Environment loaded"
+
+# Validate required variables
+MISSING_VARS=()
+
+if [ -z "$API_SECRET_SALT" ]; then
+    MISSING_VARS+=("API_SECRET_SALT")
+fi
+
+if [ -z "$JACKETT_REMOTE_URL" ]; then
+    MISSING_VARS+=("JACKETT_REMOTE_URL")
+fi
+
+if [ -z "$JACKETT_REMOTE_API_KEY" ]; then
+    MISSING_VARS+=("JACKETT_REMOTE_API_KEY")
+fi
+
+if [ ${#MISSING_VARS[@]} -ne 0 ]; then
+    print_error "Missing required environment variables:"
+    for var in "${MISSING_VARS[@]}"; do
+        print_dim "$var"
+    done
+    echo -e "\n${INFO} Add these variables to your .env file\n"
+    exit 1
+fi
+
+print_success "Required environment variables validated"
+
+# Display configuration
+print_dim "API_SECRET_SALT: ${API_SECRET_SALT:0:20}..."
+print_dim "JACKETT_REMOTE_URL: $JACKETT_REMOTE_URL"
+print_dim "JACKETT_REMOTE_API_KEY: ${JACKETT_REMOTE_API_KEY:0:20}..."
+
+# ============================================================
+# CLEANUP EXISTING PROCESSES
+# ============================================================
+
+print_section "${GEAR} Process Cleanup"
+
+print_info "Checking for existing processes..."
+
+# Kill processes on port 50051 (gRPC)
+GRPC_EXISTING=$(lsof -ti:$GRPC_PORT 2>/dev/null || echo "")
+if [ -n "$GRPC_EXISTING" ]; then
+    print_warning "Found existing process on port $GRPC_PORT (PID: $GRPC_EXISTING)"
+    kill $GRPC_EXISTING 2>/dev/null || true
+    sleep 1
+    print_success "Port $GRPC_PORT cleared"
+else
+    print_dim "Port $GRPC_PORT is free"
+fi
+
+# Kill processes on port 3000 (Search API)
+API_EXISTING=$(lsof -ti:$API_PORT 2>/dev/null || echo "")
+if [ -n "$API_EXISTING" ]; then
+    print_warning "Found existing process on port $API_PORT (PID: $API_EXISTING)"
+    kill $API_EXISTING 2>/dev/null || true
+    sleep 1
+    print_success "Port $API_PORT cleared"
+else
+    print_dim "Port $API_PORT is free"
+fi
+
+# Also kill any karma_player processes
+pkill -f "karma_player" 2>/dev/null || true
+sleep 0.5
+
+print_success "Process cleanup complete"
+
+# ============================================================
+# START GRPC SERVER
+# ============================================================
+
+print_section "${ROCKET} Starting gRPC Server"
+
+print_info "Starting gRPC Server on port $GRPC_PORT..."
+print_dim "Command: poetry run python -m karma_player.api.grpc_server"
+
+# Start gRPC server in background
+cd "$SCRIPT_DIR"
+GRPC_PORT=$GRPC_PORT \
+API_SECRET_SALT="$API_SECRET_SALT" \
+JACKETT_REMOTE_URL="$JACKETT_REMOTE_URL" \
+JACKETT_REMOTE_API_KEY="$JACKETT_REMOTE_API_KEY" \
+OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+MUSICBRAINZ_API_KEY="${MUSICBRAINZ_API_KEY:-}" \
+LOG_LEVEL="$LOG_LEVEL" \
+poetry run python -m karma_player.api.grpc_server > /tmp/karma-grpc.log 2>&1 &
+
+GRPC_PID=$!
+
+# Wait a moment and check if it's still running
+sleep 2
+if ps -p $GRPC_PID > /dev/null; then
+    print_success "gRPC Server running (PID: $GRPC_PID)"
+    print_dim "Logs: tail -f /tmp/karma-grpc.log"
+else
+    print_error "gRPC Server failed to start"
+    print_dim "Check logs: cat /tmp/karma-grpc.log"
+    exit 1
+fi
+
+# ============================================================
+# START SEARCH API
+# ============================================================
+
+print_section "${ROCKET} Starting Search API"
+
+print_info "Starting Search API on port $API_PORT..."
+print_dim "Command: poetry run uvicorn karma_player.api.server:app"
+
+# Start Search API in background too
+PORT=$API_PORT \
+API_SECRET_SALT="$API_SECRET_SALT" \
+JACKETT_REMOTE_URL="$JACKETT_REMOTE_URL" \
+JACKETT_REMOTE_API_KEY="$JACKETT_REMOTE_API_KEY" \
+OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+MUSICBRAINZ_API_KEY="${MUSICBRAINZ_API_KEY:-}" \
+MIN_SEEDERS="${MIN_SEEDERS:-1}" \
+MAX_TORRENTS="${MAX_TORRENTS:-1000}" \
+USE_PARTIAL_AI="${USE_PARTIAL_AI:-true}" \
+USE_FULL_AI="${USE_FULL_AI:-false}" \
+SKIP_MUSICBRAINZ="${SKIP_MUSICBRAINZ:-false}" \
+DEBUG="${DEBUG:-false}" \
+LOG_LEVEL="$LOG_LEVEL" \
+poetry run uvicorn karma_player.api.server:app --host 0.0.0.0 --port $API_PORT > /tmp/karma-api.log 2>&1 &
+
+API_PID=$!
+
+# Wait a moment and check if it's still running
+sleep 2
+if ps -p $API_PID > /dev/null; then
+    print_success "Search API running (PID: $API_PID)"
+else
+    print_error "Search API failed to start"
+    print_dim "Check logs: cat /tmp/karma-api.log"
+    exit 1
+fi
+
+# ============================================================
+# TAIL BOTH LOG FILES
+# ============================================================
+
+echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BOLD}${WHITE}Combined Logs (Ctrl+C to stop all services)${RESET}"
+echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+
+# Tail both log files with prefixes
+tail -f /tmp/karma-grpc.log 2>/dev/null | sed 's/^/[gRPC] /' &
+TAIL_GRPC_PID=$!
+
+tail -f /tmp/karma-api.log 2>/dev/null | sed 's/^/[API]  /' &
+TAIL_API_PID=$!
+
+# Wait for background processes
+wait
+
+# If we reach here, the Search API exited
+print_error "Search API stopped unexpectedly"
+exit 1

@@ -112,26 +112,27 @@ class AdapterYouTubeMusic(SourceAdapter):
             logger.error(f"❌ Failed to resolve stream URL for {video_id}: {e}")
             return None
 
-    async def search(self, query: str) -> List[MusicSource]:
+    async def search(self, query: str, max_results: int = 100) -> List[MusicSource]:
         """
         Search YouTube Music for songs, albums, and artists
 
         Args:
             query: Search query string
+            max_results: Maximum number of results to fetch (default: 100)
 
         Returns:
             List of MusicSource objects with streaming metadata
         """
         try:
-            logger.info(f"🎵 Searching YouTube Music: '{query}'")
+            logger.info(f"🎵 Searching YouTube Music: '{query}' (limit: {max_results})")
 
             # Search YouTube Music (supports artist, album, song queries)
             # Filter types: songs, videos, albums, artists, playlists
             # We'll focus on songs for music streaming
             # ytmusicapi is synchronous, so run in thread pool
-            # Fetch 300 results to match torrent result count (uses continuation internally)
+            # Use max_results parameter from UI
             results = await asyncio.to_thread(
-                self.client.search, query, filter="songs", limit=300
+                self.client.search, query, filter="songs", limit=max_results
             )
 
             sources = []

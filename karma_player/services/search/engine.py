@@ -76,7 +76,7 @@ class SearchEngine:
         async def search_with_timeout(adapter: SourceAdapter):
             try:
                 results = await asyncio.wait_for(
-                    adapter.search(query),
+                    adapter.search(query, max_results=max_results),
                     timeout=timeout_per_adapter
                 )
 

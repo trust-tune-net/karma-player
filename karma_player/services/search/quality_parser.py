@@ -2,6 +2,7 @@
 
 import re
 import logging
+from functools import lru_cache
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)

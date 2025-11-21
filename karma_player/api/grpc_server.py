@@ -19,11 +19,13 @@ from karma_player.services.simple_search import SimpleSearch
 from karma_player.services.search.engine import SearchEngine
 from karma_player.services.search.adapter_jackett import AdapterJackett
 from karma_player.services.search.adapter_youtube_music import AdapterYouTubeMusic
+from karma_player.services.search.indexer_discovery import create_discovery_service, IndexerDiscovery
 
 logger = logging.getLogger(__name__)
 
 # Global search instance (shared with FastAPI)
 _search_service: Optional[SimpleSearch] = None
+_indexer_discovery: Optional[IndexerDiscovery] = None
 
 
 def set_search_service(service: SimpleSearch):
@@ -276,12 +278,16 @@ def _convert_source_type(source_type_str: str) -> search_pb2.SourceType:
     return type_map.get(source_type_str, search_pb2.SOURCE_TYPE_UNSPECIFIED)
 
 
-async def serve_grpc(port: int = 50051):
+async def serve_grpc(port: int = 50051, discovery_service: Optional[IndexerDiscovery] = None):
     """
     Start gRPC server on specified port.
 
     Runs alongside FastAPI server (different port).
     Shares the same search_service instance.
+
+    Args:
+        port: Port to listen on
+        discovery_service: Optional indexer discovery service for periodic monitoring
     """
     server = aio.server(
         interceptors=[AuthInterceptor()],
@@ -308,15 +314,39 @@ async def serve_grpc(port: int = 50051):
     await server.start()
     logger.info(f"✅ gRPC server ready on port {port}")
 
+    # Start background discovery task if provided
+    discovery_task = None
+    if discovery_service:
+        # Get interval from env
+        interval_minutes = int(os.getenv("JACKETT_DISCOVERY_INTERVAL_MINUTES", "60"))
+        logger.info(f"🔄 Starting background discovery (every {interval_minutes} minutes)")
+        discovery_task = discovery_service.start_background_discovery(
+            interval_minutes=interval_minutes,
+            run_immediately=False  # Already ran during initialization
+        )
+
     try:
+        # THIS keeps the event loop alive!
         await server.wait_for_termination()
     except KeyboardInterrupt:
         logger.info("gRPC server shutting down...")
+    finally:
+        # Clean shutdown
+        if discovery_task and not discovery_task.done():
+            logger.info("🛑 Stopping discovery task...")
+            discovery_service.stop_background_discovery()
+            try:
+                await asyncio.wait_for(discovery_task, timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.warning("Discovery task did not stop gracefully")
+
         await server.stop(grace=5)
 
 
-if __name__ == "__main__":
-    # Standalone gRPC server for testing
+async def main():
+    """Main entry point for standalone gRPC server."""
+    global _indexer_discovery
+
     import sys
     from karma_player.config import Config
 
@@ -324,6 +354,9 @@ if __name__ == "__main__":
         level=getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+
+    logger.info(f"Starting {__app_name__} v{__version__}")
+    logger.info(f"gRPC Server initialization...")
 
     # Initialize search infrastructure
     jackett_url = os.getenv("JACKETT_REMOTE_URL") or os.getenv("JACKETT_URL")
@@ -334,6 +367,29 @@ if __name__ == "__main__":
         logger.error("Missing Jackett configuration")
         sys.exit(1)
 
+    # Initialize discovery service if enabled
+    discovery_enabled = os.getenv("JACKETT_DISCOVERY_ENABLED", "true").lower() == "true"
+
+    if discovery_enabled and jackett_url and jackett_api_key:
+        logger.info("🔍 Indexer discovery ENABLED")
+        try:
+            _indexer_discovery = await create_discovery_service(
+                jackett_url=jackett_url,
+                jackett_api_key=jackett_api_key
+            )
+
+            # Run initial discovery
+            logger.info("🔍 Running initial indexer discovery...")
+            await _indexer_discovery.discover_and_test_indexers()
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize discovery service: {e}", exc_info=True)
+            _indexer_discovery = None
+    else:
+        logger.info("🔍 Indexer discovery DISABLED")
+        _indexer_discovery = None
+
+    # Create Jackett adapter
     jackett = AdapterJackett(
         base_url=jackett_url,
         api_key=jackett_api_key,
@@ -342,11 +398,19 @@ if __name__ == "__main__":
     )
 
     youtube_music = AdapterYouTubeMusic()
+    logger.info("✅ YouTube Music adapter initialized")
+
     search_engine = SearchEngine(adapters=[jackett, youtube_music])
     search_service = SimpleSearch(search_engine)
 
     set_search_service(search_service)
+    logger.info("✅ Search infrastructure ready!")
 
     port = int(os.getenv("GRPC_PORT", 50051))
 
-    asyncio.run(serve_grpc(port))
+    # Start gRPC server with discovery service
+    await serve_grpc(port, discovery_service=_indexer_discovery)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

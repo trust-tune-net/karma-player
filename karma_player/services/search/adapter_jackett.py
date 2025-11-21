@@ -34,6 +34,7 @@ class AdapterJackett(SourceAdapter):
         indexer_id: str = "all",
         categories: list[int] | None = None,
         gui_base_url: str | None = None,
+        timeout: Optional[float] = None,
     ):
         """Initialize Jackett adapter.
 
@@ -43,13 +44,14 @@ class AdapterJackett(SourceAdapter):
             indexer_id: Indexer ID or 'all' for all configured indexers
             categories: Torznab category IDs (default: all audio categories)
             gui_base_url: GUI-facing base URL for proxy URL normalization (optional)
+            timeout: Request timeout in seconds (default: 15, can be overridden for adaptive timeout)
         """
         super().__init__()
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.indexer_id = indexer_id
         self.categories = categories if categories is not None else self.DEFAULT_AUDIO_CATEGORIES
-        self.timeout = 15  # Jackett queries multiple indexers
+        self.timeout = timeout if timeout is not None else 15  # Jackett queries multiple indexers
         # GUI base URL for hostname normalization (fallback to base_url if not specified)
         self.gui_base_url = (gui_base_url.rstrip("/") if gui_base_url else self.base_url)
 
@@ -63,11 +65,12 @@ class AdapterJackett(SourceAdapter):
         """Return source type."""
         return SourceType.TORRENT
 
-    async def search(self, query: str) -> List[MusicSource]:
+    async def search(self, query: str, max_results: int = 100) -> List[MusicSource]:
         """Search via Jackett Torznab API.
 
         Args:
             query: Search query
+            max_results: Maximum number of results (ignored - Jackett returns all matches)
 
         Returns:
             List of MusicSource objects

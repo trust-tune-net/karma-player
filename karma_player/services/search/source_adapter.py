@@ -67,12 +67,13 @@ class SourceAdapter(ABC):
         return True
 
     @abstractmethod
-    async def search(self, query: str) -> List[MusicSource]:
+    async def search(self, query: str, max_results: int = 100) -> List[MusicSource]:
         """
         Execute search and return normalized results.
 
         Args:
             query: Search query string (e.g., "Radiohead OK Computer FLAC")
+            max_results: Maximum number of results to fetch (default: 100)
 
         Returns:
             List of MusicSource objects

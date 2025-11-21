@@ -307,35 +307,40 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
         useSecure: useSecure,
       );
 
-      // Execute 2 parallel gRPC searches - one for streaming, one for torrents
+      // UNIFIED SEARCH: Single search call respecting user's source toggles
+      // Backend streams results as each adapter completes (true streaming, no blocking)
       // ATOMIC SEARCH: No pagination, fetch all results at once based on user's maxResults setting
-      final streamingStream = _grpcService!.search(
+
+      // Determine source type filter based on user toggles
+      pb_search.SourceTypeFilter sourceFilter;
+      if (_showTorrents && _showYouTube) {
+        // Both enabled: get ALL sources (default)
+        sourceFilter = pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_ALL;
+      } else if (_showTorrents) {
+        // Only torrents enabled
+        sourceFilter = pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_TORRENT;
+      } else if (_showYouTube) {
+        // Only streaming enabled
+        sourceFilter = pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_STREAMING;
+      } else {
+        // Nothing enabled - shouldn't happen, but default to ALL
+        sourceFilter = pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_ALL;
+      }
+
+      final searchStream = _grpcService!.search(
         query: _searchController.text,
         minSeeders: 1,
         limit: _maxResults,  // Fetch all at once, no pagination
         offset: 0,  // Always start from 0, no pagination
-        sourceTypeFilter: pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_STREAMING,
+        sourceTypeFilter: sourceFilter,  // Respect user's source toggles
         useDedup: _reorderByQuality,
         maxResults: _maxResults,
       );
 
-      final torrentStream = _grpcService!.search(
-        query: _searchController.text,
-        minSeeders: 1,
-        limit: _maxResults,  // Fetch all at once, no pagination
-        offset: 0,  // Always start from 0, no pagination
-        sourceTypeFilter: pb_search.SourceTypeFilter.SOURCE_TYPE_FILTER_TORRENT,
-        useDedup: _reorderByQuality,
-        maxResults: _maxResults,
-      );
+      // Process single unified stream
+      await _processSearchStream(searchStream, 'all');
 
-      // Process both streams concurrently
-      await Future.wait([
-        _processSearchStream(streamingStream, 'streaming'),
-        _processSearchStream(torrentStream, 'torrent'),
-      ]);
-
-      // Finalize search after both complete
+      // Finalize search after completion
       setState(() {
         _streamingLoading = false;
         _torrentLoading = false;
@@ -378,7 +383,10 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             if (result.partialResult != null) {
               final adapter = result.partialResult!.adapterName;
               final partialSources = result.partialResult!.sources;
+              final timestamp = DateTime.now().toString().substring(11, 23); // HH:mm:ss.SSS
+              print('[$timestamp] [gRPC] 🔥 PARTIAL_RESULT: $adapter sent ${partialSources.length} sources (dedup=${_reorderByQuality})');
 
+              // ALWAYS show partial results as they arrive (Sonosano-style streaming)
               // Convert partial sources to map format
               final newPartialResults = partialSources.map((source) {
                 return {
@@ -407,46 +415,48 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
               }).toList();
 
               setState(() {
-                // Add to appropriate list based on stream type
-                if (streamType == 'streaming') {
-                  _streamingResults.addAll(newPartialResults);
-                } else {
-                  _torrentResults.addAll(newPartialResults);
+                // CLIENT-SIDE FILTERING: Separate results by source_type
+                for (final resultItem in newPartialResults) {
+                  final source = resultItem['source'] as Map<String, dynamic>;
+                  final sourceType = source['source_type'] as String;
+
+                  // Add to appropriate list based on source_type field
+                  if (sourceType == 'youtube' || sourceType == 'piped' || sourceType == 'invidious') {
+                    _streamingResults.add(resultItem);
+                  } else if (sourceType == 'torrent') {
+                    _torrentResults.add(resultItem);
+                  }
                 }
+
+                // Add all results to combined list
                 _results.addAll(newPartialResults);
+                _statusMessage = '$adapter: ${partialSources.length} results';
               });
+
+              // Apply filter to show partial results immediately!
+              _applyFilter();
             }
             break;
 
           case SearchResultType.complete:
             if (result.completeResult != null) {
-              // Use final deduplicated results from backend
               final finalResults = result.completeResult!.rankedSources
                   .map((ranked) => _convertGrpcSourceToMap(ranked))
                   .toList();
 
+              print('[all] COMPLETE: ${finalResults.length} results, current=${_results.length}, dedup=${_reorderByQuality}');
+
+              final timestamp = DateTime.now().toString().substring(11, 23); // HH:mm:ss.SSS
               setState(() {
-                if (streamType == 'streaming') {
-                  _streamingLoading = false;
-                  // Replace accumulated partials with final results
-                  _streamingResults.clear();
-                  _streamingResults.addAll(finalResults);
-                } else {
-                  _torrentLoading = false;
-                  // Replace accumulated partials with final results
-                  _torrentResults.clear();
-                  _torrentResults.addAll(finalResults);
-                }
+                _streamingLoading = false;
+                _torrentLoading = false;
 
-                // Rebuild combined results
-                _results.clear();
-                _results.addAll(_torrentResults);
-                _results.addAll(_streamingResults);
-
-                print('[$streamType] Final deduplicated: ${finalResults.length} results (total_found: ${result.completeResult!.totalFound})');
+                // ALWAYS keep partial results visible - don't clear!
+                // Just update status message
+                print('[$timestamp] [all] ✅ COMPLETE: Keeping ${_results.length} partial results visible (dedup=${_reorderByQuality})');
+                _statusMessage = 'Found ${_streamingResults.length} streaming, ${_torrentResults.length} torrents';
               });
 
-              // Reapply filters to update displayed results immediately
               _applyFilter();
             }
             break;
@@ -455,11 +465,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
             if (result.error != null) {
               print('[$streamType] Error: ${result.error!.message}');
               setState(() {
-                if (streamType == 'streaming') {
-                  _streamingLoading = false;
-                } else {
-                  _torrentLoading = false;
-                }
+                _streamingLoading = false;
+                _torrentLoading = false;
               });
             }
             break;
@@ -468,11 +475,8 @@ class _SearchScreenState extends State<SearchScreen> with AutomaticKeepAliveClie
     } catch (e) {
       print('[$streamType] Stream processing error: $e');
       setState(() {
-        if (streamType == 'streaming') {
-          _streamingLoading = false;
-        } else {
-          _torrentLoading = false;
-        }
+        _streamingLoading = false;
+        _torrentLoading = false;
       });
     }
   }
