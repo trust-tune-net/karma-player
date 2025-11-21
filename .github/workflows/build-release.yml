@@ -418,8 +418,8 @@ jobs:
           Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
           Write-Host ""
-          Write-Host "📦 VC++ Runtime DLLs:"
-          Get-ChildItem -Path $resourcesDir -Filter *.dll | ForEach-Object { Write-Host "  - $($_.Name)" }
+          Write-Host "VC++ Runtime DLLs:"
+          Get-ChildItem -Path $resourcesDir -Filter *.dll
 
       - name: Install dependencies
         run: |
