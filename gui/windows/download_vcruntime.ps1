@@ -45,6 +45,7 @@ foreach ($dll in $dllNames) {
 # Cleanup
 Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "`nVC++ Runtime DLLs downloaded to: $resourcesDir"
+Write-Host ""
+Write-Host "VC++ Runtime DLLs downloaded to: $resourcesDir"
 Write-Host "Required DLLs:"
-Get-ChildItem -Path $resourcesDir -Filter *.dll | ForEach-Object { Write-Host "  - $($_.Name)" }
+Get-ChildItem -Path $resourcesDir -Filter *.dll
