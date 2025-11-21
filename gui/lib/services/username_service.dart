@@ -183,6 +183,7 @@ class UsernameService {
       await prefs.setString(_nounKey, noun);
       await prefs.setInt(_numberKey, number);
     } catch (e) {
+      print('[UsernameService] ERROR fetching username: $e');
       throw Exception('Failed to fetch username: $e');
     }
   }

@@ -64,6 +64,7 @@ class _UsernameBadgeState extends State<UsernameBadge> {
         });
       }
     } catch (e) {
+      print('[UsernameBadge] ERROR loading username: $e');
       if (mounted) {
         setState(() {
           _error = e.toString();

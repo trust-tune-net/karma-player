@@ -4,8 +4,11 @@ Auth service implementation for gRPC.
 Provides user identity (username generation) based on device_id.
 """
 
+import logging
 from karma_player.proto import auth_pb2, auth_pb2_grpc, common_pb2
 from karma_player.services.username_generator import generate_username_with_parts
+
+logger = logging.getLogger(__name__)
 
 
 class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
@@ -58,6 +61,11 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
 
         except Exception as e:
             # Handle unexpected errors
+            # Extract device_id from metadata for logging (if available)
+            metadata = dict(context.invocation_metadata())
+            device_id = metadata.get('device_id', 'unknown')
+            logger.error(f"GetUserIdentity error for device {device_id[:8]}...: {e}", exc_info=True)
+
             error = common_pb2.Error(
                 code=common_pb2.STATUS_CODE_ERROR,
                 message="Failed to generate user identity",
