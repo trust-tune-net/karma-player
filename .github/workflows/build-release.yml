@@ -371,6 +371,55 @@ jobs:
           echo "✅ Downloaded ffmpeg.exe ($(ls -lh gui/windows-binaries/ffmpeg.exe | awk '{print $5}'))"
           echo "✅ Downloaded ffprobe.exe ($(ls -lh gui/windows-binaries/ffprobe.exe | awk '{print $5}'))"
 
+      - name: Download VC++ Runtime DLLs
+        shell: powershell
+        run: |
+          Write-Host "📥 Downloading VC++ Runtime DLLs..."
+
+          $resourcesDir = "gui\windows\resources"
+          $tempDir = "$env:TEMP\vcredist_download"
+
+          # Create directories
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+          # Download VC++ Redistributable installer
+          $vcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          $installerPath = "$tempDir\vc_redist.x64.exe"
+
+          Invoke-WebRequest -Uri $vcRedistUrl -OutFile $installerPath
+          Write-Host "✅ Downloaded VC++ Redistributable"
+
+          # Extract using /quiet and /layout flags
+          Write-Host "📦 Extracting DLLs..."
+          Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/layout", $tempDir -Wait
+
+          # Find and copy the DLLs
+          $dllNames = @("MSVCP140.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll")
+
+          foreach ($dll in $dllNames) {
+              $foundDll = Get-ChildItem -Path $tempDir -Filter $dll -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+
+              if ($foundDll) {
+                  Copy-Item -Path $foundDll.FullName -Destination "$resourcesDir\$dll" -Force
+                  Write-Host "  ✅ Copied $dll"
+              } else {
+                  # Fallback: Try to find in System32 (if running on Windows)
+                  if (Test-Path "C:\Windows\System32\$dll") {
+                      Copy-Item -Path "C:\Windows\System32\$dll" -Destination "$resourcesDir\$dll" -Force
+                      Write-Host "  ✅ Copied $dll from System32"
+                  } else {
+                      Write-Warning "  ❌ Could not find $dll"
+                  }
+              }
+          }
+
+          # Cleanup
+          Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+
+          Write-Host "`n📦 VC++ Runtime DLLs:"
+          Get-ChildItem -Path $resourcesDir -Filter *.dll | ForEach-Object { Write-Host "  - $($_.Name)" }
+
       - name: Install dependencies
         run: |
           cd gui
@@ -406,6 +455,16 @@ jobs:
           else
             echo "❌ No bundled binaries found at gui/windows-binaries"
             exit 1
+          fi
+
+          # Copy VC++ Runtime DLLs to app directory
+          if [ -d "gui/windows/resources" ]; then
+            echo "📥 Copying VC++ Runtime DLLs..."
+            cp -v gui/windows/resources/*.dll "$BUILD_DIR/" 2>/dev/null || echo "⚠️  No DLLs found in resources"
+
+            # Verify DLLs were copied
+            echo "📦 VC++ Runtime DLLs in build:"
+            ls -la "$BUILD_DIR" | grep -E "MSVCP140|VCRUNTIME140"
           fi
 
       - name: Create ZIP
